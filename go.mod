@@ -1,4 +1,4 @@
-module github.com/hashicorp/terraform-provider-scaffolding-framework
+module github.com/skyscrapr/terraform-provider-pinecone
 
 go 1.19
 
