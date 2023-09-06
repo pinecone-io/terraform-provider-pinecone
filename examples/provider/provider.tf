@@ -1,3 +1,3 @@
-provider "scaffolding" {
+provider "pinecone" {
   # example configuration here
 }
