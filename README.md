@@ -1,6 +1,6 @@
 # Terraform Pinecone Provider
 
-The Terraform AWS Provider allows Terraform to manage Pinecone resources.
+The Terraform Pinecone Provider allows Terraform to manage Pinecone resources.
 
 - Contributing guide
 - Quarterly development roadmap
