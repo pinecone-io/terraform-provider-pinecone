@@ -22,7 +22,7 @@ terraform {
 }
 
 provider "pinecone" {
-  # environment = "gcp-starter"
+  environment = "gcp-starter"
 }
 
 data "pinecone_indexes" "example" {}

@@ -24,5 +24,8 @@ provider "pinecone" {
 
 ### Required
 
-- `api_key` (String) Pinecone API Key
 - `environment` (String) Pinecone Environment
+
+### Optional
+
+- `api_key` (String, Sensitive) Pinecone API Key

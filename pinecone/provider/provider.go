@@ -6,6 +6,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
@@ -42,7 +43,8 @@ func (p *PineconeProvider) Schema(ctx context.Context, req provider.SchemaReques
 		Attributes: map[string]schema.Attribute{
 			"api_key": schema.StringAttribute{
 				MarkdownDescription: "Pinecone API Key",
-				Required:            true,
+				Optional:            true,
+				Sensitive:           true,
 			},
 			"environment": schema.StringAttribute{
 				MarkdownDescription: "Pinecone Environment",
@@ -61,11 +63,14 @@ func (p *PineconeProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
-	// Configuration values are now available.
-	// if data.Endpoint.IsNull() { /* ... */ }
-
+	// Default values to environment variables, but override
+	// with Terraform configuration value if set.
+	apiKey := os.Getenv("PINECONE_API_KEY")
+	if !data.ApiKey.IsNull() {
+		apiKey = data.ApiKey.ValueString()
+	}
 	client, err := pinecone.New(
-		pinecone.WithAPIKey(data.ApiKey.ValueString()),
+		pinecone.WithAPIKey(apiKey),
 		pinecone.WithEnvironment(data.Environment.ValueString()),
 		// pinecone.WithProjectName("YOUR_PROJECT_NAME"),
 	)
