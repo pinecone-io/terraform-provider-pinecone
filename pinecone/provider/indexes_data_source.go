@@ -28,8 +28,8 @@ type IndexesDataSource struct {
 
 // IndexesDataSourceModel describes the data source data model.
 type IndexesDataSourceModel struct {
-	Indexes []string `tfsdk:"indexes"`
-	Id                    types.String `tfsdk:"id"`
+	Indexes []string     `tfsdk:"indexes"`
+	Id      types.String `tfsdk:"id"`
 }
 
 func (d *IndexesDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -45,7 +45,7 @@ func (d *IndexesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 			"indexes": schema.ListAttribute{
 				MarkdownDescription: "Indexes",
 				Computed:            true,
-				ElementType: types.StringType,
+				ElementType:         types.StringType,
 			},
 			"id": schema.StringAttribute{
 				MarkdownDescription: "Indexes identifier",
