@@ -1,3 +1,4 @@
 provider "pinecone" {
-  # example configuration here
+  api_key     = "your_api_key"
+  environment = "gcp-starter"
 }

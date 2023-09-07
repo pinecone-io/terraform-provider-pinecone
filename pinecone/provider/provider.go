@@ -5,13 +5,14 @@ package provider
 
 import (
 	"context"
-	"net/http"
+	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	pinecone "github.com/nekomeowww/go-pinecone"
 )
 
 // Ensure PineconeProvider satisfies various provider interfaces.
@@ -27,7 +28,8 @@ type PineconeProvider struct {
 
 // PineconeProviderModel describes the provider data model.
 type PineconeProviderModel struct {
-	Endpoint types.String `tfsdk:"endpoint"`
+	ApiKey      types.String `tfsdk:"api_key"`
+	Environment types.String `tfsdk:"environment"`
 }
 
 func (p *PineconeProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -38,9 +40,13 @@ func (p *PineconeProvider) Metadata(ctx context.Context, req provider.MetadataRe
 func (p *PineconeProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
-			"endpoint": schema.StringAttribute{
-				MarkdownDescription: "Example provider attribute",
-				Optional:            true,
+			"api_key": schema.StringAttribute{
+				MarkdownDescription: "Pinecone API Key",
+				Required:            true,
+			},
+			"environment": schema.StringAttribute{
+				MarkdownDescription: "Pinecone Environment",
+				Required:            true,
 			},
 		},
 	}
@@ -58,8 +64,15 @@ func (p *PineconeProvider) Configure(ctx context.Context, req provider.Configure
 	// Configuration values are now available.
 	// if data.Endpoint.IsNull() { /* ... */ }
 
-	// Example client configuration for data sources and resources
-	client := http.DefaultClient
+	client, err := pinecone.New(
+		pinecone.WithAPIKey(data.ApiKey.ValueString()),
+		pinecone.WithEnvironment(data.Environment.ValueString()),
+		// pinecone.WithProjectName("YOUR_PROJECT_NAME"),
+	)
+	if err != nil {
+		resp.Diagnostics.AddError("Provider Client Error", fmt.Sprintf("Unable to create pinecone client, got error: %s", err))
+		return
+	}
 	resp.DataSourceData = client
 	resp.ResourceData = client
 }

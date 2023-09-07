@@ -6,12 +6,11 @@ package provider
 import (
 	"context"
 	"fmt"
-	"net/http"
-
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
+
+	pinecone "github.com/nekomeowww/go-pinecone"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -23,7 +22,7 @@ func NewIndexesDataSource() datasource.DataSource {
 
 // IndexesDataSource defines the data source implementation.
 type IndexesDataSource struct {
-	client *http.Client
+	client *pinecone.Client
 }
 
 // IndexesDataSourceModel describes the data source data model.
@@ -61,7 +60,7 @@ func (d *IndexesDataSource) Configure(ctx context.Context, req datasource.Config
 		return
 	}
 
-	client, ok := req.ProviderData.(*http.Client)
+	client, ok := req.ProviderData.(*pinecone.Client)
 
 	if !ok {
 		resp.Diagnostics.AddError(
@@ -85,13 +84,13 @@ func (d *IndexesDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		return
 	}
 
-	// If applicable, this is a great opportunity to initialize any necessary
-	// provider client data and make a call using it.
-	// httpResp, err := d.client.Do(httpReq)
-	// if err != nil {
-	//     resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read Indexes, got error: %s", err))
-	//     return
-	// }
+	indexes, err := d.client.ListIndexes()
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read Indexes, got error: %s", err))
+		return
+	}
+
+	data.Indexes = indexes
 
 	// For the purposes of this Indexes code, hardcoding a response value to
 	// save into the Terraform state.
@@ -99,7 +98,7 @@ func (d *IndexesDataSource) Read(ctx context.Context, req datasource.ReadRequest
 
 	// Write logs using the tflog package
 	// Documentation: https://terraform.io/plugin/log
-	tflog.Trace(ctx, "read a data source")
+	// tflog.Trace(ctx, "read a data source")
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)

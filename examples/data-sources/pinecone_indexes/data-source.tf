@@ -6,6 +6,8 @@ terraform {
   }
 }
 
-provider "pinecone" {}
+provider "pinecone" {
+  # environment = "gcp-starter"
+}
 
 data "pinecone_indexes" "example" {}
