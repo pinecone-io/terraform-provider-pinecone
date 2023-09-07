@@ -1,98 +1,49 @@
-package provider
+package pinecone
 
 import (
-	"context"
-	"fmt"
-	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-framework/types"
-	pinecone "github.com/nekomeowww/go-pinecone"
+    "context"
+    "github.com/hashicorp/terraform-plugin-framework/tfsdk"
+    "github.com/hashicorp/terraform-plugin-go/tfprotov5"
 )
 
-func NewIndexResource() resource.Resource {
-	return &IndexResource{}
+type IndexResourceType struct{}
+
+func (r IndexResourceType) NewResource(ctx context.Context, p tfsdk.Provider) (tfsdk.Resource, error) {
+    return IndexResource{}, nil
 }
 
-func (r *IndexResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	// This resource does not support reads.
-	resp.Diagnostics.AddError("Read not supported", "This resource does not support reads.")
+type IndexResource struct{}
+
+func (r IndexResource) Schema(ctx context.Context) (tfsdk.Schema, diagnostics) {
+    return tfsdk.Schema{
+        Attributes: map[string]tfsdk.Attribute{
+            "name": {
+                Type:     types.StringType,
+                Required: true,
+            },
+            // Add other attributes as needed
+        },
+    }, nil
 }
 
-// IndexResource defines the resource implementation.
-type IndexResource struct {
-	client *pinecone.Client
-}
+func (r IndexResource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
+    // Extract the attributes from the request
+    name := req.Plan.Get(ctx, tftypes.NewAttributePath().WithAttributeName("name")).(types.String)
 
-// IndexResourceModel describes the resource data model.
-type IndexResourceModel struct {
-	Name      types.String `tfsdk:"name"`
-}
-func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data IndexResourceModel
-	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
+    // Call the Pinecone API to create the index
+    // You'll need to implement the actual API call here
 
-	// Set up the index configuration
-	config := pinecone.IndexConfig{
-		Name:      string(data.Name),
-		Dimension: int(data.Dimension),
-		Metric:    string(data.Metric),
-	}
-
-	// Create the index
-	index, err := r.client.CreateIndex(ctx, config)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create index, got error: %s", err))
-		return
-	}
-
-	// Save the index ID to the Terraform state
-	resp.State.Set(ctx, "id", index.ID)
-}
-
-}
-
-func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	// This resource does not support updates.
-	resp.Diagnostics.AddError("Update not supported", "This resource does not support updates.")
-}
-
-func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	// This resource does not support deletes.
-	resp.Diagnostics.AddError("Delete not supported", "This resource does not support deletes.")
-}
-
-if resp.Diagnostics.HasError() {
-	return
-}
-        return
-    }
-
-    // Set up the index configuration
-    config := pinecone.IndexConfig{
-        Name:      string(data.Name),
-        Dimension: int(data.Dimension),
-        Metric:    string(data.Metric),
-    }
-
-    // Create the index
-    index, err := r.client.CreateIndex(ctx, config)
     if err != nil {
-        resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create index, got error: %s", err))
+        // Handle the error
+        resp.Diagnostics.AddError(
+            "Error creating index",
+            "An error occurred while creating the index: "+err.Error(),
+        )
         return
     }
 
-    // Save the index ID to the Terraform state
-    resp.State.Set(ctx, "id", index.ID)
+    // Set the ID for the created resource
+    resp.State.Set(ctx, tftypes.NewAttributePath().WithAttributeName("id"), types.String{Value: "YourIndexID"})
 }
 
-func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-    // This resource does not support updates.
-    resp.Diagnostics.AddError("Update not supported", "This resource does not support updates.")
-}
-
-func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-    // This resource does not support deletes.
-    resp.Diagnostics.AddError("Delete not supported", "This resource does not support deletes.")
-}
+// Implement other CRUD operations as needed
