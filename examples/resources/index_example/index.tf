@@ -1,6 +1,6 @@
 provider "pinecone" {
   // Any required provider configuration parameters, e.g., API key, endpoint, etc.
-  api_key = "YOUR_PINECONE_API_KEY"
+  api_key = "var.api_key"
 }
 
 resource "pinecone_index" "example_index" {

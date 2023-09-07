@@ -25,7 +25,14 @@ func (r IndexResource) Schema(ctx context.Context) (tfsdk.Schema, diagnostics) {
 				Type:     types.StringType,
 				Required: true,
 			},
-			// Add other attributes as needed
+			"dimension": {
+				Type:     types.IntType,
+				Required: true,
+			},
+			"metric": {
+				Type:     types.StringType,
+				Required: true,
+			},
 		},
 	}, nil
 }
@@ -34,30 +41,42 @@ func (r IndexResource) Create(ctx context.Context, req tfsdk.CreateResourceReque
 	// Extract the attributes from the request
 	name := req.Plan.Get(ctx, tftypes.NewAttributePath().WithAttributeName("name")).(types.String)
 
-	// Call the Pinecone API to create the index
-	// You'll need to implement the actual API call here
+	// Initialize the Pinecone client
+	// Assuming you have some way to configure the client, like an API key or other authentication method
+	client := pinecone.NewClient("<YOUR_API_KEY_OR_CONFIG>")
+
+	// Prepare the payload for the API request
 	payload := map[string]interface{}{
-		"name":      name,
-		"dimension": dimension,
-		"metric":    metric,
-	}
-	resp, err := client.Post("/indexes", payload)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	var data map[string]interface{}
-	err = json.NewDecoder(resp.Body).Decode(&data)
-	if err != nil {
-		return "", err
-	}
-	id, err := createIndex(client, name, dimension, metric)
-	if err != nil {
-		return "", err
+		"name":      name.Value,
+		"dimension": req.Plan.Get(ctx, tftypes.NewAttributePath().WithAttributeName("dimension")).(types.Int).Value,
+		"metric":    req.Plan.Get(ctx, tftypes.NewAttributePath().WithAttributeName("metric")).(types.String).Value,
 	}
 
-	// Set the ID for the created resource
-	resp.State.Set(ctx, tftypes.NewAttributePath().WithAttributeName("id"), types.String{Value: id})
+	// Call the Pinecone API to create the index
+	response, err := client.Post("/indexes", payload)
+	if err != nil {
+		// Handle the error, maybe set a diagnostic in the response
+		resp.Diagnostics.AddError("API Call Failed", err.Error())
+		return
+	}
+	defer response.Body.Close()
+
+	// Decode the API response
+	var data map[string]interface{}
+	err = json.NewDecoder(response.Body).Decode(&data)
+	if err != nil {
+		// Handle the error, maybe set a diagnostic in the response
+		resp.Diagnostics.AddError("Failed to decode API response", err.Error())
+		return
+	}
+
+	// Extract the ID from the API response and set it for the created resource
+	if id, ok := data["id"].(string); ok {
+		resp.State.Set(ctx, tftypes.NewAttributePath().WithAttributeName("id"), types.String{Value: id})
+	} else {
+		// Handle the case where the ID is not found or is not a string
+		resp.Diagnostics.AddError("Invalid ID in API response", "The API response did not contain a valid ID.")
+	}
 }
 
 func createIndex(client *pinecone.Client, name string, dimension int, metric string) (string, error) {
