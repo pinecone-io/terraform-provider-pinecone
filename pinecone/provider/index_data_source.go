@@ -27,10 +27,10 @@ type IndexDataSource struct {
 
 // IndexDataSource describes the data source data model.
 type IndexDataSourceModel struct {
-	Id      types.String `tfsdk:"id"`
-	Name	types.String `tfsdk:"name"`
-	Dimension types.Int64 `tfsdk:"dimension"`
-	Metric types.String `tfsdk:"metric"`
+	Id        types.String `tfsdk:"id"`
+	Name      types.String `tfsdk:"name"`
+	Dimension types.Int64  `tfsdk:"dimension"`
+	Metric    types.String `tfsdk:"metric"`
 }
 
 func (d *IndexDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -49,15 +49,15 @@ func (d *IndexDataSource) Schema(ctx context.Context, req datasource.SchemaReque
 			},
 			"name": schema.StringAttribute{
 				MarkdownDescription: "Index name",
-				Required: true,
+				Required:            true,
 			},
 			"dimension": schema.Int64Attribute{
 				MarkdownDescription: "Index dimension",
-				Required: true,
+				Required:            true,
 			},
 			"metric": schema.StringAttribute{
 				MarkdownDescription: "Index metric",
-				Required: true,
+				Required:            true,
 			},
 		},
 	}

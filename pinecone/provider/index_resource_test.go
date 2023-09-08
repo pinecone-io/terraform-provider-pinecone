@@ -17,24 +17,24 @@ func TestAccIndexResource(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create and Read testing
 			{
-				Config: testAccIndexResourceConfig("frank2"),
+				Config: testAccIndexResourceConfig("frank"),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("pinecone_index.test", "name", "frank2"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "name", "frank"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "512"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
 				),
 			},
 			// ImportState testing
-			// {
-			// 	ResourceName:      "pinecone_example.test",
-			// 	ImportState:       true,
-			// 	ImportStateVerify: true,
-			// 	// This is not normally necessary, but is here because this
-			// 	// example code does not have an actual upstream service.
-			// 	// Once the Read method is able to refresh information from
-			// 	// the upstream service, this can be removed.
-			// 	ImportStateVerifyIgnore: []string{"configurable_attribute", "defaulted"},
-			// },
+			{
+				ResourceName:      "pinecone_index.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+				// This is not normally necessary, but is here because this
+				// example code does not have an actual upstream service.
+				// Once the Read method is able to refresh information from
+				// the upstream service, this can be removed.
+				// ImportStateVerifyIgnore: []string{"configurable_attribute", "defaulted"},
+			},
 			// Update and Read testing
 			// {
 			// 	Config: testAccIndexResourceConfig("frank2"),

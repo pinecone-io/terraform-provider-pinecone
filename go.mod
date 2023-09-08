@@ -6,9 +6,9 @@ require (
 	github.com/hashicorp/terraform-plugin-docs v0.16.0
 	github.com/hashicorp/terraform-plugin-framework v1.4.0
 	github.com/hashicorp/terraform-plugin-go v0.19.0
-	github.com/hashicorp/terraform-plugin-log v0.9.0
 	github.com/hashicorp/terraform-plugin-testing v1.5.1
 	github.com/nekomeowww/go-pinecone v0.1.0
+	github.com/samber/mo v1.8.0
 )
 
 require (
@@ -44,6 +44,7 @@ require (
 	github.com/hashicorp/logutils v1.0.0 // indirect
 	github.com/hashicorp/terraform-exec v0.19.0 // indirect
 	github.com/hashicorp/terraform-json v0.17.1 // indirect
+	github.com/hashicorp/terraform-plugin-log v0.9.0 // indirect
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.29.0 // indirect
 	github.com/hashicorp/terraform-registry-address v0.2.2 // indirect
 	github.com/hashicorp/terraform-svchost v0.1.1 // indirect
@@ -69,7 +70,6 @@ require (
 	github.com/refraction-networking/utls v1.5.3 // indirect
 	github.com/russross/blackfriday v1.6.0 // indirect
 	github.com/samber/lo v1.38.1 // indirect
-	github.com/samber/mo v1.8.0 // indirect
 	github.com/shopspring/decimal v1.3.1 // indirect
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/vmihailenco/msgpack v4.0.4+incompatible // indirect

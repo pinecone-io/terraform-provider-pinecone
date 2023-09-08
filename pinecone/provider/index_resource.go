@@ -11,8 +11,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 	pinecone "github.com/nekomeowww/go-pinecone"
+	"github.com/samber/mo"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -30,10 +30,10 @@ type IndexResource struct {
 
 // IndexResourceModel describes the resource data model.
 type IndexResourceModel struct {
-	Id      types.String `tfsdk:"id"`
-	Name	types.String `tfsdk:"name"`
-	Dimension types.Int64 `tfsdk:"dimension"`
-	Metric types.String `tfsdk:"metric"`
+	Id        types.String `tfsdk:"id"`
+	Name      types.String `tfsdk:"name"`
+	Dimension types.Int64  `tfsdk:"dimension"`
+	Metric    types.String `tfsdk:"metric"`
 }
 
 func (r *IndexResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -52,15 +52,15 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 			},
 			"name": schema.StringAttribute{
 				MarkdownDescription: "Index name",
-				Required: true,
+				Required:            true,
 			},
 			"dimension": schema.Int64Attribute{
 				MarkdownDescription: "Index dimension",
-				Required: true,
+				Required:            true,
 			},
 			"metric": schema.StringAttribute{
 				MarkdownDescription: "Index metric",
-				Required: true,
+				Required:            true,
 			},
 		},
 	}
@@ -100,29 +100,16 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 	payload := pinecone.CreateIndexParams{
 		Name:      data.Name.ValueString(),
 		Dimension: int(data.Dimension.ValueInt64()),
-		// Metric: mo.Option["cosine"],
+		Metric:    mo.Some(pinecone.CreateIndexMetricCosine),
 	}
-
 	err := r.client.CreateIndex(ctx, payload)
-
 	if err != nil {
 		// Handle the error, maybe set a diagnostic in the response
 		resp.Diagnostics.AddError("Failed to create index", err.Error())
 		return
 	}
 
-	// Decode the API response
-	// var data map[string]interface{}
-	// err = json.NewDecoder(response.Body).Decode(&data)
-	// if err != nil {
-	// 	// Handle the error, maybe set a diagnostic in the response
-	// 	resp.Diagnostics.AddError("Failed to decode API response", err.Error())
-	// 	return
-	// }
-
 	data.Id = data.Name
-
-	tflog.Trace(ctx, "created an index")
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -138,11 +125,11 @@ func (r *IndexResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
-	index, err := r.client.DescribeIndex(ctx, data.Name.ValueString())
+	index, err := r.client.DescribeIndex(ctx, data.Id.ValueString())
 
 	if err != nil {
 		// Handle the error, maybe set a diagnostic in the response
-		resp.Diagnostics.AddError("Failed to create index", err.Error())
+		resp.Diagnostics.AddError("Failed to describe index", err.Error())
 		return
 	}
 
@@ -155,25 +142,7 @@ func (r *IndexResource) Read(ctx context.Context, req resource.ReadRequest, resp
 }
 
 func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data IndexResourceModel
-
-	// Read Terraform plan data into the model
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	// If applicable, this is a great opportunity to initialize any necessary
-	// provider client data and make a call using it.
-	// httpResp, err := r.client.Do(httpReq)
-	// if err != nil {
-	//     resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update Index, got error: %s", err))
-	//     return
-	// }
-
-	// Save updated data into Terraform state
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	// not supported
 }
 
 func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -186,13 +155,12 @@ func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		return
 	}
 
-	// If applicable, this is a great opportunity to initialize any necessary
-	// provider client data and make a call using it.
-	// httpResp, err := r.client.Do(httpReq)
-	// if err != nil {
-	//     resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete Index, got error: %s", err))
-	//     return
-	// }
+	err := r.client.DeleteIndex(ctx, data.Name.ValueString())
+	if err != nil {
+		// Handle the error, maybe set a diagnostic in the response
+		resp.Diagnostics.AddError("Failed to delete index", err.Error())
+		return
+	}
 }
 
 func (r *IndexResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
