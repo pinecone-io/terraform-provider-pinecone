@@ -6,14 +6,10 @@ package provider
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	pinecone "github.com/nekomeowww/go-pinecone"
@@ -41,7 +37,7 @@ type IndexResourceModel struct {
 }
 
 func (r *IndexResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_Index"
+	resp.TypeName = req.ProviderTypeName + "_index"
 }
 
 func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
@@ -103,44 +99,30 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 	// Prepare the payload for the API request
 	payload := pinecone.CreateIndexParams{
 		Name:      data.Name.ValueString(),
-		Dimension: data.Dimension.ValueInt64(),
-		Metric:  pinecone.CreateIndexMetric,
+		Dimension: int(data.Dimension.ValueInt64()),
+		// Metric: mo.Option["cosine"],
 	}
 
-	r.client.CreateIndex(ctx, )
+	err := r.client.CreateIndex(ctx, payload)
 
-	// Call the Pinecone API to create the index
-	response, err := r.client.Post("/indexes", payload)
 	if err != nil {
 		// Handle the error, maybe set a diagnostic in the response
-		resp.Diagnostics.AddError("API Call Failed", err.Error())
+		resp.Diagnostics.AddError("Failed to create index", err.Error())
 		return
 	}
-	defer response.Body.Close()
 
 	// Decode the API response
-	var data map[string]interface{}
-	err = json.NewDecoder(response.Body).Decode(&data)
-	if err != nil {
-		// Handle the error, maybe set a diagnostic in the response
-		resp.Diagnostics.AddError("Failed to decode API response", err.Error())
-		return
-	}
+	// var data map[string]interface{}
+	// err = json.NewDecoder(response.Body).Decode(&data)
+	// if err != nil {
+	// 	// Handle the error, maybe set a diagnostic in the response
+	// 	resp.Diagnostics.AddError("Failed to decode API response", err.Error())
+	// 	return
+	// }
 
-	// Extract the ID from the API response and set it for the created resource
-	if id, ok := data["id"].(string); ok {
-		resp.State.Set(ctx, tftypes.NewAttributePath().WithAttributeName("id"), types.String{Value: id})
-	} else {
-		// Handle the case where the ID is not found or is not a string
-		resp.Diagnostics.AddError("Invalid ID in API response", "The API response did not contain a valid ID.")
-	}
-	// For the purposes of this Index code, hardcoding a response value to
-	// save into the Terraform state.
-	data.Id = types.StringValue("Index-id")
+	data.Id = data.Name
 
-	// Write logs using the tflog package
-	// Documentation: https://terraform.io/plugin/log
-	tflog.Trace(ctx, "created a resource")
+	tflog.Trace(ctx, "created an index")
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -156,13 +138,17 @@ func (r *IndexResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
-	// If applicable, this is a great opportunity to initialize any necessary
-	// provider client data and make a call using it.
-	// httpResp, err := r.client.Do(httpReq)
-	// if err != nil {
-	//     resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read Index, got error: %s", err))
-	//     return
-	// }
+	index, err := r.client.DescribeIndex(ctx, data.Name.ValueString())
+
+	if err != nil {
+		// Handle the error, maybe set a diagnostic in the response
+		resp.Diagnostics.AddError("Failed to create index", err.Error())
+		return
+	}
+
+	data.Id = data.Name
+	data.Name = types.StringValue(index.Database.Name)
+	data.Dimension = types.Int64Value(int64(index.Database.Dimension))
 
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)

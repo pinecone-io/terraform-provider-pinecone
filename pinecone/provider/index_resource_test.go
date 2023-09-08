@@ -49,6 +49,11 @@ func TestAccIndexResource(t *testing.T) {
 
 func testAccIndexResourceConfig(name string) string {
 	return fmt.Sprintf(`
+provider "pinecone" {
+	environment = "gcp-starter"
+}
+
+
 resource "pinecone_index" "test" {
   name = %[1]q
   dimension = 512

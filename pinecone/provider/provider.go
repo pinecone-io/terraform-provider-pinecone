@@ -84,7 +84,7 @@ func (p *PineconeProvider) Configure(ctx context.Context, req provider.Configure
 
 func (p *PineconeProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
-		NewExampleResource,
+		NewIndexResource,
 	}
 }
 
