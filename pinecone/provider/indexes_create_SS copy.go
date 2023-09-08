@@ -1,4 +1,4 @@
-package pinecone
+package provider
 
 import (
 	"context"
