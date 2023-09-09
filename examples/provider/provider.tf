@@ -1,5 +1,20 @@
-provider "pinecone" {
-  api_key     = "your_api_key"
-  environment = "gcp-starter"
-  index       = "your_index_name"
+terraform {
+  required_providers {
+    pinecone = {
+      source = "skyscrapr/pinecone"
+    }
+  }
 }
+
+provider "pinecone" {
+  api_key     = var.api_key
+  environment = "us-west4-gcp"
+}
+
+resource "pinecone_index" "example" {
+  name      = "frank"
+  dimension = 512
+  metric    = "cosine"
+}
+
+
