@@ -1,9 +1,0 @@
-{
-    "go.testEnvVars": {
-        "TF_ACC": "1",
-        "PINECONE_API_KEY": "ba72f362-1607-4bb4-b8bc-5705b2a1e5d0",
-        "TF_LOG": "INFO",
-        "TF_ACC_OPENAI": "1"
-    },
-    "go.testTimeout": "0",
-}
