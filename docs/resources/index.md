@@ -17,9 +17,16 @@ Index resource
 
 ### Required
 
-- `dimension` (Number) Index dimension
-- `metric` (String) Index metric
-- `name` (String) Index name
+- `dimension` (Number) The dimensions of the vectors to be inserted in the index
+- `name` (String) The name of the index to be created. The maximum length is 45 characters.
+
+### Optional
+
+- `metric` (String) The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'.
+- `pod_type` (String) The type of pod to use. One of s1, p1, or p2 appended with . and one of x1, x2, x4, or x8.
+- `pods` (Number) The number of pods for the index to use,including replicas.
+- `replicas` (Number) The number of replicas. Replicas duplicate your index. They provide higher availability and throughput.
+- `source_collection` (String) The name of the collection to create an index from.
 
 ### Read-Only
 

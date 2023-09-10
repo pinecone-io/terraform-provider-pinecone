@@ -23,6 +23,10 @@ func TestAccIndexResource(t *testing.T) {
 					resource.TestCheckResourceAttr("pinecone_index.test", "name", "frank"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "512"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "pods", "1"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "replicas", "1"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "pod_type", "starter"),
+					resource.TestCheckNoResourceAttr("pinecone_index.test", "source_collection"),
 				),
 			},
 			// ImportState testing
@@ -58,7 +62,6 @@ provider "pinecone" {
 resource "pinecone_index" "test" {
   name = %q
   dimension = 512
-  metric = "cosine"
 }
 `, name)
 }

@@ -78,6 +78,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 			"metric": schema.StringAttribute{
 				MarkdownDescription: "The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'.",
 				Optional:            true,
+				Computed:            true,
 				Default:             stringdefault.StaticString("cosine"),
 				Validators: []validator.String{
 					stringvalidator.OneOf([]string{"euclidean", "cosine", "dotproduct"}...),
@@ -86,20 +87,23 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 			"pods": schema.Int64Attribute{
 				MarkdownDescription: "The number of pods for the index to use,including replicas.",
 				Optional:            true,
+				Computed:            true,
 				Default:             int64default.StaticInt64(1),
 			},
 			"replicas": schema.Int64Attribute{
 				MarkdownDescription: "The number of replicas. Replicas duplicate your index. They provide higher availability and throughput.",
 				Optional:            true,
+				Computed:            true,
 				Default:             int64default.StaticInt64(1),
 			},
 			"pod_type": schema.StringAttribute{
 				MarkdownDescription: "The type of pod to use. One of s1, p1, or p2 appended with . and one of x1, x2, x4, or x8.",
 				Optional:            true,
-				Default:             stringdefault.StaticString("p1.x1"),
+				Computed:            true,
+				Default:             stringdefault.StaticString("starter"),
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(
-						regexp.MustCompile(`^(s1|p1|p2)\.(x1|x2|x4|x8)$`),
+						regexp.MustCompile(`^(starter|(s1|p1|p2)\.(x1|x2|x4|x8))$`),
 						"One of s1, p1, or p2 appended with . and one of x1, x2, x4, or x8.",
 					),
 				},
@@ -152,7 +156,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		Replicas:  int(data.Replicas.ValueInt64()),
 		PodType:   data.PodType.ValueString(),
 	}
-	if !data.SourceCollection.IsUnknown() {
+	if !data.SourceCollection.IsNull() {
 		payload.SourceCollection = data.SourceCollection.ValueStringPointer()
 	}
 
@@ -162,18 +166,13 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	data.Id = data.Name
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
-
 	// Wait for index to be ready
 	createTimeout := 1 * time.Hour
 	err = retry.RetryContext(ctx, createTimeout, func() *retry.RetryError {
-		index, err := r.client.Databases().DescribeIndex(data.Id.ValueString())
+		index, err := r.client.Databases().DescribeIndex(data.Name.ValueString())
 
+		readIndexData(index, &data)
 		// Save current status to state
-		data.Name = types.StringValue(index.Database.Name)
-		data.Dimension = types.Int64Value(int64(index.Database.Dimension))
-		data.Metric = types.StringValue(index.Database.Metric.String())
 		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 
 		if err != nil {
@@ -209,10 +208,7 @@ func (r *IndexResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
-	data.Id = types.StringValue(index.Database.Name)
-	data.Name = types.StringValue(index.Database.Name)
-	data.Dimension = types.Int64Value(int64(index.Database.Dimension))
-	data.Metric = types.StringValue(index.Database.Metric.String())
+	readIndexData(index, &data)
 
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -257,4 +253,14 @@ func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 
 func (r *IndexResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+func readIndexData(index *pinecone.Index, model *IndexResourceModel) {
+	model.Id = types.StringValue(index.Database.Name)
+	model.Name = types.StringValue(index.Database.Name)
+	model.Dimension = types.Int64Value(int64(index.Database.Dimension))
+	model.Metric = types.StringValue(index.Database.Metric.String())
+	model.Pods = types.Int64Value(int64(index.Database.Pods))
+	model.Replicas = types.Int64Value(int64(index.Database.Replicas))
+	model.PodType = types.StringValue(index.Database.PodType)
 }
