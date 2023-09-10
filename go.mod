@@ -2,7 +2,8 @@ module github.com/skyscrapr/terraform-provider-pinecone
 
 go 1.21.1
 
-replace github.com/skyscrapr/pinecone-sdk-go => ../pinecone-sdk-go
+// Use below for local development
+// replace github.com/skyscrapr/pinecone-sdk-go => ../pinecone-sdk-go
 
 require (
 	github.com/hashicorp/terraform-plugin-docs v0.16.0
