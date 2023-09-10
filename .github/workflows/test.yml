@@ -76,6 +76,7 @@ jobs:
           terraform_wrapper: false
       - run: go mod download
       - env:
+          PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
           TF_ACC: "1"
         run: go test -v -cover ./pinecone/provider/
         timeout-minutes: 10
