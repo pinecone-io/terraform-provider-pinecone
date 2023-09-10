@@ -5,22 +5,24 @@ package provider
 
 import (
 	"fmt"
-	"testing"
-
+	sdkacctest "github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"testing"
 )
 
 func TestAccIndexResource(t *testing.T) {
+	rName := sdkacctest.RandomWithPrefix("tftest")
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			// Create and Read testing
 			{
-				Config: testAccIndexResourceConfig("frank"),
+				Config: testAccIndexResourceConfig(rName, 1),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("pinecone_index.test", "id", "frank"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "name", "frank"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
+					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
 					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "512"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "pods", "1"),
@@ -42,18 +44,26 @@ func TestAccIndexResource(t *testing.T) {
 				// ImportStateVerifyIgnore: []string{"configurable_attribute", "defaulted"},
 			},
 			// Update and Read testing
-			// {
-			// 	Config: testAccIndexResourceConfig("frank2"),
-			// 	Check: resource.ComposeAggregateTestCheckFunc(
-			// 		resource.TestCheckResourceAttr("pinecone_example.test", "configurable_attribute", "two"),
-			// 	),
-			// },
+			{
+				// TODO: update replicas test. Cannot do this currently in the free-tier.
+				Config: testAccIndexResourceConfig(rName, 1),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
+					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
+					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "512"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "pods", "1"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "replicas", "1"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "pod_type", "starter"),
+					resource.TestCheckNoResourceAttr("pinecone_index.test", "source_collection"),
+				),
+			},
 			// Delete testing automatically occurs in TestCase
 		},
 	})
 }
 
-func testAccIndexResourceConfig(name string) string {
+func testAccIndexResourceConfig(name string, replicas int) string {
 	return fmt.Sprintf(`
 provider "pinecone" {
 	environment = "gcp-starter"
@@ -62,6 +72,7 @@ provider "pinecone" {
 resource "pinecone_index" "test" {
   name = %q
   dimension = 512
+  replicas = %d
 }
-`, name)
+`, name, replicas)
 }

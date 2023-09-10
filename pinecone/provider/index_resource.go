@@ -215,7 +215,38 @@ func (r *IndexResource) Read(ctx context.Context, req resource.ReadRequest, resp
 }
 
 func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	// not supported
+	var data IndexResourceModel
+
+	// Read Terraform plan data into the model
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Prepare the payload for the API request
+	payload := pinecone.ConfigureIndexParams{
+		Name:     data.Name.ValueString(),
+		Replicas: int(data.Replicas.ValueInt64()),
+		PodType:  data.PodType.ValueString(),
+	}
+
+	err := r.client.Databases().ConfigureIndex(&payload)
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to update index", err.Error())
+		return
+	}
+
+	index, err := r.client.Databases().DescribeIndex(data.Id.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to describe index", err.Error())
+		return
+	}
+
+	readIndexData(index, &data)
+
+	// Save updated data into Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
