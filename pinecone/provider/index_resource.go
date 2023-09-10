@@ -6,13 +6,14 @@ package provider
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	pinecone "github.com/nekomeowww/go-pinecone"
-	"github.com/samber/mo"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
+	"github.com/skyscrapr/pinecone-sdk-go/pinecone"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -100,16 +101,41 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 	payload := pinecone.CreateIndexParams{
 		Name:      data.Name.ValueString(),
 		Dimension: int(data.Dimension.ValueInt64()),
-		Metric:    mo.Some(pinecone.CreateIndexMetricCosine),
+		Metric:    pinecone.IndexMetric(data.Metric.ValueString()),
+		// TODO
 	}
-	err := r.client.CreateIndex(ctx, payload)
+	err := r.client.Databases().CreateIndex(&payload)
 	if err != nil {
-		// Handle the error, maybe set a diagnostic in the response
 		resp.Diagnostics.AddError("Failed to create index", err.Error())
 		return
 	}
 
 	data.Id = data.Name
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+
+	// Wait for index to be ready
+	createTimeout := 1 * time.Hour
+	err = retry.RetryContext(ctx, createTimeout, func() *retry.RetryError {
+		index, err := r.client.Databases().DescribeIndex(data.Id.ValueString())
+
+		// Save current status to state
+		data.Name = types.StringValue(index.Database.Name)
+		data.Dimension = types.Int64Value(int64(index.Database.Dimension))
+		data.Metric = types.StringValue(index.Database.Metric.String())
+		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+
+		if err != nil {
+			return retry.NonRetryableError(err)
+		}
+		if !index.Status.Ready {
+			return retry.RetryableError(fmt.Errorf("index not ready. State: %s", index.Status.State))
+		}
+		return nil
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to wait for index to become ready.", err.Error())
+		return
+	}
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -125,17 +151,16 @@ func (r *IndexResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
-	index, err := r.client.DescribeIndex(ctx, data.Id.ValueString())
-
+	index, err := r.client.Databases().DescribeIndex(data.Id.ValueString())
 	if err != nil {
-		// Handle the error, maybe set a diagnostic in the response
 		resp.Diagnostics.AddError("Failed to describe index", err.Error())
 		return
 	}
 
-	data.Id = data.Name
+	data.Id = types.StringValue(index.Database.Name)
 	data.Name = types.StringValue(index.Database.Name)
 	data.Dimension = types.Int64Value(int64(index.Database.Dimension))
+	data.Metric = types.StringValue(index.Database.Metric.String())
 
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -155,10 +180,25 @@ func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		return
 	}
 
-	err := r.client.DeleteIndex(ctx, data.Name.ValueString())
+	err := r.client.Databases().DeleteIndex(data.Name.ValueString())
 	if err != nil {
-		// Handle the error, maybe set a diagnostic in the response
 		resp.Diagnostics.AddError("Failed to delete index", err.Error())
+		return
+	}
+	// Wait for index to be deleted
+	deleteTimeout := 1 * time.Hour
+	err = retry.RetryContext(ctx, deleteTimeout, func() *retry.RetryError {
+		index, err := r.client.Databases().DescribeIndex(data.Id.ValueString())
+		if err != nil {
+			if err.Error() == "404 Not Found: Index not found" {
+				return nil
+			}
+			return retry.NonRetryableError(err)
+		}
+		return retry.RetryableError(fmt.Errorf("index not deleted. State: %s", index.Status.State))
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to wait for index to be deleted.", err.Error())
 		return
 	}
 }

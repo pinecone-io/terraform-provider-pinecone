@@ -19,6 +19,7 @@ func TestAccIndexResource(t *testing.T) {
 			{
 				Config: testAccIndexResourceConfig("frank"),
 				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("pinecone_index.test", "id", "frank"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "name", "frank"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "512"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
@@ -29,6 +30,7 @@ func TestAccIndexResource(t *testing.T) {
 				ResourceName:      "pinecone_index.test",
 				ImportState:       true,
 				ImportStateVerify: true,
+				// ImportStateVerifyIdentifierAttribute: "name",
 				// This is not normally necessary, but is here because this
 				// example code does not have an actual upstream service.
 				// Once the Read method is able to refresh information from
@@ -50,9 +52,8 @@ func TestAccIndexResource(t *testing.T) {
 func testAccIndexResourceConfig(name string) string {
 	return fmt.Sprintf(`
 provider "pinecone" {
-	environment = "us-west4-gcp"
+	environment = "gcp-starter"
 }
-
 
 resource "pinecone_index" "test" {
   name = %q

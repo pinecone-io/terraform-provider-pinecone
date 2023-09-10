@@ -26,6 +26,10 @@ func TestAccIndexesDataSource(t *testing.T) {
 }
 
 const testAccIndexesDataSourceConfig = `
+provider "pinecone" {
+	environment = "gcp-starter"
+}
+
 data "pinecone_indexes" "test" {
 }
 `

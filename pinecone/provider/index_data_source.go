@@ -6,11 +6,11 @@ package provider
 import (
 	"context"
 	"fmt"
+
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-
-	pinecone "github.com/nekomeowww/go-pinecone"
+	"github.com/skyscrapr/pinecone-sdk-go/pinecone"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -53,11 +53,11 @@ func (d *IndexDataSource) Schema(ctx context.Context, req datasource.SchemaReque
 			},
 			"dimension": schema.Int64Attribute{
 				MarkdownDescription: "Index dimension",
-				Required:            true,
+				Computed:            true,
 			},
 			"metric": schema.StringAttribute{
 				MarkdownDescription: "Index metric",
-				Required:            true,
+				Computed:            true,
 			},
 		},
 	}
@@ -93,7 +93,7 @@ func (d *IndexDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		return
 	}
 
-	index, err := d.client.DescribeIndex(ctx, data.Name.ValueString())
+	index, err := d.client.Databases().DescribeIndex(data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read Index, got error: %s", err))
 		return
@@ -101,6 +101,8 @@ func (d *IndexDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 
 	data.Name = types.StringValue(index.Database.Name)
 	data.Id = types.StringValue(index.Database.Name)
+	data.Dimension = types.Int64Value(int64(index.Database.Dimension))
+	data.Metric = types.StringValue(index.Database.Metric.String())
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)

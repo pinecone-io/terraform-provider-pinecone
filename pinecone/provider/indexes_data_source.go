@@ -6,11 +6,13 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"time"
+
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-
-	pinecone "github.com/nekomeowww/go-pinecone"
+	"github.com/skyscrapr/pinecone-sdk-go/pinecone"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -84,9 +86,9 @@ func (d *IndexesDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		return
 	}
 
-	indexes, err := d.client.ListIndexes()
+	indexes, err := d.client.Databases().ListIndexes()
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read Indexes, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to ListIndexes, got error: %s", err))
 		return
 	}
 
@@ -94,7 +96,7 @@ func (d *IndexesDataSource) Read(ctx context.Context, req datasource.ReadRequest
 
 	// For the purposes of this Indexes code, hardcoding a response value to
 	// save into the Terraform state.
-	data.Id = types.StringValue("Indexes-id")
+	data.Id = types.StringValue(strconv.FormatInt(time.Now().Unix(), 10))
 
 	// Write logs using the tflog package
 	// Documentation: https://terraform.io/plugin/log

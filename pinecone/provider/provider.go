@@ -5,7 +5,6 @@ package provider
 
 import (
 	"context"
-	"fmt"
 	"os"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -13,7 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	pinecone "github.com/nekomeowww/go-pinecone"
+	"github.com/skyscrapr/pinecone-sdk-go/pinecone"
 )
 
 // Ensure PineconeProvider satisfies various provider interfaces.
@@ -63,21 +62,14 @@ func (p *PineconeProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
-	// Default values to environment variables, but override
+	// Default to environment variables, but override
 	// with Terraform configuration value if set.
 	apiKey := os.Getenv("PINECONE_API_KEY")
 	if !data.ApiKey.IsNull() {
 		apiKey = data.ApiKey.ValueString()
 	}
-	client, err := pinecone.New(
-		pinecone.WithAPIKey(apiKey),
-		pinecone.WithEnvironment(data.Environment.ValueString()),
-		// pinecone.WithProjectName("YOUR_PROJECT_NAME"),
-	)
-	if err != nil {
-		resp.Diagnostics.AddError("Provider Client Error", fmt.Sprintf("Unable to create pinecone client, got error: %s", err))
-		return
-	}
+	client := pinecone.NewClient(apiKey, data.Environment.ValueString())
+
 	resp.DataSourceData = client
 	resp.ResourceData = client
 }
@@ -91,6 +83,7 @@ func (p *PineconeProvider) Resources(ctx context.Context) []func() resource.Reso
 func (p *PineconeProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		NewIndexesDataSource,
+		NewIndexDataSource,
 	}
 }
 

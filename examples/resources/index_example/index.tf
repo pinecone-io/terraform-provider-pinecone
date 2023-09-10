@@ -7,11 +7,11 @@ terraform {
 }
 
 provider "pinecone" {
-	environment = "gcp-starter"
+  environment = "gcp-starter"
 }
 
 resource "pinecone_index" "test" {
-  name = "frank"
+  name      = "frank"
   dimension = 512
-  metric = "cosine"
+  metric    = "cosine"
 }
