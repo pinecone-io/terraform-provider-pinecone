@@ -6,11 +6,17 @@ package provider
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 	"github.com/skyscrapr/pinecone-sdk-go/pinecone"
@@ -31,10 +37,14 @@ type IndexResource struct {
 
 // IndexResourceModel describes the resource data model.
 type IndexResourceModel struct {
-	Id        types.String `tfsdk:"id"`
-	Name      types.String `tfsdk:"name"`
-	Dimension types.Int64  `tfsdk:"dimension"`
-	Metric    types.String `tfsdk:"metric"`
+	Id               types.String `tfsdk:"id"`
+	Name             types.String `tfsdk:"name"`
+	Dimension        types.Int64  `tfsdk:"dimension"`
+	Metric           types.String `tfsdk:"metric"`
+	Pods             types.Int64  `tfsdk:"pods"`
+	Replicas         types.Int64  `tfsdk:"replicas"`
+	PodType          types.String `tfsdk:"pod_type"`
+	SourceCollection types.String `tfsdk:"source_collection"`
 }
 
 func (r *IndexResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -52,16 +62,52 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				Computed:            true,
 			},
 			"name": schema.StringAttribute{
-				MarkdownDescription: "Index name",
+				MarkdownDescription: "The name of the index to be created. The maximum length is 45 characters.",
 				Required:            true,
+				Validators: []validator.String{
+					stringvalidator.LengthAtMost(45),
+				},
 			},
 			"dimension": schema.Int64Attribute{
-				MarkdownDescription: "Index dimension",
+				MarkdownDescription: "The dimensions of the vectors to be inserted in the index",
 				Required:            true,
+				Validators: []validator.Int64{
+					int64validator.AtLeast(512),
+				},
 			},
 			"metric": schema.StringAttribute{
-				MarkdownDescription: "Index metric",
-				Required:            true,
+				MarkdownDescription: "The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'.",
+				Optional:            true,
+				Default:             stringdefault.StaticString("cosine"),
+				Validators: []validator.String{
+					stringvalidator.OneOf([]string{"euclidean", "cosine", "dotproduct"}...),
+				},
+			},
+			"pods": schema.Int64Attribute{
+				MarkdownDescription: "The number of pods for the index to use,including replicas.",
+				Optional:            true,
+				Default:             int64default.StaticInt64(1),
+			},
+			"replicas": schema.Int64Attribute{
+				MarkdownDescription: "The number of replicas. Replicas duplicate your index. They provide higher availability and throughput.",
+				Optional:            true,
+				Default:             int64default.StaticInt64(1),
+			},
+			"pod_type": schema.StringAttribute{
+				MarkdownDescription: "The type of pod to use. One of s1, p1, or p2 appended with . and one of x1, x2, x4, or x8.",
+				Optional:            true,
+				Default:             stringdefault.StaticString("p1.x1"),
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(
+						regexp.MustCompile(`^(s1|p1|p2)\.(x1|x2|x4|x8)$`),
+						"One of s1, p1, or p2 appended with . and one of x1, x2, x4, or x8.",
+					),
+				},
+			},
+			// metadata_config   object | null    Configuration for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when metadata_config is present, only specified metadata fields are indexed. To specify metadata fields to index, provide a JSON object of the following form: {"indexed": ["example_metadata_field"]}
+			"source_collection": schema.StringAttribute{
+				MarkdownDescription: "The name of the collection to create an index from.",
+				Optional:            true,
 			},
 		},
 	}
@@ -102,8 +148,14 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		Name:      data.Name.ValueString(),
 		Dimension: int(data.Dimension.ValueInt64()),
 		Metric:    pinecone.IndexMetric(data.Metric.ValueString()),
-		// TODO
+		Pods:      int(data.Pods.ValueInt64()),
+		Replicas:  int(data.Replicas.ValueInt64()),
+		PodType:   data.PodType.ValueString(),
 	}
+	if !data.SourceCollection.IsUnknown() {
+		payload.SourceCollection = data.SourceCollection.ValueStringPointer()
+	}
+
 	err := r.client.Databases().CreateIndex(&payload)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create index", err.Error())
