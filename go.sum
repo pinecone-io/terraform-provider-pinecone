@@ -182,6 +182,8 @@ github.com/skeema/knownhosts v1.2.0 h1:h9r9cf0+u7wSE+M183ZtMGgOJKiL96brpaz5ekfJC
 github.com/skeema/knownhosts v1.2.0/go.mod h1:g4fPeYpque7P0xefxtGzV81ihjC8sX2IqpAoNkjxbMo=
 github.com/skyscrapr/pinecone-sdk-go v0.0.0-20230910104552-66289d5ee6f9 h1:dnHjey5tU5OOKXy8/vtpIEr0MQ3C+sgDWxGGhiLQRQE=
 github.com/skyscrapr/pinecone-sdk-go v0.0.0-20230910104552-66289d5ee6f9/go.mod h1:d/aDpnWSD8QTYvUKniJ+RjuXMvBfg1Uu28P2rWbi4WM=
+github.com/skyscrapr/pinecone-sdk-go v0.0.0-20230911000655-41c09b31445d h1:YbKm7LfnX4OhtHm+eETfHWF0gKLOQkEFNjepiDw5XrA=
+github.com/skyscrapr/pinecone-sdk-go v0.0.0-20230911000655-41c09b31445d/go.mod h1:d/aDpnWSD8QTYvUKniJ+RjuXMvBfg1Uu28P2rWbi4WM=
 github.com/spf13/cast v1.3.1/go.mod h1:Qx5cxh0v+4UWYiBimWS+eyWzqEqokIECu5etghLkUJE=
 github.com/spf13/cast v1.5.0 h1:rj3WzYc11XZaIZMPKmwP96zkFEnnAmV8s6XbB2aY32w=
 github.com/spf13/cast v1.5.0/go.mod h1:SpXXQ5YoyJw6s3/6cMTQuxvgRl3PCJiyaX9p6b155UU=
