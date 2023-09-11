@@ -12,7 +12,7 @@ require (
 	github.com/hashicorp/terraform-plugin-go v0.19.0
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.29.0
 	github.com/hashicorp/terraform-plugin-testing v1.5.1
-	github.com/skyscrapr/pinecone-sdk-go v0.0.0-20230911000655-41c09b31445d
+	github.com/skyscrapr/pinecone-sdk-go v0.0.0-20230911092139-fb504e066518
 )
 
 require (

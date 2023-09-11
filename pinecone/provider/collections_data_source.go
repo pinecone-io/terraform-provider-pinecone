@@ -29,8 +29,8 @@ type CollectionsDataSource struct {
 
 // CollectionsDataSourceModel describes the data source data model.
 type CollectionsDataSourceModel struct {
-	Collections []string     `tfsdk:"Collections"`
-	Id      types.String `tfsdk:"id"`
+	Collections []string     `tfsdk:"collections"`
+	Id          types.String `tfsdk:"id"`
 }
 
 func (d *CollectionsDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -43,8 +43,8 @@ func (d *CollectionsDataSource) Schema(ctx context.Context, req datasource.Schem
 		MarkdownDescription: "Collections data source",
 
 		Attributes: map[string]schema.Attribute{
-			"Collections": schema.ListAttribute{
-				MarkdownDescription: "Collections",
+			"collections": schema.ListAttribute{
+				MarkdownDescription: "List of the collections in your project",
 				Computed:            true,
 				ElementType:         types.StringType,
 			},
@@ -69,7 +69,6 @@ func (d *CollectionsDataSource) Configure(ctx context.Context, req datasource.Co
 			"Unexpected Data Source Configure Type",
 			fmt.Sprintf("Expected *http.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
-
 		return
 	}
 
@@ -86,22 +85,15 @@ func (d *CollectionsDataSource) Read(ctx context.Context, req datasource.ReadReq
 		return
 	}
 
-	Collections, err := d.client.Databases().ListCollections()
+	collections, err := d.client.Collections().ListCollections()
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to ListCollections, got error: %s", err))
 		return
 	}
-
-	data.Collections = Collections
-
-	// For the purposes of this Collections code, hardcoding a response value to
-	// save into the Terraform state.
-	data.Id = types.StringValue(strconv.FormatInt(time.Now().Unix(), 10))
-
-	// Write logs using the tflog package
-	// Documentation: https://terraform.io/plugin/log
 	// tflog.Trace(ctx, "read a data source")
 
 	// Save data into Terraform state
+	data.Id = types.StringValue(strconv.FormatInt(time.Now().Unix(), 10))
+	data.Collections = collections
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
