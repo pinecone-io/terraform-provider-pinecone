@@ -8,7 +8,7 @@ terraform {
 
 provider "pinecone" {
   environment = "us-west4-gcp"
-  api_key     = ""
+  api_key     = "api-key"
 
 }
 

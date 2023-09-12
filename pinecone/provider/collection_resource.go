@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package provider
 
 import (
@@ -26,9 +29,9 @@ type CollectionResource struct {
 
 // CollectionResourceModel describes the resource data model.
 type CollectionResourceModel struct {
-	Id   types.String `tfsdk:"id"`
-	Name types.String `tfsdk:"name"`
-	// Add other attributes as needed
+	Id        types.String `tfsdk:"id"`
+	Name      types.String `tfsdk:"name"`
+	Dimension types.Int64  `tfsdk:"dimension"`
 }
 
 func (r *CollectionResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -37,9 +40,7 @@ func (r *CollectionResource) Metadata(ctx context.Context, req resource.Metadata
 
 func (r *CollectionResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		// This description is used by the documentation generator and the language server.
 		MarkdownDescription: "Collection resource",
-
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				MarkdownDescription: "Collection identifier",
@@ -49,25 +50,25 @@ func (r *CollectionResource) Schema(ctx context.Context, req resource.SchemaRequ
 				MarkdownDescription: "The name of the collection to be created.",
 				Required:            true,
 			},
-			// Add other attributes as needed
+			"dimension": schema.Int64Attribute{
+				MarkdownDescription: "The dimensions of the vectors to be inserted in the collection",
+				Required:            true,
+			},
 		},
 	}
 }
 
 func (r *CollectionResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
 		return
 	}
 
 	client, ok := req.ProviderData.(*pinecone.Client)
-
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *http.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *pinecone.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
-
 		return
 	}
 
@@ -76,63 +77,60 @@ func (r *CollectionResource) Configure(ctx context.Context, req resource.Configu
 
 func (r *CollectionResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var data CollectionResourceModel
-
-	// Read Terraform plan data into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Use the Pinecone SDK to create the collection
-	err := r.client.CreateCollection(data.Name.ValueString())
+	payload := pinecone.CreateCollectionParams{
+		Name:      data.Name.ValueString(),
+		Dimension: int(data.Dimension.ValueInt64()),
+	}
+
+	err := r.client.Collections().CreateCollection(&payload)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create collection", err.Error())
 		return
 	}
 
-	// Set the ID for the resource
-	resp.State.SetAttribute(ctx, "id", types.String{Value: data.Name.ValueString()})
+	// Save data into Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (r *CollectionResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var data CollectionResourceModel
-
-	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Use the Pinecone SDK to describe the collection
-	collection, err := r.client.DescribeCollection(data.Id.ValueString())
+	collection, err := r.client.Collections().DescribeCollection(data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to describe collection", err.Error())
 		return
 	}
 
-	readCollectionData(collection, &data)
+	data.Id = types.StringValue(collection.Name)
+	data.Name = types.StringValue(collection.Name)
+	data.Dimension = types.Int64Value(int64(collection.Dimension))
 
-	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (r *CollectionResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	// Implement update logic if needed
+	// Collections may not support updates directly. If they do, implement the update logic here.
+	// For now, this function will just read the current state.
+	r.Read(ctx, resource.ReadRequest{State: req.Plan}, resp)
 }
 
 func (r *CollectionResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var data CollectionResourceModel
-
-	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	err := r.client.DeleteCollection(data.Name.ValueString())
+	err := r.client.Collections().DeleteCollection(data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to delete collection", err.Error())
 		return
@@ -141,10 +139,4 @@ func (r *CollectionResource) Delete(ctx context.Context, req resource.DeleteRequ
 
 func (r *CollectionResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
-}
-
-func readCollectionData(collection *pinecone.Collection, model *CollectionResourceModel) {
-	model.Id = types.StringValue(collection.Name)
-	model.Name = types.StringValue(collection.Name)
-	// Add other attributes as needed
 }
