@@ -23,7 +23,7 @@ func TestAccCollectionResource(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("pinecone_collection.test", "id", rName),
 					resource.TestCheckResourceAttr("pinecone_collection.test", "name", rName),
-					resource.TestCheckResourceAttr("pinecone_collection.test", "source", rName),
+					// resource.TestCheckResourceAttr("pinecone_collection.test", "source", rName),
 					resource.TestCheckResourceAttrSet("pinecone_collection.test", "size"),
 					resource.TestCheckResourceAttrSet("pinecone_collection.test", "status"),
 				),

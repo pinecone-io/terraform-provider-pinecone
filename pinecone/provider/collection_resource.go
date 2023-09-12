@@ -173,7 +173,7 @@ func (r *CollectionResource) Delete(ctx context.Context, req resource.DeleteRequ
 	err = retry.RetryContext(ctx, deleteTimeout, func() *retry.RetryError {
 		collection, err := r.client.Collections().DescribeCollection(data.Id.ValueString())
 		if err != nil {
-			if err.Error() == "404 Not Found: Collection not found" {
+			if err.Error() == fmt.Sprintf("404 Not Found: collection %s not found", collection.Name) {
 				return nil
 			}
 			return retry.NonRetryableError(err)
