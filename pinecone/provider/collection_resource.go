@@ -6,11 +6,13 @@ package provider
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 	"github.com/skyscrapr/pinecone-sdk-go/pinecone"
 )
 
@@ -103,6 +105,28 @@ func (r *CollectionResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 
+	// Wait for collection to be ready
+	createTimeout := 1 * time.Hour
+	err = retry.RetryContext(ctx, createTimeout, func() *retry.RetryError {
+		collection, err := r.client.Collections().DescribeCollection(data.Name.ValueString())
+
+		readCollectionData(collection, &data)
+		// Save current status to state
+		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+
+		if err != nil {
+			return retry.NonRetryableError(err)
+		}
+		if collection.Status != "Ready" {
+			return retry.RetryableError(fmt.Errorf("collection not ready. State: %s", collection.Status))
+		}
+		return nil
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to wait for collection to become ready.", err.Error())
+		return
+	}
+
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -144,8 +168,32 @@ func (r *CollectionResource) Delete(ctx context.Context, req resource.DeleteRequ
 		resp.Diagnostics.AddError("Failed to delete collection", err.Error())
 		return
 	}
+	// Wait for collection to be deleted
+	deleteTimeout := 1 * time.Hour
+	err = retry.RetryContext(ctx, deleteTimeout, func() *retry.RetryError {
+		collection, err := r.client.Collections().DescribeCollection(data.Id.ValueString())
+		if err != nil {
+			if err.Error() == "404 Not Found: Collection not found" {
+				return nil
+			}
+			return retry.NonRetryableError(err)
+		}
+		return retry.RetryableError(fmt.Errorf("collection not deleted. State: %s", collection.Status))
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to wait for collection to be deleted.", err.Error())
+		return
+	}
 }
 
 func (r *CollectionResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+func readCollectionData(collection *pinecone.Collection, model *CollectionResourceModel) {
+	model.Id = types.StringValue(collection.Name)
+	model.Name = types.StringValue(collection.Name)
+	model.Source = types.StringValue(model.Source.String())
+	model.Size = types.Int64Value(int64(collection.Size))
+	model.Status = types.StringValue(collection.Status)
 }
