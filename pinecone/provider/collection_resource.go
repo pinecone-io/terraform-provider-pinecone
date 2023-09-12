@@ -173,10 +173,11 @@ func (r *CollectionResource) Delete(ctx context.Context, req resource.DeleteRequ
 		tflog.Info(ctx, fmt.Sprintf("Deleting Collection. Status: '%s'", collection.Status))
 
 		if err != nil {
-			if err.Error() == fmt.Sprintf("404 Not Found: collection %s not found", data.Name.ValueString()) {
-				return nil
-			}
-			return retry.NonRetryableError(err)
+			return nil
+			// if strings.TrimLeft(err.Error(), ":") == "404 Not Found:" {
+			// 	return nil
+			// }
+			// return retry.NonRetryableError(err)
 		}
 		return retry.RetryableError(fmt.Errorf("collection not deleted. State: %s", collection.Status))
 	})
