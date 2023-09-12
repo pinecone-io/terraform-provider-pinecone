@@ -1,63 +1,101 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package provider
 
 import (
-	"context"
+	"fmt"
+	sdkacctest "github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"testing"
-
-	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-framework/resource/testing/v2"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
-	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-func TestCollectionResource(t *testing.T) {
-	t.Parallel()
+func TestAccCollectionResource(t *testing.T) {
+	rName := sdkacctest.RandomWithPrefix("tftest")
 
-	resourceType := NewCollectionResource()
-
-	t.Run("Plan", func(t *testing.T) {
-		req := resource.PlanResourceRequest{
-			Config: tfsdk.NewAttributePathValue(tfsdk.NewAttributePath().WithAttributeName("name"), types.String{Value: "test-collection"}),
-			State:  tfsdk.NewAttributePathValue(tfsdk.NewAttributePath().WithAttributeName("id"), types.String{}),
-		}
-		resp := resource.PlanResourceResponse{}
-
-		resourceType.Plan(context.Background(), req, &resp)
-
-		if resp.Diagnostics.HasError() {
-			t.Errorf("Unexpected diagnostics: %s", resp.Diagnostics)
-		}
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			// Create and Read testing
+			{
+				Config: testAccCollectionResourceConfig(rName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("pinecone_collection.test", "id", rName),
+					resource.TestCheckResourceAttr("pinecone_collection.test", "name", rName),
+					resource.TestCheckResourceAttr("pinecone_collection.test", "source", rName),
+					resource.TestCheckResourceAttrSet("pinecone_collection.test", "size"),
+					resource.TestCheckResourceAttrSet("pinecone_collection.test", "status"),
+				),
+			},
+			// ImportState testing
+			{
+				ResourceName:      "pinecone_collection.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+				// ImportStateVerifyIdentifierAttribute: "name",
+				// This is not normally necessary, but is here because this
+				// example code does not have an actual upstream service.
+				// Once the Read method is able to refresh information from
+				// the upstream service, this can be removed.
+				// ImportStateVerifyIgnore: []string{"configurable_attribute", "defaulted"},
+			},
+			// Delete testing automatically occurs in TestCase
+		},
 	})
-
-	t.Run("Apply", func(t *testing.T) {
-		req := resource.ApplyResourceRequest{
-			Config: tfsdk.NewAttributePathValue(tfsdk.NewAttributePath().WithAttributeName("name"), types.String{Value: "test-collection"}),
-			State:  tfsdk.NewAttributePathValue(tfsdk.NewAttributePath().WithAttributeName("id"), types.String{}),
-		}
-		resp := resource.ApplyResourceResponse{}
-
-		resourceType.Apply(context.Background(), req, &resp)
-
-		if resp.Diagnostics.HasError() {
-			t.Errorf("Unexpected diagnostics: %s", resp.Diagnostics)
-		}
-	})
-
-	// Add more tests as needed, such as Read, Update, and Delete.
 }
 
-func TestCollectionResource_Acceptance(t *testing.T) {
-	// This is a placeholder for acceptance tests which would involve real API calls.
-	// You'd typically set up the environment, create real resources, and then tear them down.
-
-	t.Skip("Acceptance tests are skipped for now. Remove this line to run them.")
-
-	resourceType := NewCollectionResource()
-
-	// Example acceptance test structure
-	t.Run("Create and delete collection", func(t *testing.T) {
-		// Setup, API calls, assertions
-	})
-
-	// Add more acceptance tests as needed.
+func testAccCollectionResourceConfig(name string) string {
+	return fmt.Sprintf(`
+provider "pinecone" {
+	environment = "gcp-starter"
 }
+
+resource "pinecone_index" "test" {
+	name = %q
+	dimension = 512
+	replicas = 1
+}
+  
+resource "pinecone_collection" "test" {
+	name = %q
+	source = pinecone_index.test.name
+}
+`, name, name)
+}
+
+// func TestCollectionResource(t *testing.T) {
+// 	t.Parallel()
+
+// 	resourceType := NewCollectionResource()
+
+// 	t.Run("Plan", func(t *testing.T) {
+// 		req := resource.PlanResourceRequest{
+// 			Config: tfsdk.NewAttributePathValue(tfsdk.NewAttributePath().WithAttributeName("name"), types.String{Value: "test-collection"}),
+// 			State:  tfsdk.NewAttributePathValue(tfsdk.NewAttributePath().WithAttributeName("id"), types.String{}),
+// 		}
+// 		resp := resource.PlanResourceResponse{}
+
+// 		resourceType.Plan(context.Background(), req, &resp)
+
+// 		if resp.Diagnostics.HasError() {
+// 			t.Errorf("Unexpected diagnostics: %s", resp.Diagnostics)
+// 		}
+// 	})
+
+// 	t.Run("Apply", func(t *testing.T) {
+// 		req := resource.ApplyResourceRequest{
+// 			Config: tfsdk.NewAttributePathValue(tfsdk.NewAttributePath().WithAttributeName("name"), types.String{Value: "test-collection"}),
+// 			State:  tfsdk.NewAttributePathValue(tfsdk.NewAttributePath().WithAttributeName("id"), types.String{}),
+// 		}
+// 		resp := resource.ApplyResourceResponse{}
+
+// 		resourceType.Apply(context.Background(), req, &resp)
+
+// 		if resp.Diagnostics.HasError() {
+// 			t.Errorf("Unexpected diagnostics: %s", resp.Diagnostics)
+// 		}
+// 	})
+
+// 	// Add more tests as needed, such as Read, Update, and Delete.
+// }

@@ -29,9 +29,11 @@ type CollectionResource struct {
 
 // CollectionResourceModel describes the resource data model.
 type CollectionResourceModel struct {
-	Id        types.String `tfsdk:"id"`
-	Name      types.String `tfsdk:"name"`
-	Dimension types.Int64  `tfsdk:"dimension"`
+	Id     types.String `tfsdk:"id"`
+	Name   types.String `tfsdk:"name"`
+	Source types.String `tfsdk:"source"`
+	Size   types.Int64  `tfsdk:"size"`
+	Status types.String `tfsdk:"status"`
 }
 
 func (r *CollectionResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -47,12 +49,20 @@ func (r *CollectionResource) Schema(ctx context.Context, req resource.SchemaRequ
 				Computed:            true,
 			},
 			"name": schema.StringAttribute{
-				MarkdownDescription: "The name of the collection to be created.",
+				MarkdownDescription: "The name of the collection.",
 				Required:            true,
 			},
-			"dimension": schema.Int64Attribute{
-				MarkdownDescription: "The dimensions of the vectors to be inserted in the collection",
+			"source": schema.StringAttribute{
+				MarkdownDescription: "The name of the source index to be used as the source for the collection.",
 				Required:            true,
+			},
+			"size": schema.Int64Attribute{
+				MarkdownDescription: "The size of the collection in bytes.",
+				Computed:            true,
+			},
+			"status": schema.StringAttribute{
+				MarkdownDescription: "The status of the collection.",
+				Computed:            true,
 			},
 		},
 	}
@@ -83,8 +93,8 @@ func (r *CollectionResource) Create(ctx context.Context, req resource.CreateRequ
 	}
 
 	payload := pinecone.CreateCollectionParams{
-		Name:      data.Name.ValueString(),
-		Dimension: int(data.Dimension.ValueInt64()),
+		Name:   data.Name.ValueString(),
+		Source: data.Source.ValueString(),
 	}
 
 	err := r.client.Collections().CreateCollection(&payload)
@@ -112,15 +122,14 @@ func (r *CollectionResource) Read(ctx context.Context, req resource.ReadRequest,
 
 	data.Id = types.StringValue(collection.Name)
 	data.Name = types.StringValue(collection.Name)
-	data.Dimension = types.Int64Value(int64(collection.Dimension))
+	data.Size = types.Int64Value(int64(collection.Size))
+	data.Status = types.StringValue(collection.Status)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (r *CollectionResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	// Collections may not support updates directly. If they do, implement the update logic here.
-	// For now, this function will just read the current state.
-	r.Read(ctx, resource.ReadRequest{State: req.Plan}, resp)
+	// Collections currently do not support updates
 }
 
 func (r *CollectionResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
