@@ -194,7 +194,7 @@ func (r *CollectionResource) ImportState(ctx context.Context, req resource.Impor
 func readCollectionData(collection *pinecone.Collection, model *CollectionResourceModel) {
 	model.Id = types.StringValue(collection.Name)
 	model.Name = types.StringValue(collection.Name)
-	model.Source = types.StringValue(model.Source.String())
+	model.Source = types.StringValue(model.Source.ValueString())
 	model.Size = types.Int64Value(int64(collection.Size))
 	model.Status = types.StringValue(collection.Status)
 }

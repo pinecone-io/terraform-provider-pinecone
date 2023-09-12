@@ -23,7 +23,7 @@ func TestAccCollectionResource(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("pinecone_collection.test", "id", rName),
 					resource.TestCheckResourceAttr("pinecone_collection.test", "name", rName),
-					// resource.TestCheckResourceAttr("pinecone_collection.test", "source", rName),
+					resource.TestCheckResourceAttr("pinecone_collection.test", "source", rName),
 					resource.TestCheckResourceAttrSet("pinecone_collection.test", "size"),
 					resource.TestCheckResourceAttrSet("pinecone_collection.test", "status"),
 				),
@@ -63,39 +63,3 @@ resource "pinecone_collection" "test" {
 }
 `, name, name)
 }
-
-// func TestCollectionResource(t *testing.T) {
-// 	t.Parallel()
-
-// 	resourceType := NewCollectionResource()
-
-// 	t.Run("Plan", func(t *testing.T) {
-// 		req := resource.PlanResourceRequest{
-// 			Config: tfsdk.NewAttributePathValue(tfsdk.NewAttributePath().WithAttributeName("name"), types.String{Value: "test-collection"}),
-// 			State:  tfsdk.NewAttributePathValue(tfsdk.NewAttributePath().WithAttributeName("id"), types.String{}),
-// 		}
-// 		resp := resource.PlanResourceResponse{}
-
-// 		resourceType.Plan(context.Background(), req, &resp)
-
-// 		if resp.Diagnostics.HasError() {
-// 			t.Errorf("Unexpected diagnostics: %s", resp.Diagnostics)
-// 		}
-// 	})
-
-// 	t.Run("Apply", func(t *testing.T) {
-// 		req := resource.ApplyResourceRequest{
-// 			Config: tfsdk.NewAttributePathValue(tfsdk.NewAttributePath().WithAttributeName("name"), types.String{Value: "test-collection"}),
-// 			State:  tfsdk.NewAttributePathValue(tfsdk.NewAttributePath().WithAttributeName("id"), types.String{}),
-// 		}
-// 		resp := resource.ApplyResourceResponse{}
-
-// 		resourceType.Apply(context.Background(), req, &resp)
-
-// 		if resp.Diagnostics.HasError() {
-// 			t.Errorf("Unexpected diagnostics: %s", resp.Diagnostics)
-// 		}
-// 	})
-
-// 	// Add more tests as needed, such as Read, Update, and Delete.
-// }
