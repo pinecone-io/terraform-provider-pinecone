@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 	"github.com/skyscrapr/pinecone-sdk-go/pinecone"
 )
@@ -144,10 +145,7 @@ func (r *CollectionResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 
-	data.Id = types.StringValue(collection.Name)
-	data.Name = types.StringValue(collection.Name)
-	data.Size = types.Int64Value(int64(collection.Size))
-	data.Status = types.StringValue(collection.Status)
+	readCollectionData(collection, &data)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -172,8 +170,10 @@ func (r *CollectionResource) Delete(ctx context.Context, req resource.DeleteRequ
 	deleteTimeout := 1 * time.Hour
 	err = retry.RetryContext(ctx, deleteTimeout, func() *retry.RetryError {
 		collection, err := r.client.Collections().DescribeCollection(data.Id.ValueString())
+		tflog.Info(ctx, fmt.Sprintf("Deleting Collection. Status: '%s'", collection.Status))
+
 		if err != nil {
-			if err.Error() == fmt.Sprintf("404 Not Found: collection %s not found", collection.Name) {
+			if err.Error() == fmt.Sprintf("404 Not Found: collection %s not found", data.Name.ValueString()) {
 				return nil
 			}
 			return retry.NonRetryableError(err)
