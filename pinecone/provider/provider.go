@@ -9,8 +9,8 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
-	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/skyscrapr/pinecone-sdk-go/pinecone"
 )
@@ -77,6 +77,7 @@ func (p *PineconeProvider) Configure(ctx context.Context, req provider.Configure
 func (p *PineconeProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewIndexResource,
+		NewCollectionResource, // Added the collection resource
 	}
 }
 
