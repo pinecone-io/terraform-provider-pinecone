@@ -186,6 +186,8 @@ github.com/skyscrapr/pinecone-sdk-go v0.0.0-20230911000655-41c09b31445d h1:YbKm7
 github.com/skyscrapr/pinecone-sdk-go v0.0.0-20230911000655-41c09b31445d/go.mod h1:d/aDpnWSD8QTYvUKniJ+RjuXMvBfg1Uu28P2rWbi4WM=
 github.com/skyscrapr/pinecone-sdk-go v0.0.0-20230911092139-fb504e066518 h1:LJ+ESkk6e1+rc5f3JWfPBiIrJmnyd9i/wo8uh348RvM=
 github.com/skyscrapr/pinecone-sdk-go v0.0.0-20230911092139-fb504e066518/go.mod h1:d/aDpnWSD8QTYvUKniJ+RjuXMvBfg1Uu28P2rWbi4WM=
+github.com/skyscrapr/pinecone-sdk-go v0.0.0-20230913023823-fe8e8c1ecc13 h1:nJy0QfoPls7rHdQhYxg07F/LkqVIn6DwAHhl79JtmT4=
+github.com/skyscrapr/pinecone-sdk-go v0.0.0-20230913023823-fe8e8c1ecc13/go.mod h1:d/aDpnWSD8QTYvUKniJ+RjuXMvBfg1Uu28P2rWbi4WM=
 github.com/spf13/cast v1.3.1/go.mod h1:Qx5cxh0v+4UWYiBimWS+eyWzqEqokIECu5etghLkUJE=
 github.com/spf13/cast v1.5.0 h1:rj3WzYc11XZaIZMPKmwP96zkFEnnAmV8s6XbB2aY32w=
 github.com/spf13/cast v1.5.0/go.mod h1:SpXXQ5YoyJw6s3/6cMTQuxvgRl3PCJiyaX9p6b155UU=
@@ -288,6 +290,8 @@ google.golang.org/appengine v1.6.7 h1:FZR1q0exgwxzPzp/aF+VccGrSfxfPpkBqjIIEq3ru6
 google.golang.org/appengine v1.6.7/go.mod h1:8WjMMxjGQR8xUklV/ARdw2HLXBOI7O7uCIDZVag1xfc=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20230822172742-b8732ec3820d h1:uvYuEyMHKNt+lT4K3bN6fGswmK8qSvcreM3BwjDh+y4=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20230822172742-b8732ec3820d/go.mod h1:+Bk1OCOj40wS2hwAMA+aCW9ypzm63QTBBHp6lQ3p+9M=
+google.golang.org/genproto/googleapis/rpc v0.0.0-20230911183012-2d3300fd4832 h1:o4LtQxebKIJ4vkzyhtD2rfUNZ20Zf0ik5YVP5E7G7VE=
+google.golang.org/genproto/googleapis/rpc v0.0.0-20230911183012-2d3300fd4832/go.mod h1:+Bk1OCOj40wS2hwAMA+aCW9ypzm63QTBBHp6lQ3p+9M=
 google.golang.org/grpc v1.58.0 h1:32JY8YpPMSR45K+c3o6b8VL73V+rR8k+DeMIr4vRH8o=
 google.golang.org/grpc v1.58.0/go.mod h1:tgX3ZQDlNJGU96V6yHh1T/JeoBQ2TXdr43YbYSsCJk0=
 google.golang.org/protobuf v1.26.0-rc.1/go.mod h1:jlhhOSvTdKEhbULTjvd4ARK9grFBp09yW+WbY/TyQbw=
