@@ -76,14 +76,15 @@ func (p *PineconeProvider) Configure(ctx context.Context, req provider.Configure
 
 func (p *PineconeProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
+		NewCollectionResource,
 		NewIndexResource,
-		NewCollectionResource, // Added the collection resource
 	}
 }
 
 func (p *PineconeProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		NewCollectionsDataSource,
+		NewCollectionDataSource,
 		NewIndexesDataSource,
 		NewIndexDataSource,
 	}
