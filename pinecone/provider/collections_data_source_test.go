@@ -7,7 +7,6 @@ import (
 )
 
 func TestAccCollectionsDataSource(t *testing.T) {
-	t.Skip("skipping till able to test collecitons")
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -24,7 +23,7 @@ func TestAccCollectionsDataSource(t *testing.T) {
 
 const testAccCollectionsDataSourceConfig = `
 provider "pinecone" {
-	environment = "gcp-starter"
+	environment = "us-west4-gcp"
 }
 
 data "pinecone_collections" "test" {
