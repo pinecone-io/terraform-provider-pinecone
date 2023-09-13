@@ -27,7 +27,7 @@ func TestAccIndexResource(t *testing.T) {
 					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "pods", "1"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "replicas", "1"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "pod_type", "starter"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "pod_type", "s1.x1"),
 					resource.TestCheckNoResourceAttr("pinecone_index.test", "source_collection"),
 				),
 			},
@@ -54,7 +54,7 @@ func TestAccIndexResource(t *testing.T) {
 					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "pods", "1"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "replicas", "1"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "pod_type", "starter"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "pod_type", "s1.x1"),
 					resource.TestCheckNoResourceAttr("pinecone_index.test", "source_collection"),
 				),
 			},
@@ -66,13 +66,14 @@ func TestAccIndexResource(t *testing.T) {
 func testAccIndexResourceConfig(name string, replicas int) string {
 	return fmt.Sprintf(`
 provider "pinecone" {
-	environment = "gcp-starter"
+	environment = "us-west4-gcp"
 }
 
 resource "pinecone_index" "test" {
   name = %q
   dimension = 512
   replicas = %d
+  pod_type = "s1.x1"
 }
 `, name, replicas)
 }

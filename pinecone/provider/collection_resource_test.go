@@ -38,7 +38,7 @@ func TestAccCollectionResource(t *testing.T) {
 				// example code does not have an actual upstream service.
 				// Once the Read method is able to refresh information from
 				// the upstream service, this can be removed.
-				// ImportStateVerifyIgnore: []string{"configurable_attribute", "defaulted"},
+				ImportStateVerifyIgnore: []string{"source"},
 			},
 			// Delete testing automatically occurs in TestCase
 		},
@@ -48,13 +48,14 @@ func TestAccCollectionResource(t *testing.T) {
 func testAccCollectionResourceConfig(name string) string {
 	return fmt.Sprintf(`
 provider "pinecone" {
-	environment = "gcp-starter"
+	environment = "us-west4-gcp"
 }
 
 resource "pinecone_index" "test" {
 	name = %q
 	dimension = 512
 	replicas = 1
+	pod_type = "s1.x1"
 }
   
 resource "pinecone_collection" "test" {

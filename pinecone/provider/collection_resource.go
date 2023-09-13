@@ -139,7 +139,7 @@ func (r *CollectionResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 
-	collection, err := r.client.Collections().DescribeCollection(data.Name.ValueString())
+	collection, err := r.client.Collections().DescribeCollection(data.Id.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to describe collection", err.Error())
 		return
@@ -173,11 +173,10 @@ func (r *CollectionResource) Delete(ctx context.Context, req resource.DeleteRequ
 		tflog.Info(ctx, fmt.Sprintf("Deleting Collection. Status: '%s'", collection.Status))
 
 		if err != nil {
-			return nil
-			// if strings.TrimLeft(err.Error(), ":") == "404 Not Found:" {
-			// 	return nil
-			// }
-			// return retry.NonRetryableError(err)
+			if pineconeErr, ok := err.(*pinecone.HTTPError); ok && pineconeErr.StatusCode == 404 {
+				return nil
+			}
+			return retry.NonRetryableError(err)
 		}
 		return retry.RetryableError(fmt.Errorf("collection not deleted. State: %s", collection.Status))
 	})
