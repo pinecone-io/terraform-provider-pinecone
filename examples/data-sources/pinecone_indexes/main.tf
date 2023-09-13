@@ -7,12 +7,9 @@ terraform {
 }
 
 provider "pinecone" {
-  environment = "us-west4-gcp"
-  api_key     = "var.api_key"
-
-
+  environment = "gcp-starter"
+  # api_key = set via PINECONE_API_KEY env variable
 }
 
-data "pinecone_index" "example" {
-  name = "example-index"
+data "pinecone_indexes" "example" {
 }

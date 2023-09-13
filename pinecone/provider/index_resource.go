@@ -269,7 +269,7 @@ func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	err = retry.RetryContext(ctx, deleteTimeout, func() *retry.RetryError {
 		index, err := r.client.Databases().DescribeIndex(data.Id.ValueString())
 		if err != nil {
-			if err.Error() == "404 Not Found: Index not found" {
+			if pineconeErr, ok := err.(*pinecone.HTTPError); ok && pineconeErr.StatusCode == 404 {
 				return nil
 			}
 			return retry.NonRetryableError(err)

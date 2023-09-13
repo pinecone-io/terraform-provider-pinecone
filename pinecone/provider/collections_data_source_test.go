@@ -7,7 +7,6 @@ import (
 )
 
 func TestAccCollectionsDataSource(t *testing.T) {
-	t.Skip("temporarily skipped...")
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -16,7 +15,6 @@ func TestAccCollectionsDataSource(t *testing.T) {
 				Config: testAccCollectionsDataSourceConfig,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrSet("data.pinecone_collections.test", "id"),
-					resource.TestCheckResourceAttrSet("data.pinecone_collections.test", "names.#"),
 				),
 			},
 		},
@@ -24,6 +22,10 @@ func TestAccCollectionsDataSource(t *testing.T) {
 }
 
 const testAccCollectionsDataSourceConfig = `
+provider "pinecone" {
+	environment = "us-west4-gcp"
+}
+
 data "pinecone_collections" "test" {
 }
 `

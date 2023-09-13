@@ -27,7 +27,7 @@ func TestAccIndexesDataSource(t *testing.T) {
 
 const testAccIndexesDataSourceConfig = `
 provider "pinecone" {
-	environment = "gcp-starter"
+	environment = "us-west4-gcp"
 }
 
 data "pinecone_indexes" "test" {
