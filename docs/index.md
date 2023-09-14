@@ -22,14 +22,8 @@ terraform {
 }
 
 provider "pinecone" {
-  api_key     = var.api_key
   environment = "us-west4-gcp"
-}
-
-resource "pinecone_index" "example" {
-  name      = "frank"
-  dimension = 512
-  metric    = "cosine"
+  # api_key = set via PINECONE_API_KEY env variable
 }
 ```
 
