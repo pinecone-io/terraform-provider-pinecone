@@ -44,6 +44,7 @@ resource "pinecone_index" "test" {
 
 ### Optional
 
+- `metadata_config` (Attributes) Configuration for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when metadata_config is present, only specified metadata fields are indexed. To specify metadata fields to index, provide an array of the following form: [example_metadata_field] (see [below for nested schema](#nestedatt--metadata_config))
 - `metric` (String) The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'.
 - `pod_type` (String) The type of pod to use. One of s1, p1, or p2 appended with . and one of x1, x2, x4, or x8.
 - `pods` (Number) The number of pods for the index to use,including replicas.
@@ -53,3 +54,10 @@ resource "pinecone_index" "test" {
 ### Read-Only
 
 - `id` (String) Index identifier
+
+<a id="nestedatt--metadata_config"></a>
+### Nested Schema for `metadata_config`
+
+Optional:
+
+- `indexed` (List of String) The indexed fields.
