@@ -11,6 +11,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -18,6 +19,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 	"github.com/skyscrapr/pinecone-sdk-go/pinecone"
 )
@@ -44,7 +46,18 @@ type IndexResourceModel struct {
 	Pods             types.Int64  `tfsdk:"pods"`
 	Replicas         types.Int64  `tfsdk:"replicas"`
 	PodType          types.String `tfsdk:"pod_type"`
+	MetadataConfig   types.Object `tfsdk:"metadata_config"`
 	SourceCollection types.String `tfsdk:"source_collection"`
+}
+
+type IndexMetadataConfigModel struct {
+	Indexed types.List `tfsdk:"indexed"`
+}
+
+func (metadataConfig IndexMetadataConfigModel) AttrTypes() map[string]attr.Type {
+	return map[string]attr.Type{
+		"indexed": types.ListType{ElemType: types.StringType},
+	}
 }
 
 func (r *IndexResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -108,7 +121,19 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 					),
 				},
 			},
-			// metadata_config   object | null    Configuration for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when metadata_config is present, only specified metadata fields are indexed. To specify metadata fields to index, provide a JSON object of the following form: {"indexed": ["example_metadata_field"]}
+			"metadata_config": schema.SingleNestedAttribute{
+				Description: "Configuration for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when metadata_config is present, only specified metadata fields are indexed. To specify metadata fields to index, provide an array of the following form: [example_metadata_field]",
+				Optional:    true,
+				Computed:    true,
+				Attributes: map[string]schema.Attribute{
+					"indexed": schema.ListAttribute{
+						Description: "The indexed fields.",
+						Optional:    true,
+						Computed:    true,
+						ElementType: types.StringType,
+					},
+				},
+			},
 			"source_collection": schema.StringAttribute{
 				MarkdownDescription: "The name of the collection to create an index from.",
 				Optional:            true,
@@ -156,6 +181,9 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		Replicas:  int(data.Replicas.ValueInt64()),
 		PodType:   data.PodType.ValueString(),
 	}
+	if !data.MetadataConfig.IsNull() {
+		data.MetadataConfig.As(ctx, payload.MetadataConfig, basetypes.ObjectAsOptions{})
+	}
 	if !data.SourceCollection.IsNull() {
 		payload.SourceCollection = data.SourceCollection.ValueStringPointer()
 	}
@@ -171,7 +199,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 	err = retry.RetryContext(ctx, createTimeout, func() *retry.RetryError {
 		index, err := r.client.Databases().DescribeIndex(data.Name.ValueString())
 
-		readIndexData(index, &data)
+		readIndexData(ctx, index, &data)
 		// Save current status to state
 		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 
@@ -208,7 +236,7 @@ func (r *IndexResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
-	readIndexData(index, &data)
+	readIndexData(ctx, index, &data)
 
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -243,7 +271,7 @@ func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
-	readIndexData(index, &data)
+	readIndexData(ctx, index, &data)
 
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -286,7 +314,7 @@ func (r *IndexResource) ImportState(ctx context.Context, req resource.ImportStat
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-func readIndexData(index *pinecone.Index, model *IndexResourceModel) {
+func readIndexData(ctx context.Context, index *pinecone.Index, model *IndexResourceModel) {
 	model.Id = types.StringValue(index.Database.Name)
 	model.Name = types.StringValue(index.Database.Name)
 	model.Dimension = types.Int64Value(int64(index.Database.Dimension))
@@ -294,4 +322,5 @@ func readIndexData(index *pinecone.Index, model *IndexResourceModel) {
 	model.Pods = types.Int64Value(int64(index.Database.Pods))
 	model.Replicas = types.Int64Value(int64(index.Database.Replicas))
 	model.PodType = types.StringValue(index.Database.PodType)
+	model.MetadataConfig, _ = types.ObjectValueFrom(ctx, IndexMetadataConfigModel{}.AttrTypes(), index.Database.MetadataConfig)
 }
