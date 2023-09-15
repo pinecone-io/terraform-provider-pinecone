@@ -50,6 +50,7 @@ resource "pinecone_index" "test" {
 - `pods` (Number) The number of pods for the index to use,including replicas.
 - `replicas` (Number) The number of replicas. Replicas duplicate your index. They provide higher availability and throughput.
 - `source_collection` (String) The name of the collection to create an index from.
+- `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 
 ### Read-Only
 
@@ -61,3 +62,12 @@ resource "pinecone_index" "test" {
 Optional:
 
 - `indexed` (List of String) The indexed fields.
+
+
+<a id="nestedblock--timeouts"></a>
+### Nested Schema for `timeouts`
+
+Optional:
+
+- `create` (String) Timeout defaults to 2 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
+- `delete` (String) Timeout defaults to 2 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).

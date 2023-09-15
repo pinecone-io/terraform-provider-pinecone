@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -22,6 +23,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 	"github.com/skyscrapr/pinecone-sdk-go/pinecone"
+)
+
+const (
+	defaultIndexCreateTimeout time.Duration = 2 * time.Minute
+	defaultIndexDeleteTimeout time.Duration = 2 * time.Minute
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -39,15 +45,16 @@ type IndexResource struct {
 
 // IndexResourceModel describes the resource data model.
 type IndexResourceModel struct {
-	Id               types.String `tfsdk:"id"`
-	Name             types.String `tfsdk:"name"`
-	Dimension        types.Int64  `tfsdk:"dimension"`
-	Metric           types.String `tfsdk:"metric"`
-	Pods             types.Int64  `tfsdk:"pods"`
-	Replicas         types.Int64  `tfsdk:"replicas"`
-	PodType          types.String `tfsdk:"pod_type"`
-	MetadataConfig   types.Object `tfsdk:"metadata_config"`
-	SourceCollection types.String `tfsdk:"source_collection"`
+	Id               types.String   `tfsdk:"id"`
+	Name             types.String   `tfsdk:"name"`
+	Dimension        types.Int64    `tfsdk:"dimension"`
+	Metric           types.String   `tfsdk:"metric"`
+	Pods             types.Int64    `tfsdk:"pods"`
+	Replicas         types.Int64    `tfsdk:"replicas"`
+	PodType          types.String   `tfsdk:"pod_type"`
+	MetadataConfig   types.Object   `tfsdk:"metadata_config"`
+	SourceCollection types.String   `tfsdk:"source_collection"`
+	Timeouts         timeouts.Value `tfsdk:"timeouts"`
 }
 
 type IndexMetadataConfigModel struct {
@@ -139,6 +146,20 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				Optional:            true,
 			},
 		},
+		Blocks: map[string]schema.Block{
+			"timeouts": timeouts.Block(ctx,
+				timeouts.Opts{
+					Create: true,
+					CreateDescription: `Timeout defaults to 2 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) ` +
+						`consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are ` +
+						`"s" (seconds), "m" (minutes), "h" (hours).`,
+					Delete: true,
+					DeleteDescription: `Timeout defaults to 2 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) ` +
+						`consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are ` +
+						`"s" (seconds), "m" (minutes), "h" (hours).`,
+				},
+			),
+		},
 	}
 }
 
@@ -195,7 +216,14 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 
 	// Wait for index to be ready
-	createTimeout := 1 * time.Hour
+	// Create() is passed a default timeout to use if no value
+	// has been supplied in the Terraform configuration.
+	createTimeout, diags := data.Timeouts.Create(ctx, defaultIndexCreateTimeout)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	err = retry.RetryContext(ctx, createTimeout, func() *retry.RetryError {
 		index, err := r.client.Databases().DescribeIndex(data.Name.ValueString())
 
@@ -292,8 +320,16 @@ func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		resp.Diagnostics.AddError("Failed to delete index", err.Error())
 		return
 	}
+
 	// Wait for index to be deleted
-	deleteTimeout := 1 * time.Hour
+	// Create() is passed a default timeout to use if no value
+	// has been supplied in the Terraform configuration.
+	deleteTimeout, diags := data.Timeouts.Create(ctx, defaultIndexDeleteTimeout)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	err = retry.RetryContext(ctx, deleteTimeout, func() *retry.RetryError {
 		index, err := r.client.Databases().DescribeIndex(data.Id.ValueString())
 		if err != nil {
