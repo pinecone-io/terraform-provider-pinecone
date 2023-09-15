@@ -79,5 +79,9 @@ jobs:
       - env:
           PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
           TF_ACC: "1"
-        run: go test -v -cover ./pinecone/provider/
+        run: go test -race -covermode=atomic -coverprofile=coverage.out -v ./pinecone/provider/
         timeout-minutes: 10
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v3
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
