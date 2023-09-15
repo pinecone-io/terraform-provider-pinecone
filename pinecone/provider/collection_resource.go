@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -15,6 +16,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 	"github.com/skyscrapr/pinecone-sdk-go/pinecone"
+)
+
+const (
+	defaultCollectionCreateTimeout time.Duration = 2 * time.Minute
+	defaultCollectionDeleteTimeout time.Duration = 2 * time.Minute
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -32,11 +38,12 @@ type CollectionResource struct {
 
 // CollectionResourceModel describes the resource data model.
 type CollectionResourceModel struct {
-	Id     types.String `tfsdk:"id"`
-	Name   types.String `tfsdk:"name"`
-	Source types.String `tfsdk:"source"`
-	Size   types.Int64  `tfsdk:"size"`
-	Status types.String `tfsdk:"status"`
+	Id       types.String   `tfsdk:"id"`
+	Name     types.String   `tfsdk:"name"`
+	Source   types.String   `tfsdk:"source"`
+	Size     types.Int64    `tfsdk:"size"`
+	Status   types.String   `tfsdk:"status"`
+	Timeouts timeouts.Value `tfsdk:"timeouts"`
 }
 
 func (r *CollectionResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -67,6 +74,20 @@ func (r *CollectionResource) Schema(ctx context.Context, req resource.SchemaRequ
 				MarkdownDescription: "The status of the collection.",
 				Computed:            true,
 			},
+		},
+		Blocks: map[string]schema.Block{
+			"timeouts": timeouts.Block(ctx,
+				timeouts.Opts{
+					Create: true,
+					CreateDescription: `Timeout defaults to 2 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) ` +
+						`consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are ` +
+						`"s" (seconds), "m" (minutes), "h" (hours).`,
+					Delete: true,
+					DeleteDescription: `Timeout defaults to 2 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) ` +
+						`consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are ` +
+						`"s" (seconds), "m" (minutes), "h" (hours).`,
+				},
+			),
 		},
 	}
 }
@@ -107,7 +128,14 @@ func (r *CollectionResource) Create(ctx context.Context, req resource.CreateRequ
 	}
 
 	// Wait for collection to be ready
-	createTimeout := 1 * time.Hour
+	// Create() is passed a default timeout to use if no value
+	// has been supplied in the Terraform configuration.
+	createTimeout, diags := data.Timeouts.Create(ctx, defaultCollectionCreateTimeout)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	err = retry.RetryContext(ctx, createTimeout, func() *retry.RetryError {
 		collection, err := r.client.Collections().DescribeCollection(data.Name.ValueString())
 
@@ -167,7 +195,14 @@ func (r *CollectionResource) Delete(ctx context.Context, req resource.DeleteRequ
 		return
 	}
 	// Wait for collection to be deleted
-	deleteTimeout := 1 * time.Hour
+	// Create() is passed a default timeout to use if no value
+	// has been supplied in the Terraform configuration.
+	deleteTimeout, diags := data.Timeouts.Create(ctx, defaultIndexDeleteTimeout)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	err = retry.RetryContext(ctx, deleteTimeout, func() *retry.RetryError {
 		collection, err := r.client.Collections().DescribeCollection(data.Id.ValueString())
 		tflog.Info(ctx, fmt.Sprintf("Deleting Collection. Status: '%s'", collection.Status))
