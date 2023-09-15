@@ -28,12 +28,12 @@ var _ resource.Resource = &CollectionResource{}
 var _ resource.ResourceWithImportState = &CollectionResource{}
 
 func NewCollectionResource() resource.Resource {
-	return &CollectionResource{}
+	return &CollectionResource{PineconeResource: &PineconeResource{}}
 }
 
 // CollectionResource defines the resource implementation.
 type CollectionResource struct {
-	client *pinecone.Client
+	*PineconeResource
 }
 
 // CollectionResourceModel describes the resource data model.
@@ -90,23 +90,6 @@ func (r *CollectionResource) Schema(ctx context.Context, req resource.SchemaRequ
 			),
 		},
 	}
-}
-
-func (r *CollectionResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-
-	client, ok := req.ProviderData.(*pinecone.Client)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *pinecone.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
-		return
-	}
-
-	r.client = client
 }
 
 func (r *CollectionResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {

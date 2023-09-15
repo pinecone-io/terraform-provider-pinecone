@@ -12,19 +12,18 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/skyscrapr/pinecone-sdk-go/pinecone"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ datasource.DataSource = &CollectionsDataSource{}
 
 func NewCollectionsDataSource() datasource.DataSource {
-	return &CollectionsDataSource{}
+	return &CollectionsDataSource{PineconeDatasource: &PineconeDatasource{}}
 }
 
 // CollectionsDataSource defines the data source implementation.
 type CollectionsDataSource struct {
-	client *pinecone.Client
+	*PineconeDatasource
 }
 
 // CollectionsDataSourceModel describes the data source data model.
@@ -54,25 +53,6 @@ func (d *CollectionsDataSource) Schema(ctx context.Context, req datasource.Schem
 			},
 		},
 	}
-}
-
-func (d *CollectionsDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
-	// Prevent panic if the provider has not been configured.
-	if req.ProviderData == nil {
-		return
-	}
-
-	client, ok := req.ProviderData.(*pinecone.Client)
-
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *http.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
-		return
-	}
-
-	d.client = client
 }
 
 func (d *CollectionsDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {

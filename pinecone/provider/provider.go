@@ -41,13 +41,13 @@ func (p *PineconeProvider) Schema(ctx context.Context, req provider.SchemaReques
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
 			"api_key": schema.StringAttribute{
-				MarkdownDescription: "Pinecone API Key",
+				MarkdownDescription: "Pinecone API Key. Can be configured by setting PINECONE_API_KEY environment variable.",
 				Optional:            true,
 				Sensitive:           true,
 			},
 			"environment": schema.StringAttribute{
-				MarkdownDescription: "Pinecone Environment",
-				Required:            true,
+				MarkdownDescription: "Pinecone Environment. Can be configured by setting PINECONE_ENVIRONMENT environment variable.",
+				Optional:            true,
 			},
 		},
 	}
@@ -68,7 +68,12 @@ func (p *PineconeProvider) Configure(ctx context.Context, req provider.Configure
 	if !data.ApiKey.IsNull() {
 		apiKey = data.ApiKey.ValueString()
 	}
-	client := pinecone.NewClient(apiKey, data.Environment.ValueString())
+
+	env := os.Getenv("PINECONE_ENVIRONMENT")
+	if !data.Environment.IsNull() {
+		env = data.Environment.ValueString()
+	}
+	client := pinecone.NewClient(apiKey, env)
 
 	resp.DataSourceData = client
 	resp.ResourceData = client

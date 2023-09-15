@@ -35,12 +35,12 @@ var _ resource.Resource = &IndexResource{}
 var _ resource.ResourceWithImportState = &IndexResource{}
 
 func NewIndexResource() resource.Resource {
-	return &IndexResource{}
+	return &IndexResource{PineconeResource: &PineconeResource{}}
 }
 
 // IndexResource defines the resource implementation.
 type IndexResource struct {
-	client *pinecone.Client
+	*PineconeResource
 }
 
 // IndexResourceModel describes the resource data model.
@@ -161,26 +161,6 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 			),
 		},
 	}
-}
-
-func (r *IndexResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	// Prevent panic if the provider has not been configured.
-	if req.ProviderData == nil {
-		return
-	}
-
-	client, ok := req.ProviderData.(*pinecone.Client)
-
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *http.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
-
-		return
-	}
-
-	r.client = client
 }
 
 func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
