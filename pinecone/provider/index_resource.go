@@ -26,8 +26,8 @@ import (
 )
 
 const (
-	defaultIndexCreateTimeout time.Duration = 2 * time.Minute
-	defaultIndexDeleteTimeout time.Duration = 2 * time.Minute
+	defaultIndexCreateTimeout time.Duration = 5 * time.Minute
+	defaultIndexDeleteTimeout time.Duration = 5 * time.Minute
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -150,11 +150,11 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 			"timeouts": timeouts.Block(ctx,
 				timeouts.Opts{
 					Create: true,
-					CreateDescription: `Timeout defaults to 2 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) ` +
+					CreateDescription: `Timeout defaults to 5 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) ` +
 						`consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are ` +
 						`"s" (seconds), "m" (minutes), "h" (hours).`,
 					Delete: true,
-					DeleteDescription: `Timeout defaults to 2 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) ` +
+					DeleteDescription: `Timeout defaults to 5 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) ` +
 						`consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are ` +
 						`"s" (seconds), "m" (minutes), "h" (hours).`,
 				},
