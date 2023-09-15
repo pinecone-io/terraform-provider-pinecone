@@ -35,7 +35,7 @@ var _ resource.Resource = &IndexResource{}
 var _ resource.ResourceWithImportState = &IndexResource{}
 
 func NewIndexResource() resource.Resource {
-	return &IndexResource{}
+	return &IndexResource{PineconeResource: &PineconeResource{}}
 }
 
 // IndexResource defines the resource implementation.

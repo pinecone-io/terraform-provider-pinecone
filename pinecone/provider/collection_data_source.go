@@ -16,7 +16,7 @@ import (
 var _ datasource.DataSource = &CollectionDataSource{}
 
 func NewCollectionDataSource() datasource.DataSource {
-	return &CollectionDataSource{}
+	return &CollectionDataSource{PineconeDatasource: &PineconeDatasource{}}
 }
 
 // CollectionDataSource defines the data source implementation.

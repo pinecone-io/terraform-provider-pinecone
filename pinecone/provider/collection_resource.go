@@ -28,7 +28,7 @@ var _ resource.Resource = &CollectionResource{}
 var _ resource.ResourceWithImportState = &CollectionResource{}
 
 func NewCollectionResource() resource.Resource {
-	return &CollectionResource{}
+	return &CollectionResource{PineconeResource: &PineconeResource{}}
 }
 
 // CollectionResource defines the resource implementation.

@@ -16,7 +16,7 @@ import (
 var _ datasource.DataSource = &IndexesDataSource{}
 
 func NewIndexDataSource() datasource.DataSource {
-	return &IndexDataSource{}
+	return &IndexDataSource{PineconeDatasource: &PineconeDatasource{}}
 }
 
 // IndexDataSource defines the data source implementation.

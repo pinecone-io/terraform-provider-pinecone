@@ -71,7 +71,7 @@ func (p *PineconeProvider) Configure(ctx context.Context, req provider.Configure
 
 	env := os.Getenv("PINECONE_ENVIRONMENT")
 	if !data.Environment.IsNull() {
-		apiKey = data.Environment.ValueString()
+		env = data.Environment.ValueString()
 	}
 	client := pinecone.NewClient(apiKey, env)
 
