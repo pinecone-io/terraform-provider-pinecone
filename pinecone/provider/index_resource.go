@@ -6,13 +6,11 @@ package provider
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
-	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -43,29 +41,19 @@ type IndexResource struct {
 	*PineconeResource
 }
 
-// IndexResourceModel describes the resource data model.
-type IndexResourceModel struct {
-	Id               types.String   `tfsdk:"id"`
-	Name             types.String   `tfsdk:"name"`
-	Dimension        types.Int64    `tfsdk:"dimension"`
-	Metric           types.String   `tfsdk:"metric"`
-	Pods             types.Int64    `tfsdk:"pods"`
-	Replicas         types.Int64    `tfsdk:"replicas"`
-	PodType          types.String   `tfsdk:"pod_type"`
-	MetadataConfig   types.Object   `tfsdk:"metadata_config"`
-	SourceCollection types.String   `tfsdk:"source_collection"`
-	Timeouts         timeouts.Value `tfsdk:"timeouts"`
-}
-
-type IndexMetadataConfigModel struct {
-	Indexed types.List `tfsdk:"indexed"`
-}
-
-func (metadataConfig IndexMetadataConfigModel) AttrTypes() map[string]attr.Type {
-	return map[string]attr.Type{
-		"indexed": types.ListType{ElemType: types.StringType},
-	}
-}
+// // IndexResourceModel describes the resource data model.
+// type IndexResourceModel struct {
+// 	Id               types.String   `tfsdk:"id"`
+// 	Name             types.String   `tfsdk:"name"`
+// 	Dimension        types.Int64    `tfsdk:"dimension"`
+// 	Metric           types.String   `tfsdk:"metric"`
+// 	Pods             types.Int64    `tfsdk:"pods"`
+// 	Replicas         types.Int64    `tfsdk:"replicas"`
+// 	PodType          types.String   `tfsdk:"pod_type"`
+// 	MetadataConfig   types.Object   `tfsdk:"metadata_config"`
+// 	SourceCollection types.String   `tfsdk:"source_collection"`
+// 	Timeouts         timeouts.Value `tfsdk:"timeouts"`
+// }
 
 func (r *IndexResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_index"
@@ -90,7 +78,9 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 			},
 			"dimension": schema.Int64Attribute{
 				MarkdownDescription: "The dimensions of the vectors to be inserted in the index",
-				Required:            true,
+				Optional:            true,
+				Computed:            true,
+				Default:             int64default.StaticInt64(1536),
 				Validators: []validator.Int64{
 					int64validator.AtLeast(512),
 				},
@@ -104,46 +94,85 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 					stringvalidator.OneOf([]string{"euclidean", "cosine", "dotproduct"}...),
 				},
 			},
-			"pods": schema.Int64Attribute{
-				MarkdownDescription: "The number of pods for the index to use,including replicas.",
-				Optional:            true,
+			"host": schema.StringAttribute{
+				MarkdownDescription: "The URL address where the index is hosted.",
 				Computed:            true,
-				Default:             int64default.StaticInt64(1),
 			},
-			"replicas": schema.Int64Attribute{
-				MarkdownDescription: "The number of replicas. Replicas duplicate your index. They provide higher availability and throughput.",
-				Optional:            true,
-				Computed:            true,
-				Default:             int64default.StaticInt64(1),
-			},
-			"pod_type": schema.StringAttribute{
-				MarkdownDescription: "The type of pod to use. One of s1, p1, or p2 appended with . and one of x1, x2, x4, or x8.",
-				Optional:            true,
-				Computed:            true,
-				Default:             stringdefault.StaticString("starter"),
-				Validators: []validator.String{
-					stringvalidator.RegexMatches(
-						regexp.MustCompile(`^(starter|(s1|p1|p2)\.(x1|x2|x4|x8))$`),
-						"One of s1, p1, or p2 appended with . and one of x1, x2, x4, or x8.",
-					),
-				},
-			},
-			"metadata_config": schema.SingleNestedAttribute{
-				Description: "Configuration for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when metadata_config is present, only specified metadata fields are indexed. To specify metadata fields to index, provide an array of the following form: [example_metadata_field]",
-				Optional:    true,
-				Computed:    true,
+			"spec": schema.SingleNestedAttribute{
+				Description: "Spec",
+				Required:    true,
 				Attributes: map[string]schema.Attribute{
-					"indexed": schema.ListAttribute{
-						Description: "The indexed fields.",
+					"pod": schema.SingleNestedAttribute{
+						Description: "Configuration needed to deploy a pod-based index.",
 						Optional:    true,
-						Computed:    true,
-						ElementType: types.StringType,
+						Attributes: map[string]schema.Attribute{
+							"environment": schema.StringAttribute{
+								MarkdownDescription: "The environment where the index is hosted.",
+								Required:            true,
+							},
+							"replicas": schema.Int64Attribute{
+								MarkdownDescription: "The number of replicas. Replicas duplicate your index. They provide higher availability and throughput. Replicas can be scaled up or down as your needs change.",
+								Required:            true,
+							},
+							"shards": schema.Int64Attribute{
+								MarkdownDescription: "The number of shards. Shards split your data across multiple pods so you can fit more data into an index.",
+								Required:            true,
+							},
+							"pod_type": schema.StringAttribute{
+								MarkdownDescription: "The type of pod to use. One of s1, p1, or p2 appended with . and one of x1, x2, x4, or x8.",
+								Required:            true,
+							},
+							"pods": schema.Int64Attribute{
+								MarkdownDescription: "The number of pods to be used in the index. This should be equal to shards x replicas.'",
+								Required:            true,
+							},
+							"metadata_config": schema.SingleNestedAttribute{
+								Description: "Configuration for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when metadata_config is present, only specified metadata fields are indexed. These configurations are only valid for use with pod-based indexes.",
+								Optional:    true,
+								Computed:    true,
+								Attributes: map[string]schema.Attribute{
+									"indexed": schema.ListAttribute{
+										Description: "The indexed fields.",
+										Required:    true,
+										ElementType: types.StringType,
+									},
+								},
+							},
+							"source_collection": schema.StringAttribute{
+								MarkdownDescription: "The name of the collection to create an index from.",
+								Optional:            true,
+							},
+						},
+					},
+					"serverless": schema.SingleNestedAttribute{
+						Description: "Configuration needed to deploy a serverless index.",
+						Optional:    true,
+						Attributes: map[string]schema.Attribute{
+							"cloud": schema.StringAttribute{
+								Description: "The public cloud where you would like your index hosted. [gcp|aws|azure]",
+								Required:    true,
+							},
+							"region": schema.StringAttribute{
+								MarkdownDescription: "The region where you would like your index to be created.",
+								Required:            true,
+							},
+						},
 					},
 				},
 			},
-			"source_collection": schema.StringAttribute{
-				MarkdownDescription: "The name of the collection to create an index from.",
-				Optional:            true,
+			"status": schema.SingleNestedAttribute{
+				Description: "Status",
+				Computed:    true,
+				Attributes: map[string]schema.Attribute{
+					"ready": schema.BoolAttribute{
+						Description: "Ready.",
+						Computed:    true,
+					},
+					"state": schema.StringAttribute{
+						MarkdownDescription: "Initializing InitializationFailed ScalingUp ScalingDown ScalingUpPodSize ScalingDownPodSize Upgrading Terminating Ready",
+						Computed:    true,
+					},
+				},
 			},
 		},
 		Blocks: map[string]schema.Block{
@@ -164,7 +193,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 }
 
 func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data IndexResourceModel
+	var data IndexModel
 
 	// Read Terraform plan data into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
@@ -178,18 +207,58 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		Name:      data.Name.ValueString(),
 		Dimension: int(data.Dimension.ValueInt64()),
 		Metric:    pinecone.IndexMetric(data.Metric.ValueString()),
-		Pods:      int(data.Pods.ValueInt64()),
-		Replicas:  int(data.Replicas.ValueInt64()),
-		PodType:   data.PodType.ValueString(),
-	}
-	if !data.MetadataConfig.IsNull() {
-		data.MetadataConfig.As(ctx, payload.MetadataConfig, basetypes.ObjectAsOptions{})
-	}
-	if !data.SourceCollection.IsNull() {
-		payload.SourceCollection = data.SourceCollection.ValueStringPointer()
 	}
 
-	err := r.client.Databases().CreateIndex(&payload)
+	var spec IndexSpecModel
+	resp.Diagnostics.Append(data.Spec.As(ctx, &	spec, basetypes.ObjectAsOptions{})...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	payload.Spec = pinecone.IndexSpec{
+		Pod: newIndexPodSpec(spec.Pod),
+		Serverless: newIndexServerlessSpec(spec.Serverless),
+	}
+
+	// var podSpec IndexPodSpecModel
+	// resp.Diagnostics.Append(spec.Pod.As(ctx, &podSpec, basetypes.ObjectAsOptions{})...)
+	// if resp.Diagnostics.HasError() {
+	// 	return
+	// }
+	
+	// var serverlessSpec IndexServerlessSpecModel
+	// resp.Diagnostics.Append(spec.Serverless.As(ctx, &serverlessSpec, basetypes.ObjectAsOptions{})...)
+	// if resp.Diagnostics.HasError() {
+	// 	return
+	// }
+	
+	
+
+	// if !spec.Pod.IsUnknown() {
+	// 	payload.Spec.Pod = &pinecone.IndexPodSpec{
+	// 		Environment: podSpec.Environment.String(),
+	// 		Replicas: int(podSpec.Replicas.ValueInt64()),
+	// 		Shards: int(podSpec.Shards.ValueInt64()),
+	// 		PodType: podSpec.PodType.String(),
+	// 		Pods: int(podSpec.Pods.ValueInt64()),
+	// 		SourceCollection: podSpec.SourceCollection.String(),
+	// 	}
+	// 	if !podSpec.MetadataConfig.IsUnknown() {
+	// 		var metadataConfig IndexMetadataConfigModel
+	// 		resp.Diagnostics.Append(podSpec.MetadataConfig.As(ctx, metadataConfig, basetypes.ObjectAsOptions{})...)
+	// 		if resp.Diagnostics.HasError() {
+	// 			return
+	// 		}
+	// 		var indexed []string
+	// 		resp.Diagnostics.Append(metadataConfig.Indexed.ElementsAs(ctx, indexed, false)...)
+	// 		if resp.Diagnostics.HasError() {
+	// 			return
+	// 		}
+	// 		payload.Spec.Pod.MetadataConfig.Indexed = indexed
+	// 	}
+	// }
+	
+	err := r.client.Indexes().CreateIndex(&payload)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create index", err.Error())
 		return
@@ -205,9 +274,10 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 
 	err = retry.RetryContext(ctx, createTimeout, func() *retry.RetryError {
-		index, err := r.client.Databases().DescribeIndex(data.Name.ValueString())
+		index, err := r.client.Indexes().DescribeIndex(data.Name.ValueString())
 
-		readIndexData(ctx, index, &data)
+		resp.Diagnostics.Append(data.read(ctx, index)...)
+
 		// Save current status to state
 		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 
@@ -229,7 +299,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 }
 
 func (r *IndexResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data IndexResourceModel
+	var data IndexModel
 
 	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
@@ -238,20 +308,21 @@ func (r *IndexResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
-	index, err := r.client.Databases().DescribeIndex(data.Id.ValueString())
+	index, err := r.client.Indexes().DescribeIndex(data.Id.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to describe index", err.Error())
 		return
 	}
 
-	readIndexData(ctx, index, &data)
+	data.read(ctx, index)
+	// readIndexData(ctx, index, &data)
 
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data IndexResourceModel
+	var data IndexModel
 
 	// Read Terraform plan data into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
@@ -261,32 +332,78 @@ func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	}
 
 	// Prepare the payload for the API request
-	payload := pinecone.ConfigureIndexParams{
-		Name:     data.Name.ValueString(),
-		Replicas: int(data.Replicas.ValueInt64()),
-		PodType:  data.PodType.ValueString(),
+	payload := pinecone.ConfigureIndexParams{}
+
+	var spec IndexSpecModel
+	resp.Diagnostics.Append(data.Spec.As(ctx, spec, basetypes.ObjectAsOptions{})...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
-	err := r.client.Databases().ConfigureIndex(&payload)
+	payload.Spec = pinecone.IndexSpec{
+		Pod: newIndexPodSpec(spec.Pod),
+		Serverless: newIndexServerlessSpec(spec.Serverless),
+	}
+
+	// var podSpec IndexPodSpecModel
+	// resp.Diagnostics.Append(spec.Pod.As(ctx, podSpec, basetypes.ObjectAsOptions{})...)
+	// if resp.Diagnostics.HasError() {
+	// 	return
+	// }
+	
+	// var serverlessSpec IndexServerlessSpecModel
+	// resp.Diagnostics.Append(spec.Serverless.As(ctx, serverlessSpec, basetypes.ObjectAsOptions{})...)
+	// if resp.Diagnostics.HasError() {
+	// 	return
+	// }
+	
+	// if !spec.Pod.IsUnknown() {
+	// 	payload.Spec.Pod = &pinecone.IndexPodSpec{
+	// 		Environment: podSpec.Environment.String(),
+	// 		Replicas: int(podSpec.Replicas.ValueInt64()),
+	// 		Shards: int(podSpec.Shards.ValueInt64()),
+	// 		PodType: podSpec.PodType.String(),
+	// 		Pods: int(podSpec.Pods.ValueInt64()),
+	// 		SourceCollection: podSpec.SourceCollection.String(),
+	// 	}
+	// 	if !podSpec.MetadataConfig.IsUnknown() {
+	// 		var metadataConfig IndexMetadataConfigModel
+	// 		resp.Diagnostics.Append(podSpec.MetadataConfig.As(ctx, metadataConfig, basetypes.ObjectAsOptions{})...)
+	// 		if resp.Diagnostics.HasError() {
+	// 			return
+	// 		}
+	// 		var indexed []string
+	// 		resp.Diagnostics.Append(metadataConfig.Indexed.ElementsAs(ctx, indexed, false)...)
+	// 		if resp.Diagnostics.HasError() {
+	// 			return
+	// 		}
+	// 		payload.Spec.Pod.MetadataConfig.Indexed = indexed
+	// 	}
+	// }
+	// payload.Spec.Serverless = newIndexServerlessSpec(data.Spec.Serverless)
+	// payload.Spec.Pod = newIndexPodSpec(data.Spec.Pod)
+	
+	err := r.client.Indexes().ConfigureIndex(data.Name.ValueString(), &payload)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to update index", err.Error())
 		return
 	}
 
-	index, err := r.client.Databases().DescribeIndex(data.Id.ValueString())
+	index, err := r.client.Indexes().DescribeIndex(data.Id.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to describe index", err.Error())
 		return
 	}
 
-	readIndexData(ctx, index, &data)
+	data.read(ctx, index)
+	// readIndexData(ctx, index, &data)
 
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data IndexResourceModel
+	var data IndexModel
 
 	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
@@ -295,7 +412,7 @@ func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		return
 	}
 
-	err := r.client.Databases().DeleteIndex(data.Name.ValueString())
+	err := r.client.Indexes().DeleteIndex(data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to delete index", err.Error())
 		return
@@ -311,7 +428,7 @@ func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	}
 
 	err = retry.RetryContext(ctx, deleteTimeout, func() *retry.RetryError {
-		index, err := r.client.Databases().DescribeIndex(data.Id.ValueString())
+		index, err := r.client.Indexes().DescribeIndex(data.Id.ValueString())
 		if err != nil {
 			if pineconeErr, ok := err.(*pinecone.HTTPError); ok && pineconeErr.StatusCode == 404 {
 				return nil
@@ -328,15 +445,4 @@ func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 
 func (r *IndexResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
-}
-
-func readIndexData(ctx context.Context, index *pinecone.Index, model *IndexResourceModel) {
-	model.Id = types.StringValue(index.Database.Name)
-	model.Name = types.StringValue(index.Database.Name)
-	model.Dimension = types.Int64Value(int64(index.Database.Dimension))
-	model.Metric = types.StringValue(index.Database.Metric.String())
-	model.Pods = types.Int64Value(int64(index.Database.Pods))
-	model.Replicas = types.Int64Value(int64(index.Database.Replicas))
-	model.PodType = types.StringValue(index.Database.PodType)
-	model.MetadataConfig, _ = types.ObjectValueFrom(ctx, IndexMetadataConfigModel{}.AttrTypes(), index.Database.MetadataConfig)
 }

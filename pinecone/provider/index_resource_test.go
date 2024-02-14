@@ -5,9 +5,10 @@ package provider
 
 import (
 	"fmt"
+	"testing"
+
 	sdkacctest "github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
-	"testing"
 )
 
 func TestAccIndexResource(t *testing.T) {
@@ -23,13 +24,13 @@ func TestAccIndexResource(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
 					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
-					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "512"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1536"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "pods", "1"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "replicas", "1"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "pod_type", "s1.x1"),
-					resource.TestCheckNoResourceAttr("pinecone_index.test", "metadata_config"),
-					resource.TestCheckNoResourceAttr("pinecone_index.test", "source_collection"),
+					// resource.TestCheckResourceAttr("pinecone_index.test", "pods", "1"),
+					// resource.TestCheckResourceAttr("pinecone_index.test", "replicas", "1"),
+					// resource.TestCheckResourceAttr("pinecone_index.test", "pod_type", "s1.x1"),
+					// resource.TestCheckNoResourceAttr("pinecone_index.test", "metadata_config"),
+					// resource.TestCheckNoResourceAttr("pinecone_index.test", "source_collection"),
 				),
 			},
 			// ImportState testing
@@ -51,13 +52,13 @@ func TestAccIndexResource(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
 					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
-					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "512"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1536"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "pods", "1"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "replicas", "1"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "pod_type", "s1.x1"),
-					resource.TestCheckNoResourceAttr("pinecone_index.test", "metadata_config"),
-					resource.TestCheckNoResourceAttr("pinecone_index.test", "source_collection"),
+					// resource.TestCheckResourceAttr("pinecone_index.test", "pods", "1"),
+					// resource.TestCheckResourceAttr("pinecone_index.test", "replicas", "1"),
+					// resource.TestCheckResourceAttr("pinecone_index.test", "pod_type", "s1.x1"),
+					// resource.TestCheckNoResourceAttr("pinecone_index.test", "metadata_config"),
+					// resource.TestCheckNoResourceAttr("pinecone_index.test", "source_collection"),
 				),
 			},
 			// Delete testing automatically occurs in TestCase
@@ -73,9 +74,12 @@ provider "pinecone" {
 
 resource "pinecone_index" "test" {
   name = %q
-  dimension = 512
-  replicas = %d
-  pod_type = "s1.x1"
+  spec = {
+	serverless = {
+		cloud = "aws"
+		region = "us-west-2"
+	}
+  }
 }
-`, name, replicas)
+`, name)
 }
