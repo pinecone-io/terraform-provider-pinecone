@@ -53,9 +53,12 @@ provider "pinecone" {
 
 resource "pinecone_index" "test" {
 	name = %q
-	dimension = 512
-	replicas = 1
-	pod_type = "s1.x1"
+	spec = {
+	  serverless = {
+		    cloud = "aws"
+		    region = "us-west-2"
+	  	}
+	}
 }
   
 resource "pinecone_collection" "test" {

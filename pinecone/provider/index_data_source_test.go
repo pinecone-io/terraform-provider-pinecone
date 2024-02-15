@@ -24,7 +24,7 @@ func TestAccIndexDataSource(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("data.pinecone_index.test", "id", rName),
 					resource.TestCheckResourceAttr("data.pinecone_index.test", "name", rName),
-					resource.TestCheckResourceAttr("data.pinecone_index.test", "dimension", "512"),
+					resource.TestCheckResourceAttr("data.pinecone_index.test", "dimension", "1536"),
 					resource.TestCheckResourceAttr("data.pinecone_index.test", "metric", "cosine"),
 				),
 			},
@@ -40,9 +40,12 @@ func testAccIndexDataSourceConfig(name string) string {
 	
 	resource "pinecone_index" "test" {
 		name = %q
-		dimension = 512
-		metric = "cosine"
-		pod_type = "s1.x1"
+		spec = {
+		    serverless = {
+		        cloud = "aws"
+			    region = "us-west-2"
+		    }
+		}
 	}
 	
 	data "pinecone_index" "test" {

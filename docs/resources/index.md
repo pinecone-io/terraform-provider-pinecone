@@ -27,10 +27,10 @@ provider "pinecone" {
 }
 
 resource "pinecone_index" "test" {
-  name      = "tftestindex"
-  dimension = 512
-  metric    = "cosine"
-  pod_type  = "s1.x1"
+  name = "tftestindex"
+  # dimension = 512
+  # metric    = "cosine"
+  # pod_type  = "s1.x1"
 }
 ```
 
@@ -39,29 +39,62 @@ resource "pinecone_index" "test" {
 
 ### Required
 
-- `dimension` (Number) The dimensions of the vectors to be inserted in the index
 - `name` (String) The name of the index to be created. The maximum length is 45 characters.
+- `spec` (Attributes) Spec (see [below for nested schema](#nestedatt--spec))
 
 ### Optional
 
-- `metadata_config` (Attributes) Configuration for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when metadata_config is present, only specified metadata fields are indexed. To specify metadata fields to index, provide an array of the following form: [example_metadata_field] (see [below for nested schema](#nestedatt--metadata_config))
+- `dimension` (Number) The dimensions of the vectors to be inserted in the index
 - `metric` (String) The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'.
-- `pod_type` (String) The type of pod to use. One of s1, p1, or p2 appended with . and one of x1, x2, x4, or x8.
-- `pods` (Number) The number of pods for the index to use,including replicas.
-- `replicas` (Number) The number of replicas. Replicas duplicate your index. They provide higher availability and throughput.
-- `source_collection` (String) The name of the collection to create an index from.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 
 ### Read-Only
 
+- `host` (String) The URL address where the index is hosted.
 - `id` (String) Index identifier
+- `status` (Attributes) Status (see [below for nested schema](#nestedatt--status))
 
-<a id="nestedatt--metadata_config"></a>
-### Nested Schema for `metadata_config`
+<a id="nestedatt--spec"></a>
+### Nested Schema for `spec`
 
 Optional:
 
+- `pod` (Attributes) Configuration needed to deploy a pod-based index. (see [below for nested schema](#nestedatt--spec--pod))
+- `serverless` (Attributes) Configuration needed to deploy a serverless index. (see [below for nested schema](#nestedatt--spec--serverless))
+
+<a id="nestedatt--spec--pod"></a>
+### Nested Schema for `spec.pod`
+
+Required:
+
+- `environment` (String) The environment where the index is hosted.
+- `pod_type` (String) The type of pod to use. One of s1, p1, or p2 appended with . and one of x1, x2, x4, or x8.
+- `pods` (Number) The number of pods to be used in the index. This should be equal to shards x replicas.'
+- `replicas` (Number) The number of replicas. Replicas duplicate your index. They provide higher availability and throughput. Replicas can be scaled up or down as your needs change.
+- `shards` (Number) The number of shards. Shards split your data across multiple pods so you can fit more data into an index.
+
+Optional:
+
+- `metadata_config` (Attributes) Configuration for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when metadata_config is present, only specified metadata fields are indexed. These configurations are only valid for use with pod-based indexes. (see [below for nested schema](#nestedatt--spec--pod--metadata_config))
+- `source_collection` (String) The name of the collection to create an index from.
+
+<a id="nestedatt--spec--pod--metadata_config"></a>
+### Nested Schema for `spec.pod.metadata_config`
+
+Required:
+
 - `indexed` (List of String) The indexed fields.
+
+
+
+<a id="nestedatt--spec--serverless"></a>
+### Nested Schema for `spec.serverless`
+
+Required:
+
+- `cloud` (String) The public cloud where you would like your index hosted. [gcp|aws|azure]
+- `region` (String) The region where you would like your index to be created.
+
 
 
 <a id="nestedblock--timeouts"></a>
@@ -71,3 +104,12 @@ Optional:
 
 - `create` (String) Timeout defaults to 5 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
 - `delete` (String) Timeout defaults to 5 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
+
+
+<a id="nestedatt--status"></a>
+### Nested Schema for `status`
+
+Read-Only:
+
+- `ready` (Boolean) Ready.
+- `state` (String) Initializing InitializationFailed ScalingUp ScalingDown ScalingUpPodSize ScalingDownPodSize Upgrading Terminating Ready

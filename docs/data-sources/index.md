@@ -45,8 +45,64 @@ data "pinecone_index" "example" {
 
 - `name` (String) Index name
 
+### Optional
+
+- `spec` (Attributes) Spec (see [below for nested schema](#nestedatt--spec))
+- `status` (Attributes) Configuration for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when metadata_config is present, only specified metadata fields are indexed. To specify metadata fields to index, provide an array of the following form: [example_metadata_field] (see [below for nested schema](#nestedatt--status))
+
 ### Read-Only
 
 - `dimension` (Number) Index dimension
+- `host` (String) The URL address where the index is hosted.
 - `id` (String) Index identifier
 - `metric` (String) Index metric
+
+<a id="nestedatt--spec"></a>
+### Nested Schema for `spec`
+
+Optional:
+
+- `pod` (Attributes) Configuration needed to deploy a pod-based index. (see [below for nested schema](#nestedatt--spec--pod))
+- `serverless` (Attributes) Configuration needed to deploy a serverless index. (see [below for nested schema](#nestedatt--spec--serverless))
+
+<a id="nestedatt--spec--pod"></a>
+### Nested Schema for `spec.pod`
+
+Optional:
+
+- `metadata_config` (Attributes) Configuration for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when metadata_config is present, only specified metadata fields are indexed. These configurations are only valid for use with pod-based indexes. (see [below for nested schema](#nestedatt--spec--pod--metadata_config))
+
+Read-Only:
+
+- `environment` (String) The environment where the index is hosted.
+- `pod_type` (String) The type of pod to use. One of s1, p1, or p2 appended with . and one of x1, x2, x4, or x8.
+- `pods` (Number) The number of pods to be used in the index. This should be equal to shards x replicas.'
+- `replicas` (Number) The number of replicas. Replicas duplicate your index. They provide higher availability and throughput. Replicas can be scaled up or down as your needs change.
+- `shards` (Number) The number of shards. Shards split your data across multiple pods so you can fit more data into an index.
+
+<a id="nestedatt--spec--pod--metadata_config"></a>
+### Nested Schema for `spec.pod.metadata_config`
+
+Read-Only:
+
+- `indexed` (List of String) The indexed fields.
+
+
+
+<a id="nestedatt--spec--serverless"></a>
+### Nested Schema for `spec.serverless`
+
+Read-Only:
+
+- `cloud` (String) Ready.
+- `region` (String) Initializing InitializationFailed ScalingUp ScalingDown ScalingUpPodSize ScalingDownPodSize Upgrading Terminating Ready
+
+
+
+<a id="nestedatt--status"></a>
+### Nested Schema for `status`
+
+Read-Only:
+
+- `ready` (Boolean) Ready.
+- `state` (String) Initializing InitializationFailed ScalingUp ScalingDown ScalingUpPodSize ScalingDownPodSize Upgrading Terminating Ready
