@@ -5,7 +5,6 @@ package provider
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -96,6 +95,10 @@ func (d *IndexDataSource) Schema(ctx context.Context, req datasource.SchemaReque
 									},
 								},
 							},
+							"source_collection": schema.StringAttribute{
+								MarkdownDescription: "The name of the collection to create an index from.",
+								Computed:            true,
+							},
 						},
 					},
 					"serverless": schema.SingleNestedAttribute{
@@ -135,7 +138,7 @@ func (d *IndexDataSource) Schema(ctx context.Context, req datasource.SchemaReque
 }
 
 func (d *IndexDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	var data IndexModel
+	var data IndexDatasourceModel
 
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
@@ -146,15 +149,11 @@ func (d *IndexDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 
 	index, err := d.client.Indexes().DescribeIndex(data.Name.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read Index, got error: %s", err))
+		resp.Diagnostics.AddError("Failed to describe index", err.Error())
 		return
 	}
 
-	data.Name = types.StringValue(index.Name)
-	data.Id = types.StringValue(index.Name)
-	data.Dimension = types.Int64Value(int64(index.Dimension))
-	data.Metric = types.StringValue(index.Metric.String())
-	data.Host = types.StringValue(index.Host)
+	data.read(ctx, index)
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)

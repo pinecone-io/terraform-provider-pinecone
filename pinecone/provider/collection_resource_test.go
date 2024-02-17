@@ -54,10 +54,10 @@ provider "pinecone" {
 resource "pinecone_index" "test" {
 	name = %q
 	spec = {
-	  serverless = {
-		    cloud = "aws"
-		    region = "us-west-2"
-	  	}
+		pod = {
+			environment = "us-west4-gcp"
+			pod_type = "s1.x1"
+		}
 	}
 }
   

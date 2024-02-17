@@ -38,12 +38,15 @@ type CollectionResource struct {
 
 // CollectionResourceModel describes the resource data model.
 type CollectionResourceModel struct {
-	Id       types.String   `tfsdk:"id"`
-	Name     types.String   `tfsdk:"name"`
-	Source   types.String   `tfsdk:"source"`
-	Size     types.Int64    `tfsdk:"size"`
-	Status   types.String   `tfsdk:"status"`
-	Timeouts timeouts.Value `tfsdk:"timeouts"`
+	Id          types.String   `tfsdk:"id"`
+	Name        types.String   `tfsdk:"name"`
+	Source      types.String   `tfsdk:"source"`
+	Size        types.Int64    `tfsdk:"size"`
+	Status      types.String   `tfsdk:"status"`
+	Dimension   types.Int64    `tfsdk:"dimension"`
+	VectorCount types.Int64    `tfsdk:"vector_count"`
+	Environment types.String   `tfsdk:"environment"`
+	Timeouts    timeouts.Value `tfsdk:"timeouts"`
 }
 
 func (r *CollectionResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -72,6 +75,18 @@ func (r *CollectionResource) Schema(ctx context.Context, req resource.SchemaRequ
 			},
 			"status": schema.StringAttribute{
 				MarkdownDescription: "The status of the collection.",
+				Computed:            true,
+			},
+			"dimension": schema.Int64Attribute{
+				MarkdownDescription: "The dimension of the vectors stored in each record held in the collection.",
+				Computed:            true,
+			},
+			"vector_count": schema.Int64Attribute{
+				MarkdownDescription: "The number of records stored in the collection.",
+				Computed:            true,
+			},
+			"environment": schema.StringAttribute{
+				MarkdownDescription: "The environment where the collection is hosted.",
 				Computed:            true,
 			},
 		},
@@ -214,4 +229,7 @@ func readCollectionData(collection *pinecone.Collection, model *CollectionResour
 	model.Source = types.StringValue(model.Source.ValueString())
 	model.Size = types.Int64Value(int64(collection.Size))
 	model.Status = types.StringValue(collection.Status)
+	model.Dimension = types.Int64Value(int64(collection.Dimension))
+	model.VectorCount = types.Int64Value(int64(collection.VectorCount))
+	model.Environment = types.StringValue(collection.Environment)
 }

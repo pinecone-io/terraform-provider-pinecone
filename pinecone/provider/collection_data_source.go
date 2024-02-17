@@ -26,10 +26,13 @@ type CollectionDataSource struct {
 
 // CollectionDataSourceModel describes the data source data model.
 type CollectionDataSourceModel struct {
-	Id     types.String `tfsdk:"id"`
-	Name   types.String `tfsdk:"name"`
-	Size   types.Int64  `tfsdk:"size"`
-	Status types.String `tfsdk:"status"`
+	Id          types.String `tfsdk:"id"`
+	Name        types.String `tfsdk:"name"`
+	Size        types.Int64  `tfsdk:"size"`
+	Status      types.String `tfsdk:"status"`
+	Dimension   types.Int64  `tfsdk:"dimension"`
+	VectorCount types.Int64  `tfsdk:"vector_count"`
+	Environment types.String `tfsdk:"environment"`
 }
 
 func (d *CollectionDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -58,6 +61,18 @@ func (d *CollectionDataSource) Schema(ctx context.Context, req datasource.Schema
 				MarkdownDescription: "The status of the collection.",
 				Computed:            true,
 			},
+			"dimension": schema.Int64Attribute{
+				MarkdownDescription: "The dimension of the vectors stored in each record held in the collection.",
+				Computed:            true,
+			},
+			"vector_count": schema.Int64Attribute{
+				MarkdownDescription: "The number of records stored in the collection.",
+				Computed:            true,
+			},
+			"environment": schema.StringAttribute{
+				MarkdownDescription: "The environment where the collection is hosted.",
+				Computed:            true,
+			},
 		},
 	}
 }
@@ -83,5 +98,9 @@ func (d *CollectionDataSource) Read(ctx context.Context, req datasource.ReadRequ
 	data.Name = types.StringValue(collection.Name)
 	data.Size = types.Int64Value(int64(collection.Size))
 	data.Status = types.StringValue(collection.Status)
+	data.Dimension = types.Int64Value(int64(collection.Dimension))
+	data.VectorCount = types.Int64Value(int64(collection.VectorCount))
+	data.Environment = types.StringValue(collection.Environment)
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }

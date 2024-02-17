@@ -20,8 +20,10 @@ func TestAccCollectionDataSource(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("data.pinecone_collection.test", "id", rName),
 					resource.TestCheckResourceAttr("data.pinecone_collection.test", "name", rName),
-					resource.TestCheckResourceAttrSet("pinecone_collection.test", "size"),
-					resource.TestCheckResourceAttrSet("pinecone_collection.test", "status"),
+					resource.TestCheckResourceAttr("data.pinecone_collection.test", "status", "Ready"),
+					resource.TestCheckResourceAttr("data.pinecone_collection.test", "dimension", "1536"),
+					resource.TestCheckResourceAttrSet("data.pinecone_collection.test", "size"),
+					resource.TestCheckResourceAttrSet("data.pinecone_collection.test", "vector_count"),
 				),
 			},
 		},
@@ -36,9 +38,12 @@ provider "pinecone" {
 
 resource "pinecone_index" "test" {
 	name = %q
-	dimension = 512
-	replicas = 1
-	pod_type = "s1.x1"
+	spec = {
+		pod = {
+			environment = "us-west4-gcp"
+			pod_type = "s1.x1"
+		}
+	}
 }
   
 resource "pinecone_collection" "test" {

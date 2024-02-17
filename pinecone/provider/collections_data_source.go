@@ -70,7 +70,6 @@ func (d *CollectionsDataSource) Read(ctx context.Context, req datasource.ReadReq
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to ListCollections, got error: %s", err))
 		return
 	}
-	// tflog.Trace(ctx, "read a data source")
 
 	// Save data into Terraform state
 	data.Id = types.StringValue(strconv.FormatInt(time.Now().Unix(), 10))

@@ -27,7 +27,7 @@ type IndexesDataSource struct {
 
 // IndexesDataSourceModel describes the data source data model.
 type IndexesDataSourceModel struct {
-	Indexes types.List    `tfsdk:"indexes"`
+	Indexes types.List   `tfsdk:"indexes"`
 	Id      types.String `tfsdk:"id"`
 }
 

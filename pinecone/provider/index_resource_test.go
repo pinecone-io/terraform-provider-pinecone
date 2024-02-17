@@ -11,7 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-func TestAccIndexResource(t *testing.T) {
+func TestAccIndexResource_serverless(t *testing.T) {
 	rName := sdkacctest.RandomWithPrefix("tftest")
 
 	resource.Test(t, resource.TestCase{
@@ -20,15 +20,46 @@ func TestAccIndexResource(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create and Read testing
 			{
-				Config: testAccIndexResourceConfig(rName, 1),
+				Config: testAccIndexResourceConfig_serverless(rName),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
 					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
 					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1536"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
-					// resource.TestCheckResourceAttr("pinecone_index.test", "pods", "1"),
-					// resource.TestCheckResourceAttr("pinecone_index.test", "replicas", "1"),
-					// resource.TestCheckResourceAttr("pinecone_index.test", "pod_type", "s1.x1"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.cloud", "aws"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.region", "us-west-2"),
+				),
+			},
+			// ImportState testing
+			{
+				ResourceName:      "pinecone_index.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+			// Update not supported for serverless specs
+			// Delete testing automatically occurs in TestCase
+		},
+	})
+}
+
+func TestAccIndexResource_pod_basic(t *testing.T) {
+	rName := sdkacctest.RandomWithPrefix("tftest")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			// Create and Read testing
+			{
+				Config: testAccIndexResourceConfig_pod_basic(rName, "1", "1"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
+					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
+					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1536"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.pod.pod_type", "s1.x1"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.pod.replicas", "1"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.pod.pods", "1"),
 					// resource.TestCheckNoResourceAttr("pinecone_index.test", "metadata_config"),
 					// resource.TestCheckNoResourceAttr("pinecone_index.test", "source_collection"),
 				),
@@ -47,16 +78,15 @@ func TestAccIndexResource(t *testing.T) {
 			},
 			// Update and Read testing
 			{
-				// TODO: update replicas test. Cannot do this currently in the free-tier.
-				Config: testAccIndexResourceConfig(rName, 1),
+				Config: testAccIndexResourceConfig_pod_basic(rName, "2", "2"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
 					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
 					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1536"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
-					// resource.TestCheckResourceAttr("pinecone_index.test", "pods", "1"),
-					// resource.TestCheckResourceAttr("pinecone_index.test", "replicas", "1"),
-					// resource.TestCheckResourceAttr("pinecone_index.test", "pod_type", "s1.x1"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.pod.pod_type", "s1.x1"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.pod.replicas", "2"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.pod.pods", "2"),
 					// resource.TestCheckNoResourceAttr("pinecone_index.test", "metadata_config"),
 					// resource.TestCheckNoResourceAttr("pinecone_index.test", "source_collection"),
 				),
@@ -66,7 +96,7 @@ func TestAccIndexResource(t *testing.T) {
 	})
 }
 
-func testAccIndexResourceConfig(name string, replicas int) string {
+func testAccIndexResourceConfig_serverless(name string) string {
 	return fmt.Sprintf(`
 provider "pinecone" {
 	environment = "us-west4-gcp"
@@ -82,4 +112,24 @@ resource "pinecone_index" "test" {
   }
 }
 `, name)
+}
+
+func testAccIndexResourceConfig_pod_basic(name string, replicas string, pods string) string {
+	return fmt.Sprintf(`
+provider "pinecone" {
+	environment = "us-west4-gcp"
+}
+
+resource "pinecone_index" "test" {
+	name = %q
+	spec = {
+		pod = {
+			environment = "us-west4-gcp"
+			pod_type = "s1.x1"
+			replicas = %q
+			pods = %q
+		}
+	}
+}
+`, name, replicas, pods)
 }

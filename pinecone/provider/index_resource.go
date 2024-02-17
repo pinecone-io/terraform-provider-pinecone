@@ -25,6 +25,7 @@ import (
 
 const (
 	defaultIndexCreateTimeout time.Duration = 5 * time.Minute
+	defaultIndexUpdateTimeout time.Duration = 5 * time.Minute
 	defaultIndexDeleteTimeout time.Duration = 5 * time.Minute
 )
 
@@ -112,11 +113,15 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 							},
 							"replicas": schema.Int64Attribute{
 								MarkdownDescription: "The number of replicas. Replicas duplicate your index. They provide higher availability and throughput. Replicas can be scaled up or down as your needs change.",
-								Required:            true,
+								Optional:            true,
+								Computed:            true,
+								Default:             int64default.StaticInt64(1),
 							},
 							"shards": schema.Int64Attribute{
 								MarkdownDescription: "The number of shards. Shards split your data across multiple pods so you can fit more data into an index.",
-								Required:            true,
+								Optional:            true,
+								Computed:            true,
+								Default:             int64default.StaticInt64(1),
 							},
 							"pod_type": schema.StringAttribute{
 								MarkdownDescription: "The type of pod to use. One of s1, p1, or p2 appended with . and one of x1, x2, x4, or x8.",
@@ -124,7 +129,9 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 							},
 							"pods": schema.Int64Attribute{
 								MarkdownDescription: "The number of pods to be used in the index. This should be equal to shards x replicas.'",
-								Required:            true,
+								Optional:            true,
+								Computed:            true,
+								Default:             int64default.StaticInt64(1),
 							},
 							"metadata_config": schema.SingleNestedAttribute{
 								Description: "Configuration for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when metadata_config is present, only specified metadata fields are indexed. These configurations are only valid for use with pod-based indexes.",
@@ -141,6 +148,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 							"source_collection": schema.StringAttribute{
 								MarkdownDescription: "The name of the collection to create an index from.",
 								Optional:            true,
+								Computed:            true,
 							},
 						},
 					},
@@ -170,7 +178,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 					},
 					"state": schema.StringAttribute{
 						MarkdownDescription: "Initializing InitializationFailed ScalingUp ScalingDown ScalingUpPodSize ScalingDownPodSize Upgrading Terminating Ready",
-						Computed:    true,
+						Computed:            true,
 					},
 				},
 			},
@@ -210,54 +218,22 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 
 	var spec IndexSpecModel
-	resp.Diagnostics.Append(data.Spec.As(ctx, &	spec, basetypes.ObjectAsOptions{})...)
+	resp.Diagnostics.Append(data.Spec.As(ctx, &spec, basetypes.ObjectAsOptions{})...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	pod, diags := newIndexPodSpec(ctx, spec.Pod)
+	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	payload.Spec = pinecone.IndexSpec{
-		Pod: newIndexPodSpec(spec.Pod),
+		Pod:        pod,
 		Serverless: newIndexServerlessSpec(spec.Serverless),
 	}
 
-	// var podSpec IndexPodSpecModel
-	// resp.Diagnostics.Append(spec.Pod.As(ctx, &podSpec, basetypes.ObjectAsOptions{})...)
-	// if resp.Diagnostics.HasError() {
-	// 	return
-	// }
-	
-	// var serverlessSpec IndexServerlessSpecModel
-	// resp.Diagnostics.Append(spec.Serverless.As(ctx, &serverlessSpec, basetypes.ObjectAsOptions{})...)
-	// if resp.Diagnostics.HasError() {
-	// 	return
-	// }
-	
-	
-
-	// if !spec.Pod.IsUnknown() {
-	// 	payload.Spec.Pod = &pinecone.IndexPodSpec{
-	// 		Environment: podSpec.Environment.String(),
-	// 		Replicas: int(podSpec.Replicas.ValueInt64()),
-	// 		Shards: int(podSpec.Shards.ValueInt64()),
-	// 		PodType: podSpec.PodType.String(),
-	// 		Pods: int(podSpec.Pods.ValueInt64()),
-	// 		SourceCollection: podSpec.SourceCollection.String(),
-	// 	}
-	// 	if !podSpec.MetadataConfig.IsUnknown() {
-	// 		var metadataConfig IndexMetadataConfigModel
-	// 		resp.Diagnostics.Append(podSpec.MetadataConfig.As(ctx, metadataConfig, basetypes.ObjectAsOptions{})...)
-	// 		if resp.Diagnostics.HasError() {
-	// 			return
-	// 		}
-	// 		var indexed []string
-	// 		resp.Diagnostics.Append(metadataConfig.Indexed.ElementsAs(ctx, indexed, false)...)
-	// 		if resp.Diagnostics.HasError() {
-	// 			return
-	// 		}
-	// 		payload.Spec.Pod.MetadataConfig.Indexed = indexed
-	// 	}
-	// }
-	
 	err := r.client.Indexes().CreateIndex(&payload)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create index", err.Error())
@@ -335,68 +311,57 @@ func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	payload := pinecone.ConfigureIndexParams{}
 
 	var spec IndexSpecModel
-	resp.Diagnostics.Append(data.Spec.As(ctx, spec, basetypes.ObjectAsOptions{})...)
+	resp.Diagnostics.Append(data.Spec.As(ctx, &spec, basetypes.ObjectAsOptions{})...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	pod, diags := newIndexPodSpec(ctx, spec.Pod)
+	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	payload.Spec = pinecone.IndexSpec{
-		Pod: newIndexPodSpec(spec.Pod),
+		Pod:        pod,
 		Serverless: newIndexServerlessSpec(spec.Serverless),
 	}
 
-	// var podSpec IndexPodSpecModel
-	// resp.Diagnostics.Append(spec.Pod.As(ctx, podSpec, basetypes.ObjectAsOptions{})...)
-	// if resp.Diagnostics.HasError() {
-	// 	return
-	// }
-	
-	// var serverlessSpec IndexServerlessSpecModel
-	// resp.Diagnostics.Append(spec.Serverless.As(ctx, serverlessSpec, basetypes.ObjectAsOptions{})...)
-	// if resp.Diagnostics.HasError() {
-	// 	return
-	// }
-	
-	// if !spec.Pod.IsUnknown() {
-	// 	payload.Spec.Pod = &pinecone.IndexPodSpec{
-	// 		Environment: podSpec.Environment.String(),
-	// 		Replicas: int(podSpec.Replicas.ValueInt64()),
-	// 		Shards: int(podSpec.Shards.ValueInt64()),
-	// 		PodType: podSpec.PodType.String(),
-	// 		Pods: int(podSpec.Pods.ValueInt64()),
-	// 		SourceCollection: podSpec.SourceCollection.String(),
-	// 	}
-	// 	if !podSpec.MetadataConfig.IsUnknown() {
-	// 		var metadataConfig IndexMetadataConfigModel
-	// 		resp.Diagnostics.Append(podSpec.MetadataConfig.As(ctx, metadataConfig, basetypes.ObjectAsOptions{})...)
-	// 		if resp.Diagnostics.HasError() {
-	// 			return
-	// 		}
-	// 		var indexed []string
-	// 		resp.Diagnostics.Append(metadataConfig.Indexed.ElementsAs(ctx, indexed, false)...)
-	// 		if resp.Diagnostics.HasError() {
-	// 			return
-	// 		}
-	// 		payload.Spec.Pod.MetadataConfig.Indexed = indexed
-	// 	}
-	// }
-	// payload.Spec.Serverless = newIndexServerlessSpec(data.Spec.Serverless)
-	// payload.Spec.Pod = newIndexPodSpec(data.Spec.Pod)
-	
 	err := r.client.Indexes().ConfigureIndex(data.Name.ValueString(), &payload)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to update index", err.Error())
 		return
 	}
 
-	index, err := r.client.Indexes().DescribeIndex(data.Id.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to describe index", err.Error())
+	// Wait for index to be ready
+	// Create() is passed a default timeout to use if no value
+	// has been supplied in the Terraform configuration.
+	updateTimeout, diags := data.Timeouts.Update(ctx, defaultIndexUpdateTimeout)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	data.read(ctx, index)
-	// readIndexData(ctx, index, &data)
+	err = retry.RetryContext(ctx, updateTimeout, func() *retry.RetryError {
+		index, err := r.client.Indexes().DescribeIndex(data.Name.ValueString())
+
+		resp.Diagnostics.Append(data.read(ctx, index)...)
+
+		// Save current status to state
+		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+
+		if err != nil {
+			return retry.NonRetryableError(err)
+		}
+		if !index.Status.Ready {
+			return retry.RetryableError(fmt.Errorf("index not ready. State: %s", index.Status.State))
+		}
+		return nil
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to wait for index to become ready.", err.Error())
+		return
+	}
 
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)

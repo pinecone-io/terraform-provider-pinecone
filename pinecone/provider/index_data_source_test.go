@@ -11,7 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-func TestAccIndexDataSource(t *testing.T) {
+func TestAccIndexDataSource_serverless(t *testing.T) {
 	rName := sdkacctest.RandomWithPrefix("tftest")
 
 	resource.Test(t, resource.TestCase{
@@ -20,19 +20,21 @@ func TestAccIndexDataSource(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Read testing
 			{
-				Config: testAccIndexDataSourceConfig(rName),
+				Config: testAccIndexDataSourceConfig_serverless(rName),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("data.pinecone_index.test", "id", rName),
 					resource.TestCheckResourceAttr("data.pinecone_index.test", "name", rName),
 					resource.TestCheckResourceAttr("data.pinecone_index.test", "dimension", "1536"),
 					resource.TestCheckResourceAttr("data.pinecone_index.test", "metric", "cosine"),
+					resource.TestCheckResourceAttr("data.pinecone_index.test", "spec.serverless.cloud", "aws"),
+					resource.TestCheckResourceAttr("data.pinecone_index.test", "spec.serverless.region", "us-west-2"),
 				),
 			},
 		},
 	})
 }
 
-func testAccIndexDataSourceConfig(name string) string {
+func testAccIndexDataSourceConfig_serverless(name string) string {
 	return fmt.Sprintf(`
 	provider "pinecone" {
 		environment = "us-west4-gcp"
