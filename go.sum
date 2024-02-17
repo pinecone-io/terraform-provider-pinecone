@@ -185,6 +185,8 @@ github.com/skyscrapr/pinecone-sdk-go v0.0.0-20230915100420-d738153b7db6 h1:lNxdd
 github.com/skyscrapr/pinecone-sdk-go v0.0.0-20230915100420-d738153b7db6/go.mod h1:d/aDpnWSD8QTYvUKniJ+RjuXMvBfg1Uu28P2rWbi4WM=
 github.com/skyscrapr/pinecone-sdk-go v0.0.0-20240215003141-b2d2b7cbfc23 h1:usvV0CuwqIUmjEfW3hecVOW0a7lT1kAq1zHpPDazptg=
 github.com/skyscrapr/pinecone-sdk-go v0.0.0-20240215003141-b2d2b7cbfc23/go.mod h1:d/aDpnWSD8QTYvUKniJ+RjuXMvBfg1Uu28P2rWbi4WM=
+github.com/skyscrapr/pinecone-sdk-go v0.0.0-20240217112828-0beacfac5475 h1:L4hMTgWVp6X6bzRUYTYn5OeILnluMMnzM4HkuCQ4SRE=
+github.com/skyscrapr/pinecone-sdk-go v0.0.0-20240217112828-0beacfac5475/go.mod h1:d/aDpnWSD8QTYvUKniJ+RjuXMvBfg1Uu28P2rWbi4WM=
 github.com/spf13/cast v1.3.1/go.mod h1:Qx5cxh0v+4UWYiBimWS+eyWzqEqokIECu5etghLkUJE=
 github.com/spf13/cast v1.5.0 h1:rj3WzYc11XZaIZMPKmwP96zkFEnnAmV8s6XbB2aY32w=
 github.com/spf13/cast v1.5.0/go.mod h1:SpXXQ5YoyJw6s3/6cMTQuxvgRl3PCJiyaX9p6b155UU=
