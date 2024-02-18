@@ -79,6 +79,7 @@ Read-Only:
 - `pods` (Number) The number of pods to be used in the index. This should be equal to shards x replicas.'
 - `replicas` (Number) The number of replicas. Replicas duplicate your index. They provide higher availability and throughput. Replicas can be scaled up or down as your needs change.
 - `shards` (Number) The number of shards. Shards split your data across multiple pods so you can fit more data into an index.
+- `source_collection` (String) The name of the collection to create an index from.
 
 <a id="nestedatt--spec--pod--metadata_config"></a>
 ### Nested Schema for `spec.pod.metadata_config`

@@ -35,5 +35,21 @@ data "pinecone_collections" "example" {
 
 ### Read-Only
 
-- `collections` (List of String) List of the collections in your project
+- `collections` (Attributes List) List of the collections in your project (see [below for nested schema](#nestedatt--collections))
 - `id` (String) Collections identifier
+
+<a id="nestedatt--collections"></a>
+### Nested Schema for `collections`
+
+Required:
+
+- `name` (String) The name of the collection.
+- `source` (String) The name of the source index to be used as the source for the collection.
+
+Read-Only:
+
+- `dimension` (Number) The dimension of the vectors stored in each record held in the collection.
+- `environment` (String) The environment where the collection is hosted.
+- `size` (Number) The size of the collection in bytes.
+- `status` (String) The status of the collection.
+- `vector_count` (Number) The number of records stored in the collection.

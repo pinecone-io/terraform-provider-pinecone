@@ -53,9 +53,12 @@ resource "pinecone_collection" "test" {
 
 ### Read-Only
 
+- `dimension` (Number) The dimension of the vectors stored in each record held in the collection.
+- `environment` (String) The environment where the collection is hosted.
 - `id` (String) Collection identifier
 - `size` (Number) The size of the collection in bytes.
 - `status` (String) The status of the collection.
+- `vector_count` (Number) The number of records stored in the collection.
 
 <a id="nestedblock--timeouts"></a>
 ### Nested Schema for `timeouts`
