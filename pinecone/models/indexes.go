@@ -6,6 +6,7 @@ package models
 import (
 	"context"
 
+	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -14,6 +15,63 @@ import (
 )
 
 type IndexModel struct {
+	Name             types.String `tfsdk:"name"`
+	Dimension        types.Int64  `tfsdk:"dimension"`
+	Metric           types.String `tfsdk:"metric"`
+	Host             types.String `tfsdk:"host"`
+	Spec             types.Object `tfsdk:"spec"`
+	Status           types.Object `tfsdk:"status"`
+	SourceCollection types.String `tfsdk:"source_collection"`
+}
+
+// IndexResourceModel defined the Index model for the resource.
+type IndexResourceModel struct {
+	Id        types.String   `tfsdk:"id"`
+	Name      types.String   `tfsdk:"name"`
+	Dimension types.Int64    `tfsdk:"dimension"`
+	Metric    types.String   `tfsdk:"metric"`
+	Host      types.String   `tfsdk:"host"`
+	Spec      types.Object   `tfsdk:"spec"`
+	Status    types.Object   `tfsdk:"status"`
+	Timeouts  timeouts.Value `tfsdk:"timeouts"`
+}
+
+func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index) diag.Diagnostics {
+	var diags diag.Diagnostics
+
+	model.Id = types.StringValue(index.Name)
+	model.Name = types.StringValue(index.Name)
+	model.Dimension = types.Int64Value(int64(index.Dimension))
+	model.Metric = types.StringValue(index.Metric.String())
+	model.Host = types.StringValue(index.Host)
+
+	pod, diags := NewIndexPodSpecModel(ctx, index.Spec.Pod)
+	if diags.HasError() {
+		return diags
+	}
+	spec := IndexSpecModel{
+		Pod:        pod,
+		Serverless: NewIndexServerlessSpecModel(index.Spec.Serverless),
+	}
+
+	model.Spec, diags = types.ObjectValueFrom(ctx, IndexSpecModel{}.AttrTypes(), spec)
+	if diags.HasError() {
+		return diags
+	}
+
+	model.Status, diags = types.ObjectValueFrom(ctx, IndexStatusModel{}.AttrTypes(), IndexStatusModel{
+		Ready: types.BoolValue(index.Status.Ready),
+		State: types.StringValue(index.Status.State.String()),
+	})
+	if diags.HasError() {
+		return diags
+	}
+
+	return diags
+}
+
+// IndexDatasourceeModel defined the Index model for the datasource.
+type IndexDatasourceModel struct {
 	Id        types.String `tfsdk:"id"`
 	Name      types.String `tfsdk:"name"`
 	Dimension types.Int64  `tfsdk:"dimension"`
@@ -23,7 +81,7 @@ type IndexModel struct {
 	Status    types.Object `tfsdk:"status"`
 }
 
-func (model *IndexModel) Read(ctx context.Context, index *pinecone.Index) diag.Diagnostics {
+func (model *IndexDatasourceModel) Read(ctx context.Context, index *pinecone.Index) diag.Diagnostics {
 	var diags diag.Diagnostics
 
 	model.Id = types.StringValue(index.Name)
@@ -193,4 +251,9 @@ func (status IndexStatusModel) AttrTypes() map[string]attr.Type {
 		"ready": types.BoolType,
 		"state": types.StringType,
 	}
+}
+
+type IndexesDataSourceModel struct {
+	Indexes []string     `tfsdk:"indexes"`
+	Id      types.String `tfsdk:"id"`
 }

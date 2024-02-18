@@ -12,7 +12,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 	"github.com/skyscrapr/pinecone-sdk-go/pinecone"
@@ -35,14 +34,6 @@ func NewCollectionResource() resource.Resource {
 // CollectionResource defines the resource implementation.
 type CollectionResource struct {
 	*PineconeResource
-}
-
-// CollectionResourceModel describes the resource data model.
-type CollectionResourceModel struct {
-	models.CollectionModel
-	Id       types.String   `tfsdk:"id"`
-	Source   types.String   `tfsdk:"source"`
-	Timeouts timeouts.Value `tfsdk:"timeouts"`
 }
 
 func (r *CollectionResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -104,7 +95,7 @@ func (r *CollectionResource) Schema(ctx context.Context, req resource.SchemaRequ
 }
 
 func (r *CollectionResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data CollectionResourceModel
+	var data models.CollectionResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -133,7 +124,7 @@ func (r *CollectionResource) Create(ctx context.Context, req resource.CreateRequ
 	err = retry.RetryContext(ctx, createTimeout, func() *retry.RetryError {
 		collection, err := r.client.Collections().DescribeCollection(data.Name.ValueString())
 
-		readCollectionData(collection, &data)
+		data.Read(collection)
 		// Save current status to state
 		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 
@@ -155,7 +146,7 @@ func (r *CollectionResource) Create(ctx context.Context, req resource.CreateRequ
 }
 
 func (r *CollectionResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data CollectionResourceModel
+	var data models.CollectionResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -167,7 +158,7 @@ func (r *CollectionResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 
-	readCollectionData(collection, &data)
+	data.Read(collection)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -177,7 +168,7 @@ func (r *CollectionResource) Update(ctx context.Context, req resource.UpdateRequ
 }
 
 func (r *CollectionResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data CollectionResourceModel
+	var data models.CollectionResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -217,15 +208,4 @@ func (r *CollectionResource) Delete(ctx context.Context, req resource.DeleteRequ
 
 func (r *CollectionResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
-}
-
-func readCollectionData(collection *pinecone.Collection, model *CollectionResourceModel) {
-	model.Id = types.StringValue(collection.Name)
-	model.Name = types.StringValue(collection.Name)
-	model.Source = types.StringValue(model.Source.ValueString())
-	model.Size = types.Int64Value(int64(collection.Size))
-	model.Status = types.StringValue(collection.Status)
-	model.Dimension = types.Int64Value(int64(collection.Dimension))
-	model.VectorCount = types.Int64Value(int64(collection.VectorCount))
-	model.Environment = types.StringValue(collection.Environment)
 }

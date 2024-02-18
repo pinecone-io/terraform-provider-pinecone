@@ -9,7 +9,6 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/skyscrapr/terraform-provider-pinecone/pinecone/models"
 )
 
@@ -23,12 +22,6 @@ func NewCollectionDataSource() datasource.DataSource {
 // CollectionDataSource defines the data source implementation.
 type CollectionDataSource struct {
 	*PineconeDatasource
-}
-
-// CollectionDataSourceModel describes the data source data model.
-type CollectionDataSourceModel struct {
-	models.CollectionModel
-	Id types.String `tfsdk:"id"`
 }
 
 func (d *CollectionDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -74,7 +67,7 @@ func (d *CollectionDataSource) Schema(ctx context.Context, req datasource.Schema
 }
 
 func (d *CollectionDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	var data CollectionDataSourceModel
+	var data models.CollectionDataSourceModel
 
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
@@ -90,13 +83,7 @@ func (d *CollectionDataSource) Read(ctx context.Context, req datasource.ReadRequ
 	}
 
 	// Save data into Terraform state
-	data.Id = types.StringValue(collection.Name)
-	data.Name = types.StringValue(collection.Name)
-	data.Size = types.Int64Value(int64(collection.Size))
-	data.Status = types.StringValue(collection.Status)
-	data.Dimension = types.Int64Value(int64(collection.Dimension))
-	data.VectorCount = types.Int64Value(int64(collection.VectorCount))
-	data.Environment = types.StringValue(collection.Environment)
+	data.Read(collection)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }

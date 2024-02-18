@@ -27,12 +27,6 @@ type CollectionsDataSource struct {
 	*PineconeDatasource
 }
 
-// CollectionsDataSourceModel describes the data source data model.
-type CollectionsDataSourceModel struct {
-	Collections []models.CollectionModel `tfsdk:"collections"`
-	Id          types.String             `tfsdk:"id"`
-}
-
 func (d *CollectionsDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_collections"
 }
@@ -88,7 +82,7 @@ func (d *CollectionsDataSource) Schema(ctx context.Context, req datasource.Schem
 }
 
 func (d *CollectionsDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	var data CollectionsDataSourceModel
+	var data models.CollectionsDataSourceModel
 
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)

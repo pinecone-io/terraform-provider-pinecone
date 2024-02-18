@@ -24,11 +24,6 @@ type IndexDataSource struct {
 	*PineconeDatasource
 }
 
-// IndexDatasourceModel defines the Index model for the datasource.
-type IndexDatasourceModel struct {
-	models.IndexModel
-}
-
 func (d *IndexDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_index"
 }
@@ -144,7 +139,7 @@ func (d *IndexDataSource) Schema(ctx context.Context, req datasource.SchemaReque
 }
 
 func (d *IndexDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	var data IndexDatasourceModel
+	var data models.IndexDatasourceModel
 
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)

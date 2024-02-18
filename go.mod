@@ -83,4 +83,4 @@ require (
 )
 
 // Use below for local development
-// replace github.com/skyscrapr/pinecone-sdk-go => ../pinecone-sdk-go
+replace github.com/skyscrapr/pinecone-sdk-go => ../pinecone-sdk-go
