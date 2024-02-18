@@ -13,7 +13,6 @@ import (
 	"github.com/skyscrapr/pinecone-sdk-go/pinecone"
 )
 
-// Index
 type IndexModel struct {
 	Id        types.String `tfsdk:"id"`
 	Name      types.String `tfsdk:"name"`
@@ -58,7 +57,6 @@ func (model *IndexModel) Read(ctx context.Context, index *pinecone.Index) diag.D
 	return diags
 }
 
-// IndexSpec
 type IndexSpecModel struct {
 	Pod        *IndexPodSpecModel        `tfsdk:"pod"`
 	Serverless *IndexServerlessSpecModel `tfsdk:"serverless"`
@@ -185,7 +183,6 @@ func (model IndexServerlessSpecModel) AttrTypes() map[string]attr.Type {
 	}
 }
 
-// IndexStatus
 type IndexStatusModel struct {
 	Ready types.Bool   `tfsdk:"ready"`
 	State types.String `tfsdk:"state"`

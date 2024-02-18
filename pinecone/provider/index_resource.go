@@ -43,7 +43,7 @@ type IndexResource struct {
 	*PineconeResource
 }
 
-// IndexResourceModel
+// IndexResourceModel defined the Index model for the resource.
 type IndexResourceModel struct {
 	models.IndexModel
 	Timeouts timeouts.Value `tfsdk:"timeouts"`

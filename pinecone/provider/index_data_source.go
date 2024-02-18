@@ -24,7 +24,7 @@ type IndexDataSource struct {
 	*PineconeDatasource
 }
 
-// IndexDatasourceModel
+// IndexDatasourceModel defines the Index model for the datasource.
 type IndexDatasourceModel struct {
 	models.IndexModel
 }
