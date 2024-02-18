@@ -28,9 +28,12 @@ provider "pinecone" {
 
 resource "pinecone_index" "test" {
   name = "tftestindex"
-  # dimension = 512
-  # metric    = "cosine"
-  # pod_type  = "s1.x1"
+  spec = {
+    serverless = {
+      cloud  = "aws"
+      region = "us-west-2"
+    }
+  }
 }
 ```
 

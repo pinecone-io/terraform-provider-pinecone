@@ -11,5 +11,15 @@ provider "pinecone" {
   # api_key = set via PINECONE_API_KEY env variable
 }
 
-data "pinecone_indexes" "example" {
+resource "pinecone_index" "test" {
+  name = "tftestindex"
+  spec = {
+    serverless = {
+      cloud  = "aws"
+      region = "us-west-2"
+    }
+  }
+}
+
+data "pinecone_indexes" "test" {
 }

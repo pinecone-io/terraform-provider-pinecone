@@ -11,6 +11,6 @@ provider "pinecone" {
   # api_key = set via PINECONE_API_KEY env variable
 }
 
-data "pinecone_collections" "example" {
+data "pinecone_collections" "test" {
 }
 
