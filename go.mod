@@ -11,7 +11,7 @@ require (
 	github.com/hashicorp/terraform-plugin-log v0.9.0
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.32.0
 	github.com/hashicorp/terraform-plugin-testing v1.6.0
-	github.com/skyscrapr/pinecone-sdk-go v0.0.0-20240218024056-d377aa60667d
+	github.com/skyscrapr/pinecone-sdk-go v0.0.0-20240218063037-dc2384fe1625
 )
 
 require (
@@ -83,4 +83,4 @@ require (
 )
 
 // Use below for local development
-replace github.com/skyscrapr/pinecone-sdk-go => ../pinecone-sdk-go
+// replace github.com/skyscrapr/pinecone-sdk-go => ../pinecone-sdk-go
