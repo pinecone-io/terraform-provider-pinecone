@@ -25,9 +25,9 @@ import (
 )
 
 const (
-	defaultIndexCreateTimeout time.Duration = 5 * time.Minute
-	defaultIndexUpdateTimeout time.Duration = 5 * time.Minute
-	defaultIndexDeleteTimeout time.Duration = 5 * time.Minute
+	defaultIndexCreateTimeout time.Duration = 10 * time.Minute
+	defaultIndexUpdateTimeout time.Duration = 10 * time.Minute
+	defaultIndexDeleteTimeout time.Duration = 10 * time.Minute
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -19,8 +20,8 @@ import (
 )
 
 const (
-	defaultCollectionCreateTimeout time.Duration = 5 * time.Minute
-	defaultCollectionDeleteTimeout time.Duration = 5 * time.Minute
+	defaultCollectionCreateTimeout time.Duration = 10 * time.Minute
+	defaultCollectionDeleteTimeout time.Duration = 10 * time.Minute
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -165,6 +166,7 @@ func (r *CollectionResource) Read(ctx context.Context, req resource.ReadRequest,
 
 func (r *CollectionResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	// Collections currently do not support updates
+	resp.Diagnostics.Append(diag.NewErrorDiagnostic("not supported", "This resource's Update method should not have been called"))
 }
 
 func (r *CollectionResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
