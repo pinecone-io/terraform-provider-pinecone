@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/skyscrapr/terraform-provider-pinecone/pinecone/models"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -21,6 +22,11 @@ func NewIndexDataSource() datasource.DataSource {
 // IndexDataSource defines the data source implementation.
 type IndexDataSource struct {
 	*PineconeDatasource
+}
+
+// IndexDatasourceModel
+type IndexDatasourceModel struct {
+	models.IndexModel
 }
 
 func (d *IndexDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -153,7 +159,7 @@ func (d *IndexDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		return
 	}
 
-	data.read(ctx, index)
+	data.Read(ctx, index)
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)

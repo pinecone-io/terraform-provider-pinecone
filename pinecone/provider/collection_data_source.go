@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/skyscrapr/terraform-provider-pinecone/pinecone/models"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -26,13 +27,8 @@ type CollectionDataSource struct {
 
 // CollectionDataSourceModel describes the data source data model.
 type CollectionDataSourceModel struct {
-	Id          types.String `tfsdk:"id"`
-	Name        types.String `tfsdk:"name"`
-	Size        types.Int64  `tfsdk:"size"`
-	Status      types.String `tfsdk:"status"`
-	Dimension   types.Int64  `tfsdk:"dimension"`
-	VectorCount types.Int64  `tfsdk:"vector_count"`
-	Environment types.String `tfsdk:"environment"`
+	models.CollectionModel
+	Id types.String `tfsdk:"id"`
 }
 
 func (d *CollectionDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {

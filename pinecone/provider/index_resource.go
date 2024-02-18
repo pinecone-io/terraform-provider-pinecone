@@ -21,6 +21,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 	"github.com/skyscrapr/pinecone-sdk-go/pinecone"
+	"github.com/skyscrapr/terraform-provider-pinecone/pinecone/models"
 )
 
 const (
@@ -42,19 +43,11 @@ type IndexResource struct {
 	*PineconeResource
 }
 
-// // IndexResourceModel describes the resource data model.
-// type IndexResourceModel struct {
-// 	Id               types.String   `tfsdk:"id"`
-// 	Name             types.String   `tfsdk:"name"`
-// 	Dimension        types.Int64    `tfsdk:"dimension"`
-// 	Metric           types.String   `tfsdk:"metric"`
-// 	Pods             types.Int64    `tfsdk:"pods"`
-// 	Replicas         types.Int64    `tfsdk:"replicas"`
-// 	PodType          types.String   `tfsdk:"pod_type"`
-// 	MetadataConfig   types.Object   `tfsdk:"metadata_config"`
-// 	SourceCollection types.String   `tfsdk:"source_collection"`
-// 	Timeouts         timeouts.Value `tfsdk:"timeouts"`
-// }
+// IndexResourceModel
+type IndexResourceModel struct {
+	models.IndexModel
+	Timeouts timeouts.Value `tfsdk:"timeouts"`
+}
 
 func (r *IndexResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_index"
@@ -217,13 +210,13 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		Metric:    pinecone.IndexMetric(data.Metric.ValueString()),
 	}
 
-	var spec IndexSpecModel
+	var spec models.IndexSpecModel
 	resp.Diagnostics.Append(data.Spec.As(ctx, &spec, basetypes.ObjectAsOptions{})...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	pod, diags := newIndexPodSpec(ctx, spec.Pod)
+	pod, diags := models.NewIndexPodSpec(ctx, spec.Pod)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -231,7 +224,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	payload.Spec = pinecone.IndexSpec{
 		Pod:        pod,
-		Serverless: newIndexServerlessSpec(spec.Serverless),
+		Serverless: models.NewIndexServerlessSpec(spec.Serverless),
 	}
 
 	err := r.client.Indexes().CreateIndex(&payload)
@@ -252,7 +245,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 	err = retry.RetryContext(ctx, createTimeout, func() *retry.RetryError {
 		index, err := r.client.Indexes().DescribeIndex(data.Name.ValueString())
 
-		resp.Diagnostics.Append(data.read(ctx, index)...)
+		resp.Diagnostics.Append(data.Read(ctx, index)...)
 
 		// Save current status to state
 		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -290,8 +283,7 @@ func (r *IndexResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
-	data.read(ctx, index)
-	// readIndexData(ctx, index, &data)
+	data.Read(ctx, index)
 
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -310,13 +302,13 @@ func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	// Prepare the payload for the API request
 	payload := pinecone.ConfigureIndexParams{}
 
-	var spec IndexSpecModel
+	var spec models.IndexSpecModel
 	resp.Diagnostics.Append(data.Spec.As(ctx, &spec, basetypes.ObjectAsOptions{})...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	pod, diags := newIndexPodSpec(ctx, spec.Pod)
+	pod, diags := models.NewIndexPodSpec(ctx, spec.Pod)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -324,7 +316,7 @@ func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 
 	payload.Spec = pinecone.IndexSpec{
 		Pod:        pod,
-		Serverless: newIndexServerlessSpec(spec.Serverless),
+		Serverless: models.NewIndexServerlessSpec(spec.Serverless),
 	}
 
 	err := r.client.Indexes().ConfigureIndex(data.Name.ValueString(), &payload)
@@ -345,7 +337,7 @@ func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	err = retry.RetryContext(ctx, updateTimeout, func() *retry.RetryError {
 		index, err := r.client.Indexes().DescribeIndex(data.Name.ValueString())
 
-		resp.Diagnostics.Append(data.read(ctx, index)...)
+		resp.Diagnostics.Append(data.Read(ctx, index)...)
 
 		// Save current status to state
 		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)

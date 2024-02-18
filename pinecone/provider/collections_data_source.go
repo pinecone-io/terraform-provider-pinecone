@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/skyscrapr/terraform-provider-pinecone/pinecone/models"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -28,8 +29,8 @@ type CollectionsDataSource struct {
 
 // CollectionsDataSourceModel describes the data source data model.
 type CollectionsDataSourceModel struct {
-	Collections []string     `tfsdk:"collections"`
-	Id          types.String `tfsdk:"id"`
+	Collections []models.CollectionModel `tfsdk:"collections"`
+	Id          types.String             `tfsdk:"id"`
 }
 
 func (d *CollectionsDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -42,10 +43,41 @@ func (d *CollectionsDataSource) Schema(ctx context.Context, req datasource.Schem
 		MarkdownDescription: "Collections data source",
 
 		Attributes: map[string]schema.Attribute{
-			"collections": schema.ListAttribute{
+			"collections": schema.ListNestedAttribute{
 				MarkdownDescription: "List of the collections in your project",
 				Computed:            true,
-				ElementType:         types.StringType,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"name": schema.StringAttribute{
+							MarkdownDescription: "The name of the collection.",
+							Required:            true,
+						},
+						"source": schema.StringAttribute{
+							MarkdownDescription: "The name of the source index to be used as the source for the collection.",
+							Required:            true,
+						},
+						"size": schema.Int64Attribute{
+							MarkdownDescription: "The size of the collection in bytes.",
+							Computed:            true,
+						},
+						"status": schema.StringAttribute{
+							MarkdownDescription: "The status of the collection.",
+							Computed:            true,
+						},
+						"dimension": schema.Int64Attribute{
+							MarkdownDescription: "The dimension of the vectors stored in each record held in the collection.",
+							Computed:            true,
+						},
+						"vector_count": schema.Int64Attribute{
+							MarkdownDescription: "The number of records stored in the collection.",
+							Computed:            true,
+						},
+						"environment": schema.StringAttribute{
+							MarkdownDescription: "The environment where the collection is hosted.",
+							Computed:            true,
+						},
+					},
+				},
 			},
 			"id": schema.StringAttribute{
 				MarkdownDescription: "Collections identifier",
@@ -71,8 +103,11 @@ func (d *CollectionsDataSource) Read(ctx context.Context, req datasource.ReadReq
 		return
 	}
 
+	for _, c := range collections.Collections {
+		data.Collections = append(data.Collections, *models.NewCollectionModel(&c))
+	}
+
 	// Save data into Terraform state
 	data.Id = types.StringValue(strconv.FormatInt(time.Now().Unix(), 10))
-	data.Collections = collections
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }

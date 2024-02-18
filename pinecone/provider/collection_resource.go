@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 	"github.com/skyscrapr/pinecone-sdk-go/pinecone"
+	"github.com/skyscrapr/terraform-provider-pinecone/pinecone/models"
 )
 
 const (
@@ -38,15 +39,10 @@ type CollectionResource struct {
 
 // CollectionResourceModel describes the resource data model.
 type CollectionResourceModel struct {
-	Id          types.String   `tfsdk:"id"`
-	Name        types.String   `tfsdk:"name"`
-	Source      types.String   `tfsdk:"source"`
-	Size        types.Int64    `tfsdk:"size"`
-	Status      types.String   `tfsdk:"status"`
-	Dimension   types.Int64    `tfsdk:"dimension"`
-	VectorCount types.Int64    `tfsdk:"vector_count"`
-	Environment types.String   `tfsdk:"environment"`
-	Timeouts    timeouts.Value `tfsdk:"timeouts"`
+	models.CollectionModel
+	Id       types.String   `tfsdk:"id"`
+	Source   types.String   `tfsdk:"source"`
+	Timeouts timeouts.Value `tfsdk:"timeouts"`
 }
 
 func (r *CollectionResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {

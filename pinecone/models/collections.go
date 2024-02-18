@@ -21,12 +21,12 @@ type CollectionModel struct {
 func NewCollectionModel(collection *pinecone.Collection) *CollectionModel {
 	if collection != nil {
 		newCollection := &CollectionModel{
-			Name:			  types.StringValue(collection.Name),
-			Size:             types.Int64Value(int64(collection.Size)),
+			Name:        types.StringValue(collection.Name),
+			Size:        types.Int64Value(int64(collection.Size)),
 			Status:      types.StringValue(collection.Status),
-			Dimension:             types.Int64Value(int64(collection.Dimension)),
-			VectorCount:             types.Int64Value(int64(collection.VectorCount)),
-			Environment:      types.StringValue(collection.Environment),
+			Dimension:   types.Int64Value(int64(collection.Dimension)),
+			VectorCount: types.Int64Value(int64(collection.VectorCount)),
+			Environment: types.StringValue(collection.Environment),
 		}
 		return newCollection
 	}
