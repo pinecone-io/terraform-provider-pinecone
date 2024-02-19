@@ -96,6 +96,27 @@ func TestAccIndexResource_pod_basic(t *testing.T) {
 	})
 }
 
+func TestAccIndexResource_dimension(t *testing.T) {
+	rName := sdkacctest.RandomWithPrefix("tftest")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			// Create and Read testing
+			{
+				Config: testAccIndexResourceConfig_dimension(rName, "1"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
+					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
+					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1"),
+				),
+			},
+			// Delete testing automatically occurs in TestCase
+		},
+	})
+}
+
 func testAccIndexResourceConfig_serverless(name string) string {
 	return fmt.Sprintf(`
 provider "pinecone" {
@@ -132,4 +153,23 @@ resource "pinecone_index" "test" {
 	}
 }
 `, name, replicas, pods)
+}
+
+func testAccIndexResourceConfig_dimension(name string, dimension string) string {
+	return fmt.Sprintf(`
+provider "pinecone" {
+	environment = "us-west4-gcp"
+}
+
+resource "pinecone_index" "test" {
+  name = %q
+  dimension = %q
+  spec = {
+	serverless = {
+		cloud = "aws"
+		region = "us-west-2"
+	}
+  }
+}
+`, name, dimension)
 }

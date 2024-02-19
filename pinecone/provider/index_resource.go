@@ -70,7 +70,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				Computed:            true,
 				Default:             int64default.StaticInt64(1536),
 				Validators: []validator.Int64{
-					int64validator.AtLeast(512),
+					int64validator.AtLeast(1),
 				},
 			},
 			"metric": schema.StringAttribute{
