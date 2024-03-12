@@ -23,3 +23,4 @@ Project ApiKey resource
 ### Read-Only
 
 - `id` (String) ApiKey identifier
+- `secret` (String, Sensitive) The api key secret.

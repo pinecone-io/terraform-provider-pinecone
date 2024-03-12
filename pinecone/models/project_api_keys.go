@@ -20,15 +20,17 @@ type ProjectApiKeysModel struct {
 type ProjectApiKeyModel struct {
 	Id        types.String `tfsdk:"id"`
 	Name      types.String `tfsdk:"name"`
+	Secret    types.String `tfsdk:"secret"`
 	ProjectId types.String `tfsdk:"project_id"`
 }
 
-func (model *ProjectApiKeyModel) Read(ctx context.Context, project *pinecone.ProjectApiKey) diag.Diagnostics {
+func (model *ProjectApiKeyModel) Read(ctx context.Context, apiKey *pinecone.ProjectApiKey) diag.Diagnostics {
 	var diags diag.Diagnostics
 
-	model.Id = types.StringValue(project.ID)
-	model.Name = types.StringValue(project.Name)
-	model.ProjectId = types.StringValue(project.ProjectID)
+	model.Id = types.StringValue(apiKey.ID)
+	model.Name = types.StringValue(apiKey.Name)
+	model.Secret = types.StringValue(apiKey.Value)
+	model.ProjectId = types.StringValue(apiKey.ProjectID)
 
 	return diags
 }

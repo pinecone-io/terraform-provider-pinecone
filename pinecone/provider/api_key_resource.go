@@ -7,7 +7,7 @@ import (
 	"context"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
-	"github.com/hashicorp/terraform-plugin-framework/path"
+	// "github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -17,7 +17,8 @@ import (
 
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ resource.Resource = &ProjectApiKeyResource{}
-var _ resource.ResourceWithImportState = &ProjectApiKeyResource{}
+
+// var _ resource.ResourceWithImportState = &ProjectApiKeyResource{}
 
 func NewProjectApiKeyResource() resource.Resource {
 	return &ProjectApiKeyResource{PineconeResource: &PineconeResource{}}
@@ -49,6 +50,11 @@ func (r *ProjectApiKeyResource) Schema(ctx context.Context, req resource.SchemaR
 					stringvalidator.LengthAtLeast(3),
 					stringvalidator.LengthAtMost(7),
 				},
+			},
+			"secret": schema.StringAttribute{
+				MarkdownDescription: "The api key secret.",
+				Computed:            true,
+				Sensitive:           true,
 			},
 			"project_id": schema.StringAttribute{
 				MarkdownDescription: "The id of the project.",
@@ -131,6 +137,6 @@ func (r *ProjectApiKeyResource) Delete(ctx context.Context, req resource.DeleteR
 	}
 }
 
-func (r *ProjectApiKeyResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
-}
+// func (r *ProjectApiKeyResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+// 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+// }
