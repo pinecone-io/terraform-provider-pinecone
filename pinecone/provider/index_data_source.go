@@ -13,7 +13,7 @@ import (
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
-var _ datasource.DataSource = &IndexesDataSource{}
+var _ datasource.DataSource = &IndexDataSource{}
 
 func NewIndexDataSource() datasource.DataSource {
 	return &IndexDataSource{PineconeDatasource: &PineconeDatasource{}}

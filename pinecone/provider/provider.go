@@ -28,8 +28,7 @@ type PineconeProvider struct {
 
 // PineconeProviderModel describes the provider data model.
 type PineconeProviderModel struct {
-	ApiKey      types.String `tfsdk:"api_key"`
-	Environment types.String `tfsdk:"environment"`
+	ApiKey types.String `tfsdk:"api_key"`
 }
 
 func (p *PineconeProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -44,10 +43,6 @@ func (p *PineconeProvider) Schema(ctx context.Context, req provider.SchemaReques
 				MarkdownDescription: "Pinecone API Key. Can be configured by setting PINECONE_API_KEY environment variable.",
 				Optional:            true,
 				Sensitive:           true,
-			},
-			"environment": schema.StringAttribute{
-				MarkdownDescription: "Pinecone Environment. Can be configured by setting PINECONE_ENVIRONMENT environment variable.",
-				Optional:            true,
 			},
 		},
 	}
@@ -69,11 +64,11 @@ func (p *PineconeProvider) Configure(ctx context.Context, req provider.Configure
 		apiKey = data.ApiKey.ValueString()
 	}
 
-	env := os.Getenv("PINECONE_ENVIRONMENT")
-	if !data.Environment.IsNull() {
-		env = data.Environment.ValueString()
-	}
-	client := pinecone.NewClient(apiKey, env)
+	// env := os.Getenv("PINECONE_ENVIRONMENT")
+	// if !data.Environment.IsNull() {
+	// 	env = data.Environment.ValueString()
+	// }
+	client := pinecone.NewClient(apiKey)
 
 	resp.DataSourceData = client
 	resp.ResourceData = client
@@ -83,6 +78,8 @@ func (p *PineconeProvider) Resources(ctx context.Context) []func() resource.Reso
 	return []func() resource.Resource{
 		NewCollectionResource,
 		NewIndexResource,
+		NewProjectResource,
+		NewProjectApiKeyResource,
 	}
 }
 
@@ -92,6 +89,10 @@ func (p *PineconeProvider) DataSources(ctx context.Context) []func() datasource.
 		NewCollectionDataSource,
 		NewIndexesDataSource,
 		NewIndexDataSource,
+		NewProjectsDataSource,
+		NewProjectDataSource,
+		NewProjectApiKeysDataSource,
+		NewProjectApiKeyDataSource,
 	}
 }
 
