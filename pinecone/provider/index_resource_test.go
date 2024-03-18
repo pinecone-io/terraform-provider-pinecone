@@ -117,10 +117,31 @@ func TestAccIndexResource_dimension(t *testing.T) {
 	})
 }
 
+func TestAccIndexResource_complex(t *testing.T) {
+	rName := sdkacctest.RandomWithPrefix("tftest")
+	rShortName := fmt.Sprintf("%s%d", "tf", sdkacctest.RandIntRange(0, 9999))
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			// Create and Read testing
+			{
+				Config: testAccIndexResourceConfig_complex(rName, rShortName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("pinecone_project.test", "name", rName),
+					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
+					resource.TestCheckResourceAttr("pinecone_project_api_key.test", "name", rShortName),
+				),
+			},
+			// Delete testing automatically occurs in TestCase
+		},
+	})
+}
+
 func testAccIndexResourceConfig_serverless(name string) string {
 	return fmt.Sprintf(`
 provider "pinecone" {
-	environment = "us-west4-gcp"
 }
 
 resource "pinecone_index" "test" {
@@ -138,7 +159,6 @@ resource "pinecone_index" "test" {
 func testAccIndexResourceConfig_pod_basic(name string, replicas string, pods string) string {
 	return fmt.Sprintf(`
 provider "pinecone" {
-	environment = "us-west4-gcp"
 }
 
 resource "pinecone_index" "test" {
@@ -158,7 +178,6 @@ resource "pinecone_index" "test" {
 func testAccIndexResourceConfig_dimension(name string, dimension string) string {
 	return fmt.Sprintf(`
 provider "pinecone" {
-	environment = "us-west4-gcp"
 }
 
 resource "pinecone_index" "test" {
@@ -172,4 +191,38 @@ resource "pinecone_index" "test" {
   }
 }
 `, name, dimension)
+}
+
+func testAccIndexResourceConfig_complex(name string, shortName string) string {
+	return fmt.Sprintf(`
+provider "pinecone" {
+  alias = "mgmt"
+}
+
+provider "pinecone" {
+  api_key = pinecone_project_api_key.test.secret
+}
+
+resource "pinecone_project" "test" {
+  provider = pinecone.mgmt
+  name = %q
+}
+  
+resource "pinecone_project_api_key" "test" {
+  provider = pinecone.mgmt
+  name = %q
+  project_id = pinecone_project.test.id
+}
+  
+resource "pinecone_index" "test" {
+  name = %q
+  dimension = 19
+  spec = {
+	serverless = {
+	  cloud = "aws"
+	  region = "us-west-2"
+	}
+  }
+}
+`, name, shortName, name)
 }
