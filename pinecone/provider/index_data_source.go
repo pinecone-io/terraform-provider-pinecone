@@ -148,7 +148,7 @@ func (d *IndexDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		return
 	}
 
-	index, err := d.client.Indexes().DescribeIndex(data.Name.ValueString())
+	index, err := d.client.DescribeIndex(ctx, data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to describe index", err.Error())
 		return

@@ -159,15 +159,15 @@ func (d *IndexesDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		return
 	}
 
-	indexes, err := d.client.Indexes().ListIndexes()
+	indexes, err := d.client.ListIndexes(ctx)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to ListIndexes, got error: %s", err))
 		return
 	}
 
-	for _, i := range indexes.Indexes {
+	for _, i := range indexes {
 		index := models.IndexModel{}
-		resp.Diagnostics.Append(index.Read(ctx, &i)...)
+		resp.Diagnostics.Append(index.Read(ctx, i)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}

@@ -91,14 +91,14 @@ func (d *CollectionsDataSource) Read(ctx context.Context, req datasource.ReadReq
 		return
 	}
 
-	collections, err := d.client.Collections().ListCollections()
+	collections, err := d.client.ListCollections(ctx)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to ListCollections, got error: %s", err))
 		return
 	}
 
-	for _, c := range collections.Collections {
-		data.Collections = append(data.Collections, *models.NewCollectionModel(&c))
+	for _, c := range collections {
+		data.Collections = append(data.Collections, *models.NewCollectionModel(c))
 	}
 
 	// Save data into Terraform state

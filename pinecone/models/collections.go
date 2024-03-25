@@ -6,7 +6,7 @@ package models
 import (
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/skyscrapr/pinecone-sdk-go/pinecone"
+	"github.com/pinecone-io/go-pinecone/pinecone"
 )
 
 // CollectionModel describes the collection data model.
@@ -23,10 +23,10 @@ func NewCollectionModel(collection *pinecone.Collection) *CollectionModel {
 	if collection != nil {
 		newCollection := &CollectionModel{
 			Name:        types.StringValue(collection.Name),
-			Size:        types.Int64Value(int64(collection.Size)),
-			Status:      types.StringValue(collection.Status),
-			Dimension:   types.Int64Value(int64(collection.Dimension)),
-			VectorCount: types.Int64Value(int64(collection.VectorCount)),
+			Size:        types.Int64Value(*collection.Size),
+			Status:      types.StringValue(string(collection.Status)),
+			Dimension:   types.Int64Value(int64(*collection.Dimension)),
+			VectorCount: types.Int64Value(int64(*collection.VectorCount)),
 			Environment: types.StringValue(collection.Environment),
 		}
 		return newCollection
@@ -51,10 +51,10 @@ func (model *CollectionResourceModel) Read(collection *pinecone.Collection) {
 	model.Id = types.StringValue(collection.Name)
 	model.Name = types.StringValue(collection.Name)
 	model.Source = types.StringValue(model.Source.ValueString())
-	model.Size = types.Int64Value(int64(collection.Size))
-	model.Status = types.StringValue(collection.Status)
-	model.Dimension = types.Int64Value(int64(collection.Dimension))
-	model.VectorCount = types.Int64Value(int64(collection.VectorCount))
+	model.Size = types.Int64Value(int64(*collection.Size))
+	model.Status = types.StringValue(string(collection.Status))
+	model.Dimension = types.Int64Value(int64(*collection.Dimension))
+	model.VectorCount = types.Int64Value(int64(*collection.VectorCount))
 	model.Environment = types.StringValue(collection.Environment)
 }
 
@@ -72,10 +72,10 @@ type CollectionDataSourceModel struct {
 func (model *CollectionDataSourceModel) Read(collection *pinecone.Collection) {
 	model.Id = types.StringValue(collection.Name)
 	model.Name = types.StringValue(collection.Name)
-	model.Size = types.Int64Value(int64(collection.Size))
-	model.Status = types.StringValue(collection.Status)
-	model.Dimension = types.Int64Value(int64(collection.Dimension))
-	model.VectorCount = types.Int64Value(int64(collection.VectorCount))
+	model.Size = types.Int64Value(int64(*collection.Size))
+	model.Status = types.StringValue(string(collection.Status))
+	model.Dimension = types.Int64Value(int64(*collection.Dimension))
+	model.VectorCount = types.Int64Value(int64(*collection.VectorCount))
 	model.Environment = types.StringValue(collection.Environment)
 }
 

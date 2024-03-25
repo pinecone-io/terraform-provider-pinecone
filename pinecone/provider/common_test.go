@@ -7,7 +7,7 @@ import (
 	"context"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/skyscrapr/pinecone-sdk-go/pinecone"
+	"github.com/pinecone-io/go-pinecone/pinecone"
 	"testing"
 )
 

@@ -76,7 +76,7 @@ func (d *CollectionDataSource) Read(ctx context.Context, req datasource.ReadRequ
 		return
 	}
 
-	collection, err := d.client.Collections().DescribeCollection(data.Name.ValueString())
+	collection, err := d.client.DescribeCollection(ctx, data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to describe collection, got error: %s", err))
 		return

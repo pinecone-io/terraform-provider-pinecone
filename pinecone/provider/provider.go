@@ -12,7 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/skyscrapr/pinecone-sdk-go/pinecone"
+	"github.com/pinecone-io/go-pinecone/pinecone"
 )
 
 // Ensure PineconeProvider satisfies various provider interfaces.
@@ -64,7 +64,13 @@ func (p *PineconeProvider) Configure(ctx context.Context, req provider.Configure
 		apiKey = data.ApiKey.ValueString()
 	}
 
-	client := pinecone.NewClient(apiKey)
+	client, err := pinecone.NewClient(pinecone.NewClientParams{
+		ApiKey: apiKey,
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to create pinecone client", err.Error())
+		return
+	}
 
 	resp.DataSourceData = client
 	resp.ResourceData = client
@@ -74,8 +80,6 @@ func (p *PineconeProvider) Resources(ctx context.Context) []func() resource.Reso
 	return []func() resource.Resource{
 		NewCollectionResource,
 		NewIndexResource,
-		NewProjectResource,
-		NewProjectApiKeyResource,
 	}
 }
 
@@ -85,10 +89,6 @@ func (p *PineconeProvider) DataSources(ctx context.Context) []func() datasource.
 		NewCollectionDataSource,
 		NewIndexesDataSource,
 		NewIndexDataSource,
-		NewProjectsDataSource,
-		NewProjectDataSource,
-		NewProjectApiKeysDataSource,
-		NewProjectApiKeyDataSource,
 	}
 }
 
