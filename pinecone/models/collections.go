@@ -54,7 +54,7 @@ func (model *CollectionResourceModel) Read(collection *pinecone.Collection) {
 	model.Status = types.StringValue(string(collection.Status))
 	model.Environment = types.StringValue(collection.Environment)
 	if collection.Size != nil {
-		model.Size = types.Int64Value(int64(*collection.Size))
+		model.Size = types.Int64Value(*collection.Size)
 	}
 	if collection.Dimension != nil {
 		model.Dimension = types.Int64Value(int64(*collection.Dimension))
@@ -81,7 +81,7 @@ type CollectionDataSourceModel struct {
 func (model *CollectionDataSourceModel) Read(collection *pinecone.Collection) {
 	model.Id = types.StringValue(collection.Name)
 	model.Name = types.StringValue(collection.Name)
-	model.Size = types.Int64Value(int64(*collection.Size))
+	model.Size = types.Int64Value(*collection.Size)
 	model.Status = types.StringValue(string(collection.Status))
 	model.Dimension = types.Int64Value(int64(*collection.Dimension))
 	model.VectorCount = types.Int64Value(int64(*collection.VectorCount))
