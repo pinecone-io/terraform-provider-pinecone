@@ -46,10 +46,6 @@ func (d *CollectionsDataSource) Schema(ctx context.Context, req datasource.Schem
 							MarkdownDescription: "The name of the collection.",
 							Required:            true,
 						},
-						"source": schema.StringAttribute{
-							MarkdownDescription: "The name of the source index to be used as the source for the collection.",
-							Required:            true,
-						},
 						"size": schema.Int64Attribute{
 							MarkdownDescription: "The size of the collection in bytes.",
 							Computed:            true,

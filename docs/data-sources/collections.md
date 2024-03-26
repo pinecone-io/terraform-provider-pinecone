@@ -44,7 +44,6 @@ data "pinecone_collections" "test" {
 Required:
 
 - `name` (String) The name of the collection.
-- `source` (String) The name of the source index to be used as the source for the collection.
 
 Read-Only:
 

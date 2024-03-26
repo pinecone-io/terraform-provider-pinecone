@@ -22,12 +22,15 @@ type CollectionModel struct {
 func NewCollectionModel(collection *pinecone.Collection) *CollectionModel {
 	if collection != nil {
 		newCollection := &CollectionModel{
-			Name:      types.StringValue(collection.Name),
-			Size:      types.Int64Value(*collection.Size),
-			Status:    types.StringValue(string(collection.Status)),
-			Dimension: types.Int64Value(int64(*collection.Dimension)),
-			// VectorCount: types.Int64Value(int64(*collection.VectorCount)),
+			Name:        types.StringValue(collection.Name),
+			Status:      types.StringValue(string(collection.Status)),
 			Environment: types.StringValue(collection.Environment),
+		}
+		if collection.Size != nil {
+			newCollection.Size = types.Int64Value(*collection.Size)
+		}
+		if collection.Dimension != nil {
+			newCollection.Dimension = types.Int64Value(int64(*collection.Dimension))
 		}
 		return newCollection
 	}
@@ -81,11 +84,15 @@ type CollectionDataSourceModel struct {
 func (model *CollectionDataSourceModel) Read(collection *pinecone.Collection) {
 	model.Id = types.StringValue(collection.Name)
 	model.Name = types.StringValue(collection.Name)
-	model.Size = types.Int64Value(*collection.Size)
 	model.Status = types.StringValue(string(collection.Status))
-	model.Dimension = types.Int64Value(int64(*collection.Dimension))
-	// model.VectorCount = types.Int64Value(int64(*collection.VectorCount))
 	model.Environment = types.StringValue(collection.Environment)
+	if collection.Size != nil {
+		model.Size = types.Int64Value(*collection.Size)
+	}
+	if collection.Dimension != nil {
+		model.Dimension = types.Int64Value(int64(*collection.Dimension))
+	}
+	// model.VectorCount = types.Int64Value(int64(*collection.VectorCount))
 }
 
 // CollectionsDataSourceModel describes the data source data model.
