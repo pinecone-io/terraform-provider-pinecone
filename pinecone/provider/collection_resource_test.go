@@ -5,13 +5,13 @@ package provider
 
 import (
 	"fmt"
-	sdkacctest "github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
+	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"testing"
 )
 
 func TestAccCollectionResource(t *testing.T) {
-	rName := sdkacctest.RandomWithPrefix("tftest")
+	rName := acctest.RandomWithPrefix("tftest")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -48,7 +48,6 @@ func TestAccCollectionResource(t *testing.T) {
 func testAccCollectionResourceConfig(name string) string {
 	return fmt.Sprintf(`
 provider "pinecone" {
-	environment = "us-west4-gcp"
 }
 
 resource "pinecone_index" "test" {

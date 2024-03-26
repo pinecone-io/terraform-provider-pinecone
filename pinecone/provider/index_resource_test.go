@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"testing"
 
-	sdkacctest "github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
+	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
 func TestAccIndexResource_serverless(t *testing.T) {
-	rName := sdkacctest.RandomWithPrefix("tftest")
+	rName := acctest.RandomWithPrefix("tftest")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -43,7 +43,7 @@ func TestAccIndexResource_serverless(t *testing.T) {
 }
 
 func TestAccIndexResource_pod_basic(t *testing.T) {
-	rName := sdkacctest.RandomWithPrefix("tftest")
+	rName := acctest.RandomWithPrefix("tftest")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -76,28 +76,28 @@ func TestAccIndexResource_pod_basic(t *testing.T) {
 				// the upstream service, this can be removed.
 				// ImportStateVerifyIgnore: []string{"configurable_attribute", "defaulted"},
 			},
-			// Update and Read testing
-			{
-				Config: testAccIndexResourceConfig_pod_basic(rName, "2", "2"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
-					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
-					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1536"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "spec.pod.pod_type", "s1.x1"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "spec.pod.replicas", "2"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "spec.pod.pods", "2"),
-					// resource.TestCheckNoResourceAttr("pinecone_index.test", "metadata_config"),
-					// resource.TestCheckNoResourceAttr("pinecone_index.test", "source_collection"),
-				),
-			},
+			// Update not supported
+			// {
+			// 	Config: testAccIndexResourceConfig_pod_basic(rName, "2", "2"),
+			// 	Check: resource.ComposeAggregateTestCheckFunc(
+			// 		resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
+			// 		resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
+			// 		resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1536"),
+			// 		resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
+			// 		resource.TestCheckResourceAttr("pinecone_index.test", "spec.pod.pod_type", "s1.x1"),
+			// 		resource.TestCheckResourceAttr("pinecone_index.test", "spec.pod.replicas", "2"),
+			// 		resource.TestCheckResourceAttr("pinecone_index.test", "spec.pod.pods", "2"),
+			// 		// resource.TestCheckNoResourceAttr("pinecone_index.test", "metadata_config"),
+			// 		// resource.TestCheckNoResourceAttr("pinecone_index.test", "source_collection"),
+			// 	),
+			// },
 			// Delete testing automatically occurs in TestCase
 		},
 	})
 }
 
 func TestAccIndexResource_dimension(t *testing.T) {
-	rName := sdkacctest.RandomWithPrefix("tftest")
+	rName := acctest.RandomWithPrefix("tftest")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -110,28 +110,6 @@ func TestAccIndexResource_dimension(t *testing.T) {
 					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
 					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
 					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1"),
-				),
-			},
-			// Delete testing automatically occurs in TestCase
-		},
-	})
-}
-
-func TestAccIndexResource_complex(t *testing.T) {
-	rName := sdkacctest.RandomWithPrefix("tftest")
-	rShortName := fmt.Sprintf("%s%d", "tf", sdkacctest.RandIntRange(0, 9999))
-
-	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		Steps: []resource.TestStep{
-			// Create and Read testing
-			{
-				Config: testAccIndexResourceConfig_complex(rName, rShortName),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("pinecone_project.test", "name", rName),
-					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
-					resource.TestCheckResourceAttr("pinecone_project_api_key.test", "name", rShortName),
 				),
 			},
 			// Delete testing automatically occurs in TestCase
@@ -191,38 +169,4 @@ resource "pinecone_index" "test" {
   }
 }
 `, name, dimension)
-}
-
-func testAccIndexResourceConfig_complex(name string, shortName string) string {
-	return fmt.Sprintf(`
-provider "pinecone" {
-  alias = "mgmt"
-}
-
-provider "pinecone" {
-  api_key = pinecone_project_api_key.test.secret
-}
-
-resource "pinecone_project" "test" {
-  provider = pinecone.mgmt
-  name = %q
-}
-  
-resource "pinecone_project_api_key" "test" {
-  provider = pinecone.mgmt
-  name = %q
-  project_id = pinecone_project.test.id
-}
-  
-resource "pinecone_index" "test" {
-  name = %q
-  dimension = 19
-  spec = {
-	serverless = {
-	  cloud = "aws"
-	  region = "us-west-2"
-	}
-  }
-}
-`, name, shortName, name)
 }

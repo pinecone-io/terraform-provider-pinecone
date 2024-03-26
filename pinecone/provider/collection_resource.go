@@ -5,6 +5,8 @@ package provider
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
@@ -12,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 	"github.com/pinecone-io/go-pinecone/pinecone"
 	"github.com/skyscrapr/terraform-provider-pinecone/pinecone/models"
 )
@@ -66,10 +69,11 @@ func (r *CollectionResource) Schema(ctx context.Context, req resource.SchemaRequ
 				MarkdownDescription: "The dimension of the vectors stored in each record held in the collection.",
 				Computed:            true,
 			},
-			"vector_count": schema.Int64Attribute{
-				MarkdownDescription: "The number of records stored in the collection.",
-				Computed:            true,
-			},
+			// "vector_count": schema.Int64Attribute{
+			// 	MarkdownDescription: "The number of records stored in the collection.",
+			// 	Optional: true,
+			// 	Computed:            true,
+			// },
 			"environment": schema.StringAttribute{
 				MarkdownDescription: "The environment where the collection is hosted.",
 				Computed:            true,
@@ -104,7 +108,7 @@ func (r *CollectionResource) Create(ctx context.Context, req resource.CreateRequ
 		Source: data.Source.ValueString(),
 	}
 
-	collection, err := r.client.CreateCollection(ctx, &payload)
+	_, err := r.client.CreateCollection(ctx, &payload)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create collection", err.Error())
 		return
@@ -113,33 +117,33 @@ func (r *CollectionResource) Create(ctx context.Context, req resource.CreateRequ
 	// Wait for collection to be ready
 	// Create() is passed a default timeout to use if no value
 	// has been supplied in the Terraform configuration.
-	// createTimeout, diags := data.Timeouts.Create(ctx, defaultCollectionCreateTimeout)
-	// resp.Diagnostics.Append(diags...)
-	// if resp.Diagnostics.HasError() {
-	// 	return
-	// }
+	createTimeout, diags := data.Timeouts.Create(ctx, defaultCollectionCreateTimeout)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
-	// err = retry.RetryContext(ctx, createTimeout, func() *retry.RetryError {
-	// 	collection, err := r.client.Collections().DescribeCollection(data.Name.ValueString())
+	err = retry.RetryContext(ctx, createTimeout, func() *retry.RetryError {
+		collection, err := r.client.DescribeCollection(ctx, data.Name.ValueString())
 
-	// 	data.Read(collection)
-	// 	// Save current status to state
-	// 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+		data.Read(collection)
+		// Save current status to state
+		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 
-	// 	if err != nil {
-	// 		return retry.NonRetryableError(err)
-	// 	}
-	// 	if collection.Status != "Ready" {
-	// 		return retry.RetryableError(fmt.Errorf("collection not ready. State: %s", collection.Status))
-	// 	}
-	// 	return nil
-	// })
-	// if err != nil {
-	// 	resp.Diagnostics.AddError("Failed to wait for collection to become ready.", err.Error())
-	// 	return
-	// }
+		if err != nil {
+			return retry.NonRetryableError(err)
+		}
+		if collection.Status != "Ready" {
+			return retry.RetryableError(fmt.Errorf("collection not ready. State: %s", collection.Status))
+		}
+		return nil
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to wait for collection to become ready.", err.Error())
+		return
+	}
 
-	data.Read(collection)
+	// data.Read(collection)
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -183,28 +187,28 @@ func (r *CollectionResource) Delete(ctx context.Context, req resource.DeleteRequ
 	// Wait for collection to be deleted
 	// Create() is passed a default timeout to use if no value
 	// has been supplied in the Terraform configuration.
-	// deleteTimeout, diags := data.Timeouts.Create(ctx, defaultIndexDeleteTimeout)
-	// resp.Diagnostics.Append(diags...)
-	// if resp.Diagnostics.HasError() {
-	// 	return
-	// }
+	deleteTimeout, diags := data.Timeouts.Delete(ctx, defaultIndexDeleteTimeout)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
-	// err = retry.RetryContext(ctx, deleteTimeout, func() *retry.RetryError {
-	// 	collection, err := r.client.Collections().DescribeCollection(data.Id.ValueString())
-	// 	tflog.Info(ctx, fmt.Sprintf("Deleting Collection. Status: '%s'", collection.Status))
+	err = retry.RetryContext(ctx, deleteTimeout, func() *retry.RetryError {
+		collection, err := r.client.DescribeCollection(ctx, data.Id.ValueString())
+		// tflog.Info(ctx, fmt.Sprintf("Deleting Collection. Status: '%s'", collection.Status))
 
-	// 	if err != nil {
-	// 		if pineconeErr, ok := err.(*pinecone.HTTPError); ok && pineconeErr.StatusCode == 404 {
-	// 			return nil
-	// 		}
-	// 		return retry.NonRetryableError(err)
-	// 	}
-	// 	return retry.RetryableError(fmt.Errorf("collection not deleted. State: %s", collection.Status))
-	// })
-	// if err != nil {
-	// 	resp.Diagnostics.AddError("Failed to wait for collection to be deleted.", err.Error())
-	// 	return
-	// }
+		if err != nil {
+			if strings.Contains(err.Error(), "404") {
+				return nil
+			}
+			return retry.NonRetryableError(err)
+		}
+		return retry.RetryableError(fmt.Errorf("collection not deleted. State: %s", collection.Status))
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to wait for collection to be deleted.", err.Error())
+		return
+	}
 }
 
 func (r *CollectionResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

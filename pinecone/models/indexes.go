@@ -162,9 +162,9 @@ func (model IndexSpecModel) AttrTypes() map[string]attr.Type {
 type IndexPodSpecModel struct {
 	Environment      types.String `tfsdk:"environment"`
 	Replicas         types.Int64  `tfsdk:"replicas"`
-	ShardCount           types.Int64  `tfsdk:"shards"`
+	ShardCount       types.Int64  `tfsdk:"shards"`
 	PodType          types.String `tfsdk:"pod_type"`
-	PodCount             types.Int64  `tfsdk:"pods"`
+	PodCount         types.Int64  `tfsdk:"pods"`
 	MetadataConfig   types.Object `tfsdk:"metadata_config"`
 	SourceCollection types.String `tfsdk:"source_collection"`
 }
@@ -176,7 +176,7 @@ func NewIndexPodSpec(ctx context.Context, spec *IndexPodSpecModel) (*pinecone.Po
 			PodCount:    int32(spec.PodCount.ValueInt64()),
 			PodType:     spec.PodType.ValueString(),
 			Replicas:    int32(spec.Replicas.ValueInt64()),
-			ShardCount:      int32(spec.ShardCount.ValueInt64()),
+			ShardCount:  int32(spec.ShardCount.ValueInt64()),
 		}
 
 		var metadataConfig pinecone.PodSpecMetadataConfig
@@ -193,19 +193,29 @@ func NewIndexPodSpec(ctx context.Context, spec *IndexPodSpecModel) (*pinecone.Po
 }
 
 func NewIndexPodSpecModel(ctx context.Context, spec *pinecone.PodSpec) (*IndexPodSpecModel, diag.Diagnostics) {
+	var diags diag.Diagnostics
+
 	if spec != nil {
 		newSpec := &IndexPodSpecModel{
-			Environment:      types.StringValue(spec.Environment),
-			PodCount:         types.Int64Value(int64(spec.PodCount)),
-			PodType:          types.StringValue(spec.PodType),
-			Replicas:         types.Int64Value(int64(spec.Replicas)),
-			ShardCount:       types.Int64Value(int64(spec.ShardCount)),
-			SourceCollection: types.StringPointerValue(spec.SourceCollection),
+			Environment: types.StringValue(spec.Environment),
+			PodCount:    types.Int64Value(int64(spec.PodCount)),
+			PodType:     types.StringValue(spec.PodType),
+			Replicas:    types.Int64Value(int64(spec.Replicas)),
+			ShardCount:  types.Int64Value(int64(spec.ShardCount)),
 		}
 
-		indexed, diags := types.ListValueFrom(ctx, types.StringType, spec.MetadataConfig.Indexed)
-		if diags.HasError() {
-			return nil, diags
+		if spec.SourceCollection != nil {
+			newSpec.SourceCollection = types.StringPointerValue(spec.SourceCollection)
+		}
+
+		var indexed basetypes.ListValue
+		if spec.MetadataConfig != nil {
+			indexed, diags = types.ListValueFrom(ctx, types.StringType, spec.MetadataConfig.Indexed)
+			if diags.HasError() {
+				return nil, diags
+			}
+		} else {
+			indexed = types.ListNull(types.StringType)
 		}
 		metadataConfig := &IndexMetadataConfigModel{
 			Indexed: indexed,
@@ -214,7 +224,7 @@ func NewIndexPodSpecModel(ctx context.Context, spec *pinecone.PodSpec) (*IndexPo
 		if diags.HasError() {
 			return nil, diags
 		}
-		return newSpec, diags
+		return newSpec, nil
 	}
 	return nil, nil
 }
