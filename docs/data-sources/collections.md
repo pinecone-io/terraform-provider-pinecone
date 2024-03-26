@@ -52,4 +52,3 @@ Read-Only:
 - `environment` (String) The environment where the collection is hosted.
 - `size` (Number) The size of the collection in bytes.
 - `status` (String) The status of the collection.
-- `vector_count` (Number) The number of records stored in the collection.

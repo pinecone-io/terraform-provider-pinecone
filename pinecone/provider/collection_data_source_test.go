@@ -23,7 +23,7 @@ func TestAccCollectionDataSource(t *testing.T) {
 					resource.TestCheckResourceAttr("data.pinecone_collection.test", "status", "Ready"),
 					resource.TestCheckResourceAttr("data.pinecone_collection.test", "dimension", "1536"),
 					resource.TestCheckResourceAttrSet("data.pinecone_collection.test", "size"),
-					resource.TestCheckResourceAttrSet("data.pinecone_collection.test", "vector_count"),
+					// resource.TestCheckResourceAttrSet("data.pinecone_collection.test", "vector_count"),
 				),
 			},
 		},
