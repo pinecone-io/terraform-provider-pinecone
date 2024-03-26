@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"testing"
 
-	sdkacctest "github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
+	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
 func TestAccIndexDataSource_serverless(t *testing.T) {
-	rName := sdkacctest.RandomWithPrefix("tftest")
+	rName := acctest.RandomWithPrefix("tftest")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -37,7 +37,6 @@ func TestAccIndexDataSource_serverless(t *testing.T) {
 func testAccIndexDataSourceConfig_serverless(name string) string {
 	return fmt.Sprintf(`
 	provider "pinecone" {
-		environment = "us-west4-gcp"
 	}
 	
 	resource "pinecone_index" "test" {

@@ -11,7 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
-	"github.com/skyscrapr/pinecone-sdk-go/pinecone"
+	"github.com/pinecone-io/go-pinecone/pinecone"
 )
 
 type IndexModel struct {
@@ -28,7 +28,7 @@ func (model *IndexModel) Read(ctx context.Context, index *pinecone.Index) diag.D
 
 	model.Name = types.StringValue(index.Name)
 	model.Dimension = types.Int64Value(int64(index.Dimension))
-	model.Metric = types.StringValue(index.Metric.String())
+	model.Metric = types.StringValue(string(index.Metric))
 	model.Host = types.StringValue(index.Host)
 
 	pod, diags := NewIndexPodSpecModel(ctx, index.Spec.Pod)
@@ -47,7 +47,7 @@ func (model *IndexModel) Read(ctx context.Context, index *pinecone.Index) diag.D
 
 	model.Status, diags = types.ObjectValueFrom(ctx, IndexStatusModel{}.AttrTypes(), IndexStatusModel{
 		Ready: types.BoolValue(index.Status.Ready),
-		State: types.StringValue(index.Status.State.String()),
+		State: types.StringValue(string(index.Status.State)),
 	})
 	if diags.HasError() {
 		return diags
@@ -74,7 +74,7 @@ func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index
 	model.Id = types.StringValue(index.Name)
 	model.Name = types.StringValue(index.Name)
 	model.Dimension = types.Int64Value(int64(index.Dimension))
-	model.Metric = types.StringValue(index.Metric.String())
+	model.Metric = types.StringValue(string(index.Metric))
 	model.Host = types.StringValue(index.Host)
 
 	pod, diags := NewIndexPodSpecModel(ctx, index.Spec.Pod)
@@ -93,7 +93,7 @@ func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index
 
 	model.Status, diags = types.ObjectValueFrom(ctx, IndexStatusModel{}.AttrTypes(), IndexStatusModel{
 		Ready: types.BoolValue(index.Status.Ready),
-		State: types.StringValue(index.Status.State.String()),
+		State: types.StringValue(string(index.Status.State)),
 	})
 	if diags.HasError() {
 		return diags
@@ -119,7 +119,7 @@ func (model *IndexDatasourceModel) Read(ctx context.Context, index *pinecone.Ind
 	model.Id = types.StringValue(index.Name)
 	model.Name = types.StringValue(index.Name)
 	model.Dimension = types.Int64Value(int64(index.Dimension))
-	model.Metric = types.StringValue(index.Metric.String())
+	model.Metric = types.StringValue(string(index.Metric))
 	model.Host = types.StringValue(index.Host)
 
 	pod, diags := NewIndexPodSpecModel(ctx, index.Spec.Pod)
@@ -138,7 +138,7 @@ func (model *IndexDatasourceModel) Read(ctx context.Context, index *pinecone.Ind
 
 	model.Status, diags = types.ObjectValueFrom(ctx, IndexStatusModel{}.AttrTypes(), IndexStatusModel{
 		Ready: types.BoolValue(index.Status.Ready),
-		State: types.StringValue(index.Status.State.String()),
+		State: types.StringValue(string(index.Status.State)),
 	})
 	if diags.HasError() {
 		return diags
@@ -162,50 +162,60 @@ func (model IndexSpecModel) AttrTypes() map[string]attr.Type {
 type IndexPodSpecModel struct {
 	Environment      types.String `tfsdk:"environment"`
 	Replicas         types.Int64  `tfsdk:"replicas"`
-	Shards           types.Int64  `tfsdk:"shards"`
+	ShardCount       types.Int64  `tfsdk:"shards"`
 	PodType          types.String `tfsdk:"pod_type"`
-	Pods             types.Int64  `tfsdk:"pods"`
+	PodCount         types.Int64  `tfsdk:"pods"`
 	MetadataConfig   types.Object `tfsdk:"metadata_config"`
 	SourceCollection types.String `tfsdk:"source_collection"`
 }
 
-func NewIndexPodSpec(ctx context.Context, spec *IndexPodSpecModel) (*pinecone.IndexPodSpec, diag.Diagnostics) {
+func NewIndexPodSpec(ctx context.Context, spec *IndexPodSpecModel) (*pinecone.PodSpec, diag.Diagnostics) {
 	if spec != nil {
-		newSpec := &pinecone.IndexPodSpec{
+		newSpec := &pinecone.PodSpec{
 			Environment: spec.Environment.ValueString(),
-			Pods:        int(spec.Pods.ValueInt64()),
+			PodCount:    int32(spec.PodCount.ValueInt64()),
 			PodType:     spec.PodType.ValueString(),
-			Replicas:    int(spec.Replicas.ValueInt64()),
-			Shards:      int(spec.Shards.ValueInt64()),
+			Replicas:    int32(spec.Replicas.ValueInt64()),
+			ShardCount:  int32(spec.ShardCount.ValueInt64()),
 		}
 
-		var metadataConfig pinecone.IndexMetadataConfig
+		var metadataConfig pinecone.PodSpecMetadataConfig
 		if !spec.MetadataConfig.IsUnknown() {
 			diags := spec.MetadataConfig.As(ctx, &metadataConfig, basetypes.ObjectAsOptions{})
 			if diags.HasError() {
 				return nil, diags
 			}
 		}
-		newSpec.MetadataConfig = metadataConfig
+		newSpec.MetadataConfig = &metadataConfig
 		return newSpec, nil
 	}
 	return nil, nil
 }
 
-func NewIndexPodSpecModel(ctx context.Context, spec *pinecone.IndexPodSpec) (*IndexPodSpecModel, diag.Diagnostics) {
+func NewIndexPodSpecModel(ctx context.Context, spec *pinecone.PodSpec) (*IndexPodSpecModel, diag.Diagnostics) {
+	var diags diag.Diagnostics
+
 	if spec != nil {
 		newSpec := &IndexPodSpecModel{
-			Environment:      types.StringValue(spec.Environment),
-			Pods:             types.Int64Value(int64(spec.Pods)),
-			PodType:          types.StringValue(spec.PodType),
-			Replicas:         types.Int64Value(int64(spec.Replicas)),
-			Shards:           types.Int64Value(int64(spec.Shards)),
-			SourceCollection: types.StringValue(spec.SourceCollection),
+			Environment: types.StringValue(spec.Environment),
+			PodCount:    types.Int64Value(int64(spec.PodCount)),
+			PodType:     types.StringValue(spec.PodType),
+			Replicas:    types.Int64Value(int64(spec.Replicas)),
+			ShardCount:  types.Int64Value(int64(spec.ShardCount)),
 		}
 
-		indexed, diags := types.ListValueFrom(ctx, types.StringType, spec.MetadataConfig.Indexed)
-		if diags.HasError() {
-			return nil, diags
+		if spec.SourceCollection != nil {
+			newSpec.SourceCollection = types.StringPointerValue(spec.SourceCollection)
+		}
+
+		var indexed basetypes.ListValue
+		if spec.MetadataConfig != nil {
+			indexed, diags = types.ListValueFrom(ctx, types.StringType, spec.MetadataConfig.Indexed)
+			if diags.HasError() {
+				return nil, diags
+			}
+		} else {
+			indexed = types.ListNull(types.StringType)
 		}
 		metadataConfig := &IndexMetadataConfigModel{
 			Indexed: indexed,
@@ -214,7 +224,7 @@ func NewIndexPodSpecModel(ctx context.Context, spec *pinecone.IndexPodSpec) (*In
 		if diags.HasError() {
 			return nil, diags
 		}
-		return newSpec, diags
+		return newSpec, nil
 	}
 	return nil, nil
 }
@@ -246,20 +256,20 @@ type IndexServerlessSpecModel struct {
 	Region types.String `tfsdk:"region"`
 }
 
-func NewIndexServerlessSpec(spec *IndexServerlessSpecModel) *pinecone.IndexServerlessSpec {
+func NewIndexServerlessSpec(spec *IndexServerlessSpecModel) *pinecone.ServerlessSpec {
 	if spec != nil {
-		return &pinecone.IndexServerlessSpec{
-			Cloud:  spec.Cloud.ValueString(),
+		return &pinecone.ServerlessSpec{
+			Cloud:  pinecone.Cloud(spec.Cloud.String()),
 			Region: spec.Region.ValueString(),
 		}
 	}
 	return nil
 }
 
-func NewIndexServerlessSpecModel(spec *pinecone.IndexServerlessSpec) *IndexServerlessSpecModel {
+func NewIndexServerlessSpecModel(spec *pinecone.ServerlessSpec) *IndexServerlessSpecModel {
 	if spec != nil {
 		return &IndexServerlessSpecModel{
-			Cloud:  types.StringValue(spec.Cloud),
+			Cloud:  types.StringValue(string(spec.Cloud)),
 			Region: types.StringValue(spec.Region),
 		}
 	}

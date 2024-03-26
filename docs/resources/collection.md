@@ -61,7 +61,6 @@ resource "pinecone_collection" "test" {
 - `id` (String) Collection identifier
 - `size` (Number) The size of the collection in bytes.
 - `status` (String) The status of the collection.
-- `vector_count` (Number) The number of records stored in the collection.
 
 <a id="nestedblock--timeouts"></a>
 ### Nested Schema for `timeouts`

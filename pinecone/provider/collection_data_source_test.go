@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"testing"
 
-	sdkacctest "github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
+	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
 func TestAccCollectionDataSource(t *testing.T) {
-	rName := sdkacctest.RandomWithPrefix("tftest")
+	rName := acctest.RandomWithPrefix("tftest")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -23,7 +23,7 @@ func TestAccCollectionDataSource(t *testing.T) {
 					resource.TestCheckResourceAttr("data.pinecone_collection.test", "status", "Ready"),
 					resource.TestCheckResourceAttr("data.pinecone_collection.test", "dimension", "1536"),
 					resource.TestCheckResourceAttrSet("data.pinecone_collection.test", "size"),
-					resource.TestCheckResourceAttrSet("data.pinecone_collection.test", "vector_count"),
+					// resource.TestCheckResourceAttrSet("data.pinecone_collection.test", "vector_count"),
 				),
 			},
 		},
@@ -33,7 +33,6 @@ func TestAccCollectionDataSource(t *testing.T) {
 func testAccCollectionDataSourceConfig(name string) string {
 	return fmt.Sprintf(`
 provider "pinecone" {
-	environment = "us-west4-gcp"
 }
 
 resource "pinecone_index" "test" {

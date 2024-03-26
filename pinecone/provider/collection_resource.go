@@ -6,6 +6,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
@@ -13,9 +14,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
-	"github.com/skyscrapr/pinecone-sdk-go/pinecone"
+	"github.com/pinecone-io/go-pinecone/pinecone"
 	"github.com/skyscrapr/terraform-provider-pinecone/pinecone/models"
 )
 
@@ -69,10 +69,11 @@ func (r *CollectionResource) Schema(ctx context.Context, req resource.SchemaRequ
 				MarkdownDescription: "The dimension of the vectors stored in each record held in the collection.",
 				Computed:            true,
 			},
-			"vector_count": schema.Int64Attribute{
-				MarkdownDescription: "The number of records stored in the collection.",
-				Computed:            true,
-			},
+			// "vector_count": schema.Int64Attribute{
+			// 	MarkdownDescription: "The number of records stored in the collection.",
+			// 	Optional: true,
+			// 	Computed:            true,
+			// },
 			"environment": schema.StringAttribute{
 				MarkdownDescription: "The environment where the collection is hosted.",
 				Computed:            true,
@@ -102,12 +103,12 @@ func (r *CollectionResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 
-	payload := pinecone.CreateCollectionParams{
+	payload := pinecone.CreateCollectionRequest{
 		Name:   data.Name.ValueString(),
 		Source: data.Source.ValueString(),
 	}
 
-	err := r.client.Collections().CreateCollection(&payload)
+	_, err := r.client.CreateCollection(ctx, &payload)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create collection", err.Error())
 		return
@@ -123,7 +124,7 @@ func (r *CollectionResource) Create(ctx context.Context, req resource.CreateRequ
 	}
 
 	err = retry.RetryContext(ctx, createTimeout, func() *retry.RetryError {
-		collection, err := r.client.Collections().DescribeCollection(data.Name.ValueString())
+		collection, err := r.client.DescribeCollection(ctx, data.Name.ValueString())
 
 		data.Read(collection)
 		// Save current status to state
@@ -142,6 +143,8 @@ func (r *CollectionResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 
+	// data.Read(collection)
+
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -153,7 +156,7 @@ func (r *CollectionResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 
-	collection, err := r.client.Collections().DescribeCollection(data.Id.ValueString())
+	collection, err := r.client.DescribeCollection(ctx, data.Id.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to describe collection", err.Error())
 		return
@@ -176,7 +179,7 @@ func (r *CollectionResource) Delete(ctx context.Context, req resource.DeleteRequ
 		return
 	}
 
-	err := r.client.Collections().DeleteCollection(data.Name.ValueString())
+	err := r.client.DeleteCollection(ctx, data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to delete collection", err.Error())
 		return
@@ -184,18 +187,18 @@ func (r *CollectionResource) Delete(ctx context.Context, req resource.DeleteRequ
 	// Wait for collection to be deleted
 	// Create() is passed a default timeout to use if no value
 	// has been supplied in the Terraform configuration.
-	deleteTimeout, diags := data.Timeouts.Create(ctx, defaultIndexDeleteTimeout)
+	deleteTimeout, diags := data.Timeouts.Delete(ctx, defaultIndexDeleteTimeout)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	err = retry.RetryContext(ctx, deleteTimeout, func() *retry.RetryError {
-		collection, err := r.client.Collections().DescribeCollection(data.Id.ValueString())
-		tflog.Info(ctx, fmt.Sprintf("Deleting Collection. Status: '%s'", collection.Status))
+		collection, err := r.client.DescribeCollection(ctx, data.Id.ValueString())
+		// tflog.Info(ctx, fmt.Sprintf("Deleting Collection. Status: '%s'", collection.Status))
 
 		if err != nil {
-			if pineconeErr, ok := err.(*pinecone.HTTPError); ok && pineconeErr.StatusCode == 404 {
+			if strings.Contains(err.Error(), "404") {
 				return nil
 			}
 			return retry.NonRetryableError(err)

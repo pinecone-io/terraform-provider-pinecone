@@ -44,7 +44,6 @@ data "pinecone_collections" "test" {
 Required:
 
 - `name` (String) The name of the collection.
-- `source` (String) The name of the source index to be used as the source for the collection.
 
 Read-Only:
 
@@ -52,4 +51,3 @@ Read-Only:
 - `environment` (String) The environment where the collection is hosted.
 - `size` (Number) The size of the collection in bytes.
 - `status` (String) The status of the collection.
-- `vector_count` (Number) The number of records stored in the collection.

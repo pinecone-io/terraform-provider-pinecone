@@ -54,10 +54,10 @@ func (d *CollectionDataSource) Schema(ctx context.Context, req datasource.Schema
 				MarkdownDescription: "The dimension of the vectors stored in each record held in the collection.",
 				Computed:            true,
 			},
-			"vector_count": schema.Int64Attribute{
-				MarkdownDescription: "The number of records stored in the collection.",
-				Computed:            true,
-			},
+			// "vector_count": schema.Int64Attribute{
+			// 	MarkdownDescription: "The number of records stored in the collection.",
+			// 	Computed:            true,
+			// },
 			"environment": schema.StringAttribute{
 				MarkdownDescription: "The environment where the collection is hosted.",
 				Computed:            true,
@@ -76,7 +76,7 @@ func (d *CollectionDataSource) Read(ctx context.Context, req datasource.ReadRequ
 		return
 	}
 
-	collection, err := d.client.Collections().DescribeCollection(data.Name.ValueString())
+	collection, err := d.client.DescribeCollection(ctx, data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to describe collection, got error: %s", err))
 		return

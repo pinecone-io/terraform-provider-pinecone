@@ -6,6 +6,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
@@ -20,7 +21,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
-	"github.com/skyscrapr/pinecone-sdk-go/pinecone"
+	"github.com/pinecone-io/go-pinecone/pinecone"
 	"github.com/skyscrapr/terraform-provider-pinecone/pinecone/models"
 )
 
@@ -197,34 +198,59 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	// Prepare the payload for the API request
-	payload := pinecone.CreateIndexParams{
-		Name:      data.Name.ValueString(),
-		Dimension: int(data.Dimension.ValueInt64()),
-		Metric:    pinecone.IndexMetric(data.Metric.ValueString()),
-	}
-
 	var spec models.IndexSpecModel
 	resp.Diagnostics.Append(data.Spec.As(ctx, &spec, basetypes.ObjectAsOptions{})...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	pod, diags := models.NewIndexPodSpec(ctx, spec.Pod)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
+	// Prepare the payload for the API request
+	if spec.Pod != nil {
+		podReq := pinecone.CreatePodIndexRequest{
+			Name:        data.Name.ValueString(),
+			Dimension:   int32(data.Dimension.ValueInt64()),
+			Metric:      pinecone.IndexMetric(data.Metric.ValueString()),
+			Environment: spec.Pod.Environment.ValueString(),
+			PodType:     spec.Pod.PodType.ValueString(),
+			Shards:      int32(spec.Pod.ShardCount.ValueInt64()),
+			Replicas:    int32(spec.Pod.Replicas.ValueInt64()),
+			// SourceCollection: spec.Pod.SourceCollection.ValueStringPointer(),
+		}
+
+		if !spec.Pod.SourceCollection.IsUnknown() {
+			podReq.SourceCollection = spec.Pod.SourceCollection.ValueStringPointer()
+		}
+
+		var metadataConfig *pinecone.PodSpecMetadataConfig
+		if !spec.Pod.MetadataConfig.IsUnknown() {
+			resp.Diagnostics.Append(spec.Pod.MetadataConfig.As(ctx, &metadataConfig, basetypes.ObjectAsOptions{})...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+		}
+		podReq.MetadataConfig = metadataConfig
+
+		_, err := r.client.CreatePodIndex(ctx, &podReq)
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to create pod index", err.Error())
+			return
+		}
 	}
 
-	payload.Spec = pinecone.IndexSpec{
-		Pod:        pod,
-		Serverless: models.NewIndexServerlessSpec(spec.Serverless),
-	}
+	if spec.Serverless != nil {
+		serverlessReq := pinecone.CreateServerlessIndexRequest{
+			Name:      data.Name.ValueString(),
+			Dimension: int32(data.Dimension.ValueInt64()),
+			Metric:    pinecone.IndexMetric(data.Metric.ValueString()),
+			Cloud:     pinecone.Cloud(spec.Serverless.Cloud.ValueString()),
+			Region:    spec.Serverless.Region.ValueString(),
+		}
 
-	err := r.client.Indexes().CreateIndex(&payload)
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to create index", err.Error())
-		return
+		_, err := r.client.CreateServerlessIndex(ctx, &serverlessReq)
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to create serverless index", err.Error())
+			return
+		}
 	}
 
 	// Wait for index to be ready
@@ -236,8 +262,8 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	err = retry.RetryContext(ctx, createTimeout, func() *retry.RetryError {
-		index, err := r.client.Indexes().DescribeIndex(data.Name.ValueString())
+	err := retry.RetryContext(ctx, createTimeout, func() *retry.RetryError {
+		index, err := r.client.DescribeIndex(ctx, data.Name.ValueString())
 
 		resp.Diagnostics.Append(data.Read(ctx, index)...)
 
@@ -256,6 +282,8 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		resp.Diagnostics.AddError("Failed to wait for index to become ready.", err.Error())
 		return
 	}
+
+	// resp.Diagnostics.Append(data.Read(ctx, index)...)
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -271,7 +299,7 @@ func (r *IndexResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
-	index, err := r.client.Indexes().DescribeIndex(data.Id.ValueString())
+	index, err := r.client.DescribeIndex(ctx, data.Id.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to describe index", err.Error())
 		return
@@ -284,73 +312,7 @@ func (r *IndexResource) Read(ctx context.Context, req resource.ReadRequest, resp
 }
 
 func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data models.IndexResourceModel
-
-	// Read Terraform plan data into the model
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	// Prepare the payload for the API request
-	payload := pinecone.ConfigureIndexParams{}
-
-	var spec models.IndexSpecModel
-	resp.Diagnostics.Append(data.Spec.As(ctx, &spec, basetypes.ObjectAsOptions{})...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	pod, diags := models.NewIndexPodSpec(ctx, spec.Pod)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	payload.Spec = pinecone.IndexSpec{
-		Pod:        pod,
-		Serverless: models.NewIndexServerlessSpec(spec.Serverless),
-	}
-
-	err := r.client.Indexes().ConfigureIndex(data.Name.ValueString(), &payload)
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to update index", err.Error())
-		return
-	}
-
-	// Wait for index to be ready
-	// Create() is passed a default timeout to use if no value
-	// has been supplied in the Terraform configuration.
-	updateTimeout, diags := data.Timeouts.Update(ctx, defaultIndexUpdateTimeout)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	err = retry.RetryContext(ctx, updateTimeout, func() *retry.RetryError {
-		index, err := r.client.Indexes().DescribeIndex(data.Name.ValueString())
-
-		resp.Diagnostics.Append(data.Read(ctx, index)...)
-
-		// Save current status to state
-		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
-
-		if err != nil {
-			return retry.NonRetryableError(err)
-		}
-		if !index.Status.Ready {
-			return retry.RetryableError(fmt.Errorf("index not ready. State: %s", index.Status.State))
-		}
-		return nil
-	})
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to wait for index to become ready.", err.Error())
-		return
-	}
-
-	// Save updated data into Terraform state
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	// Update not supported.
 }
 
 func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -363,7 +325,7 @@ func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		return
 	}
 
-	err := r.client.Indexes().DeleteIndex(data.Name.ValueString())
+	err := r.client.DeleteIndex(ctx, data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to delete index", err.Error())
 		return
@@ -379,9 +341,9 @@ func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	}
 
 	err = retry.RetryContext(ctx, deleteTimeout, func() *retry.RetryError {
-		index, err := r.client.Indexes().DescribeIndex(data.Id.ValueString())
+		index, err := r.client.DescribeIndex(ctx, data.Id.ValueString())
 		if err != nil {
-			if pineconeErr, ok := err.(*pinecone.HTTPError); ok && pineconeErr.StatusCode == 404 {
+			if strings.Contains(err.Error(), "not found") {
 				return nil
 			}
 			return retry.NonRetryableError(err)

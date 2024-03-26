@@ -46,10 +46,6 @@ func (d *CollectionsDataSource) Schema(ctx context.Context, req datasource.Schem
 							MarkdownDescription: "The name of the collection.",
 							Required:            true,
 						},
-						"source": schema.StringAttribute{
-							MarkdownDescription: "The name of the source index to be used as the source for the collection.",
-							Required:            true,
-						},
 						"size": schema.Int64Attribute{
 							MarkdownDescription: "The size of the collection in bytes.",
 							Computed:            true,
@@ -62,10 +58,10 @@ func (d *CollectionsDataSource) Schema(ctx context.Context, req datasource.Schem
 							MarkdownDescription: "The dimension of the vectors stored in each record held in the collection.",
 							Computed:            true,
 						},
-						"vector_count": schema.Int64Attribute{
-							MarkdownDescription: "The number of records stored in the collection.",
-							Computed:            true,
-						},
+						// "vector_count": schema.Int64Attribute{
+						// 	MarkdownDescription: "The number of records stored in the collection.",
+						// 	Computed:            true,
+						// },
 						"environment": schema.StringAttribute{
 							MarkdownDescription: "The environment where the collection is hosted.",
 							Computed:            true,
@@ -91,14 +87,14 @@ func (d *CollectionsDataSource) Read(ctx context.Context, req datasource.ReadReq
 		return
 	}
 
-	collections, err := d.client.Collections().ListCollections()
+	collections, err := d.client.ListCollections(ctx)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to ListCollections, got error: %s", err))
 		return
 	}
 
-	for _, c := range collections.Collections {
-		data.Collections = append(data.Collections, *models.NewCollectionModel(&c))
+	for _, c := range collections {
+		data.Collections = append(data.Collections, *models.NewCollectionModel(c))
 	}
 
 	// Save data into Terraform state

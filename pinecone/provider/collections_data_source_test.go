@@ -23,7 +23,6 @@ func TestAccCollectionsDataSource(t *testing.T) {
 
 const testAccCollectionsDataSourceConfig = `
 provider "pinecone" {
-	environment = "us-west4-gcp"
 }
 
 data "pinecone_collections" "test" {
