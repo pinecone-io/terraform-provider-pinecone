@@ -9,36 +9,37 @@
 
 The Terraform Pinecone Provider allows Terraform to manage Pinecone resources.
 
-Please note: We take Terraform's security and our users' trust very seriously. If you believe you have found a security issue in the Terraform Pinecone Provider, please responsibly disclose it by contacting us.
+Note: We take Terraform's security and our users' trust very seriously. If you believe you have found a security issue in the Terraform Pinecone Provider, please responsibly disclose it by contacting us.
 
 ## Requirements
 
 - [Terraform](https://www.terraform.io/downloads.html) >= v1.4.6
-- [Go](https://golang.org/doc/install) >= 1.20 (to build the provider plugin)
+- [Go](https://golang.org/doc/install) >= 1.20. This is necessary tto build the provider plugin.
 
-## Installing the Provider
+## Installing the provider
 
-The provider is registered in the official [terraform registry](https://registry.terraform.io/providers/skyscrapr/pinecone/latest) 
+The provider is registered in the official [terraform registry](https://registry.terraform.io/providers/skyscrapr/pinecone/latest). This enables the provider to be auto-installed when you run ```terraform init```. You can also download the latest binary for your target platform from the [releases](https://github.com/skyscrapr/terraform-provider-pinecone/releases) tab.
 
-This enables the provider to be auto-installed when you run ```terraform init```
+## Building the provider
 
-You can also download the latest binary for your target platform from the [releases](https://github.com/skyscrapr/terraform-provider-pinecone/releases) tab.
+Follow these steps to build the Terraform Pinecone provider:
 
-## Building the Provider
+1. Clone the repository using the following command:
 
-- Clone the repo:
     ```sh
     $ git clone https://github.com/skyscrapr/terraform-provider-pinecone
     ```
 
-- Build the provider: (NOTE: the install directory will be set accoring to GOPATH environment variable)
+1. Build the provider using the following command. The install directory depends on the GOPATH environment variable.
+
     ```sh
     $ go install .
     ```
 
 ## Usage
 
-You can enable the provider in your terraform configurtion by add the folowing:
+You can enable the provider in your Terraform configuration by add the folowing to the configuration file:
+
 ```terraform
 terraform {
   required_providers {
@@ -49,9 +50,10 @@ terraform {
 }
 ```
 
-You can configure the Pinecone client using environment variables to avoid setting sensitive values in terraform config.
-- Set `PINECONE_API_KEY` to your Pinecone API Key.
-- Set `PINECONE_ENVIRONMENT` to your Pinecone environment. 
+You can configure the Pinecone client using environment variables to avoid setting sensitive values in the Terraform configuration file. To do so, follow these steps:
+
++ Set `PINECONE_API_KEY` to your Pinecone API Key.
++ Set `PINECONE_ENVIRONMENT` to your Pinecone environment. 
 
 ## Documentation
 
@@ -59,8 +61,8 @@ Documentation can be found on the [Terraform Registry](https://registry.terrafor
 
 ## Examples
 
-Please see the [examples](https://github.com/skyscrapr/terraform-provider-pinecone/examples) for example usage.
+See the [examples](https://github.com/skyscrapr/terraform-provider-pinecone/examples) for example usage.
 
 ## Support
 
-Please raise an issue for any support related requirements.
+Raise an issue for any support-related requirements.
