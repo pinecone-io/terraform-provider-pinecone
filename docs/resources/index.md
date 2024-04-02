@@ -16,7 +16,7 @@ Index resource
 terraform {
   required_providers {
     pinecone = {
-      source = "skyscrapr/pinecone"
+      source = "pinecone-io/pinecone"
     }
   }
 }
