@@ -61,7 +61,7 @@ Documentation can be found on the [Terraform Registry](https://registry.terrafor
 
 ## Examples
 
-See the [examples](https://github.com/skyscrapr/terraform-provider-pinecone/examples) for example usage.
+See the [examples](https://github.com/pinecone-io/pinecone-terraform-provider/examples) for example usage.
 
 ## Support
 
