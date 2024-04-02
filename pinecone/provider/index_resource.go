@@ -22,7 +22,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 	"github.com/pinecone-io/go-pinecone/pinecone"
-	"github.com/skyscrapr/terraform-provider-pinecone/pinecone/models"
+	"github.com/pinecone-io/terraform-provider-pinecone/pinecone/models"
 )
 
 const (
