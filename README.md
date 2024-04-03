@@ -23,8 +23,8 @@ please responsibly disclose it by contacting us.
 
 ## Installing the provider
 
-The provider is registered in the official [Terraform
-registry]((https://registry.terraform.io/providers/pinecone-io/pinecone/latest).
+The provider is registered in the official [Terraform 
+registry](https://registry.terraform.io/providers/pinecone-io/pinecone/latest).
 This enables the provider to be auto-installed when you run ```terraform
 init```. You can also download the latest binary for your target platform from
 the
@@ -37,13 +37,16 @@ Follow these steps to build the Terraform Provider for Pinecone:
 
 1. Clone the repository using the following command:
 
-    ```sh $ git clone https://github.com/pinecone-io/terraform-provider-pinecone
-```
+    ```
+    sh $ git clone https://github.com/pinecone-io/terraform-provider-pinecone
+    ```
 
 1. Build the provider using the following command. The install directory depends
 on the `GOPATH` environment variable.
 
-    ```sh $ go install .  ```
+    ```
+    sh $ go install .  
+    ```
 
 ## Usage
 
