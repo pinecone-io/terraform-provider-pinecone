@@ -55,11 +55,11 @@ following to your Terraform configuration file:
 
 ```terraform 
 terraform { 
-	required_providers { 
-		openai = { 
-			source = "pinecone-io/pinecone" 
-		} 
-	} 
+  required_providers { 
+    openai = { 
+      source = "pinecone-io/pinecone" 
+    } 
+  } 
 } 
 ```
 
@@ -74,8 +74,9 @@ Registry](https://registry.terraform.io/providers/pinecone-io/pinecone/latest).
 
 ## Examples
 
-See the [examples](https://github.com/pinecone-io/terraform-provider-pinecone/
-tree/main/examples) for example usage.
+See the 
+[examples](https://github.com/pinecone-io/terraform-provider-pinecone/tree/main/examples)
+for example usage.
 
 ## Support
 
