@@ -60,11 +60,8 @@ following to your Terraform configuration file:
 "pinecone-io/pinecone" } } } ```
 
 You can configure the Pinecone client using environment variables to avoid
-setting sensitive values in the Terraform configuration file. To do so, follow
-these steps:
-
-+ Set `PINECONE_API_KEY` to your Pinecone API Key.
-+ Set `PINECONE_ENVIRONMENT` to your Pinecone environment. 
+setting sensitive values in the Terraform configuration file. To do so, set
+`PINECONE_API_KEY` to your Pinecone API Key.
 
 ## Documentation
 
