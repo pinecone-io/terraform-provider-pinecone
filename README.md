@@ -36,7 +36,7 @@ Follow these steps to build the Terraform Pinecone provider:
 
 ## Usage
 
-You can enable the provider in your Terraform configuration by add the folowing to the configuration file:
+You can enable the provider in your Terraform configuration by adding the following to your Terraform configuration file:
 
 ```terraform
 terraform {
