@@ -41,7 +41,7 @@ You can enable the provider in your terraform configurtion by add the folowing:
 ```terraform
 terraform {
   required_providers {
-    openai = {
+    pinecone = {
       source = "pinecone-io/pinecone"
     }
   }

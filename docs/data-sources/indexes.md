@@ -22,7 +22,6 @@ terraform {
 }
 
 provider "pinecone" {
-  environment = "gcp-starter"
   # api_key = set via PINECONE_API_KEY env variable
 }
 
