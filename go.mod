@@ -1,4 +1,4 @@
-module github.com/skyscrapr/terraform-provider-pinecone
+module github.com/pinecone-io/terraform-provider-pinecone
 
 go 1.21.1
 
@@ -85,5 +85,3 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
-// Use below for local development
-// replace github.com/skyscrapr/pinecone-sdk-go => ../pinecone-sdk-go

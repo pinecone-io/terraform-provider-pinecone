@@ -9,7 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/skyscrapr/terraform-provider-pinecone/pinecone/models"
+	"github.com/pinecone-io/terraform-provider-pinecone/pinecone/models"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.

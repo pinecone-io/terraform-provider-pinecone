@@ -9,7 +9,7 @@ import (
 	"log"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
-	"github.com/skyscrapr/terraform-provider-pinecone/pinecone/provider"
+	"github.com/pinecone-io/terraform-provider-pinecone/pinecone/provider"
 )
 
 // Run "go generate" to format example terraform files and generate the docs for the registry/website
@@ -38,7 +38,7 @@ func main() {
 	flag.Parse()
 
 	opts := providerserver.ServeOpts{
-		Address: "registry.terraform.io/skyscrapr/pinecone",
+		Address: "registry.terraform.io/pinecone/pinecone",
 		Debug:   debug,
 	}
 
