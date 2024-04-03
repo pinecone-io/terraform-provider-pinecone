@@ -12,7 +12,7 @@ Note: We take Terraform's security and our users' trust very seriously. If you b
 ## Requirements
 
 - [Terraform](https://www.terraform.io/downloads.html) >= v1.4.6
-- [Go](https://golang.org/doc/install) >= 1.20. This is necessary tto build the provider plugin.
+- [Go](https://golang.org/doc/install) >= 1.20. This is necessary to build the provider plugin.
 
 ## Installing the provider
 
@@ -59,8 +59,7 @@ Documentation can be found on the [Terraform Registry](https://registry.terrafor
 
 ## Examples
 
-<<<<<<< HEAD
-See the [examples](https://github.com/pinecone-io/pinecone-terraform-provider/examples) for example usage.
+See the [examples](https://github.com/pinecone-io/terraform-provider-pinecone/tree/main/examples) for example usage.
 
 ## Support
 
