@@ -53,8 +53,15 @@ on the `GOPATH` environment variable.
 You can enable the provider in your Terraform configuration by adding the
 following to your Terraform configuration file:
 
-```terraform terraform { required_providers { openai = { source =
-"pinecone-io/pinecone" } } } ```
+```terraform 
+terraform { 
+	required_providers { 
+		openai = { 
+			source = "pinecone-io/pinecone" 
+		} 
+	} 
+} 
+```
 
 You can configure the Pinecone client using environment variables to avoid
 setting sensitive values in the Terraform configuration file. To do so, set
