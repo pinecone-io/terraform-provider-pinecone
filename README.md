@@ -20,7 +20,7 @@ The provider is registered in the official [Terraform registry](https://registry
 
 ## Building the provider
 
-Follow these steps to build the Terraform Pinecone provider. You can also download the latest binary for your target platform from the [releases](https://github.com/pinecone-io/terraform-provider-pinecone/releases) tab.
+Follow these steps to build the Terraform Pinecone provider: 
 
 1. Clone the repository using the following command:
 
@@ -28,7 +28,7 @@ Follow these steps to build the Terraform Pinecone provider. You can also downlo
     $ git clone https://github.com/pinecone-io/terraform-provider-pinecone
     ```
 
-1. Build the provider using the following command. The install directory depends on the GOPATH environment variable.
+1. Build the provider using the following command. The install directory depends on the `GOPATH` environment variable.
 
     ```sh
     $ go install .
@@ -64,7 +64,7 @@ See the [examples](https://github.com/pinecone-io/pinecone-terraform-provider/ex
 
 ## Support
 
-Raise an issue for any support-related requirements.
+Please create an issue for any support requests.
 
 ## Contributing
 
@@ -72,4 +72,4 @@ Thank you to [skyscrapr](https://github.com/skyscrapr/) for developing this Terr
 found at [skyscrapr/terraform-provider-pinecone](https://github.com/skyscrapr/terraform-provider-pinecone). He continues
 to be the primary developer of this codebase.
 
-We welcome all contributions. If you identify issues or improvements, please file an issue or raise a pull request.
+We welcome all contributions. If you identify issues or improvements, please create an issue or pull request.
