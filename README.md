@@ -56,7 +56,7 @@ following to your Terraform configuration file:
 ```terraform 
 terraform { 
   required_providers { 
-    openai = { 
+    pinecone = { 
       source = "pinecone-io/pinecone" 
     } 
   } 
