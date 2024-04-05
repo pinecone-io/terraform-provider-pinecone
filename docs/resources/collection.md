@@ -27,6 +27,7 @@ provider "pinecone" {
 
 resource "pinecone_index" "test" {
   name = "test-index"
+  dimension = 1536
   spec = {
     pod = {
       environment = "us-west4-gcp"
