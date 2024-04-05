@@ -26,7 +26,7 @@ provider "pinecone" {
 }
 
 resource "pinecone_index" "test" {
-  name = "test-index"
+  name = "tftestindex"
   spec = {
     serverless = {
       cloud  = "aws"

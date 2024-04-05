@@ -61,6 +61,10 @@ terraform {
     } 
   } 
 } 
+
+provider "pinecone" {
+  api_key = var.pinecone_api_key
+}
 ```
 
 You can configure the Pinecone client using environment variables to avoid

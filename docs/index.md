@@ -8,11 +8,7 @@ description: |-
 
 # pinecone Provider
 
-You can use the Pinecone provider to interact with the resources supported in [Pinecone](www.pinecone.io). The provider needs to be configured with the proper credentials before it can be used.
 
-```shell
-export PINECONE_API_KEY="xxxxxxxxx"
-```
 
 ## Example Usage
 

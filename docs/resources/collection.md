@@ -26,8 +26,7 @@ provider "pinecone" {
 }
 
 resource "pinecone_index" "test" {
-  name = "test-index"
-  dimension = 1536
+  name = "tftestindex"
   spec = {
     pod = {
       environment = "us-west4-gcp"
@@ -37,7 +36,7 @@ resource "pinecone_index" "test" {
 }
 
 resource "pinecone_collection" "test" {
-  name   = "test-collection"
+  name   = "tftestcollection"
   source = pinecone_index.test.name
 }
 ```
