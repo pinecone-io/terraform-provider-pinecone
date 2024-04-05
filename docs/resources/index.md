@@ -25,12 +25,26 @@ provider "pinecone" {
   api_key = var.pinecone_api_key
 }
 
-resource "pinecone_index" "test" {
-  name = "tftestindex"
+# Serverless Indexes
+resource "pinecone_index" "serverless_index" {
+  name      = "tftestindex"
+  dimension = 1536
+  metric    = "cosine"
   spec = {
     serverless = {
       cloud  = "aws"
       region = "us-west-2"
+    }
+  }
+}
+# Pod Indexes
+resource "pinecone_index" "pod_index" {
+  name      = "tftestindex"
+  dimension = 1536
+  metric    = "cosine"
+  spec = {
+    pod = {
+      environment = "us-west1-gcp"
     }
   }
 }
