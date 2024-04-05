@@ -8,7 +8,11 @@ description: |-
 
 # pinecone Provider
 
+You can use the Pinecone provider to interact with the resources supported in [Pinecone](www.pinecone.io). The provider needs to be configured with the proper credentials before it can be used.
 
+```shell
+export PINECONE_API_KEY="xxxxxxxxx"
+```
 
 ## Example Usage
 
@@ -22,7 +26,7 @@ terraform {
 }
 
 provider "pinecone" {
-  # api_key = set via PINECONE_API_KEY env variable
+  api_key = var.pinecone_api_key
 }
 ```
 
