@@ -27,7 +27,7 @@ provider "pinecone" {
 
 # Serverless Indexes
 resource "pinecone_index" "serverless_index" {
-  name      = "tftestindex"
+  name      = "tf_serverless_index"
   dimension = 1536
   metric    = "cosine"
   spec = {
@@ -39,7 +39,7 @@ resource "pinecone_index" "serverless_index" {
 }
 # Pod Indexes
 resource "pinecone_index" "pod_index" {
-  name      = "tftestindex"
+  name      = "tf_pod_index"
   dimension = 1536
   metric    = "cosine"
   spec = {
