@@ -117,9 +117,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 							},
 							"pods": schema.Int64Attribute{
 								MarkdownDescription: "The number of pods to be used in the index. This should be equal to shards x replicas.'",
-								Optional:            true,
 								Computed:            true,
-								Default:             int64default.StaticInt64(1),
 							},
 							"metadata_config": schema.SingleNestedAttribute{
 								Description: "Configuration for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when metadata_config is present, only specified metadata fields are indexed. These configurations are only valid for use with pod-based indexes.",
@@ -214,7 +212,6 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 			PodType:     spec.Pod.PodType.ValueString(),
 			Shards:      int32(spec.Pod.ShardCount.ValueInt64()),
 			Replicas:    int32(spec.Pod.Replicas.ValueInt64()),
-			// SourceCollection: spec.Pod.SourceCollection.ValueStringPointer(),
 		}
 
 		if !spec.Pod.SourceCollection.IsUnknown() {
