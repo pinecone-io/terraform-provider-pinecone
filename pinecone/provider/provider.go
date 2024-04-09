@@ -65,7 +65,8 @@ func (p *PineconeProvider) Configure(ctx context.Context, req provider.Configure
 	}
 
 	client, err := pinecone.NewClient(pinecone.NewClientParams{
-		ApiKey: apiKey,
+		ApiKey:    apiKey,
+		SourceTag: "terraform",
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create pinecone client", err.Error())
