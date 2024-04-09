@@ -124,6 +124,7 @@ provider "pinecone" {
 
 resource "pinecone_index" "test" {
   name = %q
+  dimension = 1536
   spec = {
 	serverless = {
 		cloud = "aws"
@@ -141,6 +142,7 @@ provider "pinecone" {
 
 resource "pinecone_index" "test" {
 	name = %q
+	dimension = 1536
 	spec = {
 		pod = {
 			environment = "us-west4-gcp"

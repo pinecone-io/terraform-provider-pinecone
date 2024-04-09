@@ -7,12 +7,12 @@ terraform {
 }
 
 provider "pinecone" {
-  environment = "us-west4-gcp"
   # api_key = set via PINECONE_API_KEY env variable
 }
 
 resource "pinecone_index" "test" {
   name = "tftestindex"
+  dimension = 10
   spec = {
     serverless = {
       cloud  = "aws"

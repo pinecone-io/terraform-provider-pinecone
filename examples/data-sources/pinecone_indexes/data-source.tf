@@ -12,6 +12,7 @@ provider "pinecone" {
 
 resource "pinecone_index" "test" {
   name = "tftestindex"
+  dimension = 10
   spec = {
     serverless = {
       cloud  = "aws"
