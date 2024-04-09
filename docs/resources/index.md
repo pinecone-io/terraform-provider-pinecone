@@ -42,12 +42,12 @@ resource "pinecone_index" "test" {
 
 ### Required
 
+- `dimension` (Number) The dimensions of the vectors to be inserted in the index
 - `name` (String) The name of the index to be created. The maximum length is 45 characters.
 - `spec` (Attributes) Spec (see [below for nested schema](#nestedatt--spec))
 
 ### Optional
 
-- `dimension` (Number) The dimensions of the vectors to be inserted in the index
 - `metric` (String) The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 
