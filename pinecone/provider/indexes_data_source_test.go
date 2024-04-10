@@ -36,6 +36,7 @@ func testAccIndexesDataSourceConfig(name string) string {
 	
 	resource "pinecone_index" "test" {
 		name = %q
+		dimension = 1536
 		spec = {
 		    serverless = {
 		        cloud = "aws"
