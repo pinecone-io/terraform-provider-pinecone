@@ -22,7 +22,7 @@ terraform {
 }
 
 provider "pinecone" {
-  # api_key = set via PINECONE_API_KEY env variable
+  api_key = var.pinecone_api_key
 }
 
 data "pinecone_collections" "test" {
