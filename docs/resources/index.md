@@ -21,9 +21,7 @@ terraform {
   }
 }
 
-provider "pinecone" {
-  # api_key = set via PINECONE_API_KEY env variable
-}
+provider "pinecone" {}
 
 resource "pinecone_index" "test" {
   name      = "tftestindex"

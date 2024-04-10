@@ -21,9 +21,7 @@ terraform {
   }
 }
 
-provider "pinecone" {
-  api_key = var.pinecone_api_key
-}
+provider "pinecone" {}
 
 data "pinecone_collections" "test" {
 }
