@@ -6,6 +6,9 @@ package provider
 import (
 	"context"
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"strings"
 	"time"
 
@@ -64,12 +67,18 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				Validators: []validator.String{
 					stringvalidator.LengthAtMost(45),
 				},
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"dimension": schema.Int64Attribute{
 				MarkdownDescription: "The dimensions of the vectors to be inserted in the index",
 				Required:            true,
 				Validators: []validator.Int64{
 					int64validator.AtLeast(1),
+				},
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.RequiresReplace(),
 				},
 			},
 			"metric": schema.StringAttribute{
@@ -79,6 +88,9 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				Default:             stringdefault.StaticString("cosine"),
 				Validators: []validator.String{
 					stringvalidator.OneOf([]string{"euclidean", "cosine", "dotproduct"}...),
+				},
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"host": schema.StringAttribute{
@@ -96,22 +108,34 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 							"environment": schema.StringAttribute{
 								MarkdownDescription: "The environment where the index is hosted.",
 								Required:            true,
+								PlanModifiers: []planmodifier.String{
+									stringplanmodifier.RequiresReplace(),
+								},
 							},
 							"replicas": schema.Int64Attribute{
 								MarkdownDescription: "The number of replicas. Replicas duplicate your index. They provide higher availability and throughput. Replicas can be scaled up or down as your needs change.",
 								Optional:            true,
 								Computed:            true,
 								Default:             int64default.StaticInt64(1),
+								PlanModifiers: []planmodifier.Int64{
+									int64planmodifier.RequiresReplace(),
+								},
 							},
 							"shards": schema.Int64Attribute{
 								MarkdownDescription: "The number of shards. Shards split your data across multiple pods so you can fit more data into an index.",
 								Optional:            true,
 								Computed:            true,
 								Default:             int64default.StaticInt64(1),
+								PlanModifiers: []planmodifier.Int64{
+									int64planmodifier.RequiresReplace(),
+								},
 							},
 							"pod_type": schema.StringAttribute{
 								MarkdownDescription: "The type of pod to use. One of s1, p1, or p2 appended with . and one of x1, x2, x4, or x8.",
 								Required:            true,
+								PlanModifiers: []planmodifier.String{
+									stringplanmodifier.RequiresReplace(),
+								},
 							},
 							"pods": schema.Int64Attribute{
 								MarkdownDescription: "The number of pods to be used in the index. This should be equal to shards x replicas.'",
@@ -132,7 +156,9 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 							"source_collection": schema.StringAttribute{
 								MarkdownDescription: "The name of the collection to create an index from.",
 								Optional:            true,
-								Computed:            true,
+								PlanModifiers: []planmodifier.String{
+									stringplanmodifier.RequiresReplace(),
+								},
 							},
 						},
 					},
@@ -143,10 +169,16 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 							"cloud": schema.StringAttribute{
 								Description: "The public cloud where you would like your index hosted. [gcp|aws|azure]",
 								Required:    true,
+								PlanModifiers: []planmodifier.String{
+									stringplanmodifier.RequiresReplace(),
+								},
 							},
 							"region": schema.StringAttribute{
 								MarkdownDescription: "The region where you would like your index to be created.",
 								Required:            true,
+								PlanModifiers: []planmodifier.String{
+									stringplanmodifier.RequiresReplace(),
+								},
 							},
 						},
 					},
