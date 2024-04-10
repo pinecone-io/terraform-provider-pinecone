@@ -21,9 +21,7 @@ terraform {
   }
 }
 
-provider "pinecone" {
-  api_key = var.pinecone_api_key
-}
+provider "pinecone" {}
 
 resource "pinecone_index" "test" {
   name      = "tftestindex"

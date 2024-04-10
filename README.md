@@ -54,18 +54,46 @@ You can enable the provider in your Terraform configuration by adding the
 following to your Terraform configuration file:
 
 ```terraform 
-terraform { 
-  required_providers { 
-    pinecone = { 
-      source = "pinecone-io/pinecone" 
-    } 
-  } 
-} 
+terraform {
+  required_providers {
+    pinecone = {
+      source = "pinecone-io/pinecone"
+    }
+  }
+}
 ```
+
+### Pinecone API Key
+
+Your Pinecone API Key is required to use the Terraform Provider. There are a
+couple of ways to configure this.
+
+### As a `PINECONE_API_KEY` environment variable
 
 You can configure the Pinecone client using environment variables to avoid
 setting sensitive values in the Terraform configuration file. To do so, set
-`PINECONE_API_KEY` to your Pinecone API Key.
+`PINECONE_API_KEY` to your Pinecone API Key. Then the `provider` declaration
+is simply:
+
+```terraform
+provider "pinecone" {}
+```
+
+
+### As part of the `provider` declaration
+
+If your API key was set as an [Input Variable](https://developer.hashicorp.com/terraform/language/values/variables),
+you can use that value in the declaration. For example:
+
+```terraform
+provider "pinecone" {
+  api_key = var.pinecone_api_key
+}
+```
+
+Remember, your API Key should be a protected secret. See how to 
+[protect sensitive input variables](https://developer.hashicorp.com/terraform/tutorials/configuration-language/sensitive-variables)
+when setting your API Key this way.
 
 ## Documentation
 
