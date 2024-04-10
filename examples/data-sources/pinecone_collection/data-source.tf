@@ -12,7 +12,7 @@ provider "pinecone" {
 
 
 resource "pinecone_index" "test" {
-  name = "tftestindex"
+  name      = "tftestindex"
   dimension = 10
   spec = {
     pod = {
