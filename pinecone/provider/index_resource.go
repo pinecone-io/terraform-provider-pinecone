@@ -328,7 +328,11 @@ func (r *IndexResource) Read(ctx context.Context, req resource.ReadRequest, resp
 
 	index, err := r.client.DescribeIndex(ctx, data.Id.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to describe index", err.Error())
+		if err.Error() == fmt.Sprintf("failed to describe idx: Resource %s not found", data.Id.ValueString()) {
+			resp.State.RemoveResource(ctx)
+		} else {
+			resp.Diagnostics.AddError("Failed to describe index", err.Error())
+		}
 		return
 	}
 
