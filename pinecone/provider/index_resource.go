@@ -67,9 +67,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 			},
 			"dimension": schema.Int64Attribute{
 				MarkdownDescription: "The dimensions of the vectors to be inserted in the index",
-				Optional:            true,
-				Computed:            true,
-				Default:             int64default.StaticInt64(1536),
+				Required:            true,
 				Validators: []validator.Int64{
 					int64validator.AtLeast(1),
 				},
