@@ -1,6 +1,12 @@
 name: Acceptance Testing
 
-on: pull_request_target
+on:
+  pull_request_target:
+    branches:
+      - main
+  push:
+    branches:
+      - main
 
 jobs:
   authorize:
