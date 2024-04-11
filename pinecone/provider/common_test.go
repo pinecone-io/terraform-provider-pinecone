@@ -5,11 +5,23 @@ package provider
 
 import (
 	"context"
+	"os"
+	"testing"
+
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/pinecone-io/go-pinecone/pinecone"
-	"testing"
 )
+
+// NewTestClient returns a new Pinecone API client instance
+// to be used in acceptance tests.
+func NewTestClient() (*pinecone.Client, error) {
+	apiKey := os.Getenv("PINECONE_API_KEY")
+
+	return pinecone.NewClient(pinecone.NewClientParams{
+		ApiKey: apiKey,
+	})
+}
 
 func TestDatasource_Configure(t *testing.T) {
 	// Create a test *pinecone.Client

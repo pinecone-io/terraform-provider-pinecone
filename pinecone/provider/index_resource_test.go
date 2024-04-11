@@ -4,11 +4,14 @@
 package provider
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/pinecone-io/go-pinecone/pinecone"
 )
 
 func TestAccIndexResource_serverless(t *testing.T) {
@@ -115,6 +118,73 @@ func TestAccIndexResource_dimension(t *testing.T) {
 			// Delete testing automatically occurs in TestCase
 		},
 	})
+}
+
+func TestAccIndexResource_disappears(t *testing.T) {
+	rName := acctest.RandomWithPrefix("tftest")
+	resourceName := "pinecone_index.test"
+
+	var index pinecone.Index
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		// CheckDestroy:             testAccCheckIndexDestroy(ctx),
+		Steps: []resource.TestStep{
+			// Create and Read testing
+			{
+				Config: testAccIndexResourceConfig_serverless(rName),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckIndexExists(resourceName, &index),
+					testAccDeleteIndex(resourceName),
+				),
+				ExpectNonEmptyPlan: true,
+			},
+		},
+	})
+}
+
+func testAccCheckIndexExists(resourceName string, index *pinecone.Index) resource.TestCheckFunc {
+	return func(state *terraform.State) error {
+		indexResource, found := state.RootModule().Resources[resourceName]
+		if !found {
+			return fmt.Errorf("Resource not found in state: %s", resourceName)
+		}
+
+		// Create a new client, and use the default configurations from the environment
+		c, _ := NewTestClient()
+
+		fetchedIndex, err := c.DescribeIndex(context.Background(), indexResource.Primary.ID)
+		if err != nil {
+			return fmt.Errorf("Error describing index: %w", err)
+		}
+		if fetchedIndex == nil {
+			return fmt.Errorf("Index not found for ID: %s", indexResource.Primary.ID)
+		}
+
+		*index = *fetchedIndex
+
+		return nil
+	}
+}
+
+func testAccDeleteIndex(resourceName string) resource.TestCheckFunc {
+	return func(state *terraform.State) error {
+		indexResource, found := state.RootModule().Resources[resourceName]
+		if !found {
+			return fmt.Errorf("Resource not found in state: %s", resourceName)
+		}
+
+		// Create a new client, and use the default configurations from the environment
+		c, _ := NewTestClient()
+
+		err := c.DeleteIndex(context.Background(), indexResource.Primary.ID)
+		if err != nil {
+			return fmt.Errorf("Error deleting index: %w", err)
+		}
+
+		return nil
+	}
 }
 
 func testAccIndexResourceConfig_serverless(name string) string {
