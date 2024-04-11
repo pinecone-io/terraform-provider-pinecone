@@ -6,8 +6,10 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
-
+	
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
@@ -183,7 +185,19 @@ func testAccDeleteIndex(resourceName string) resource.TestCheckFunc {
 			return fmt.Errorf("Error deleting index: %w", err)
 		}
 
-		return nil
+		ctx := context.TODO()
+		deleteTimeout := defaultIndexDeleteTimeout
+		err = retry.RetryContext(ctx, deleteTimeout, func() *retry.RetryError {
+			index, err := c.DescribeIndex(ctx, indexResource.Primary.ID)
+			if err != nil {
+				if strings.Contains(err.Error(), "not found") {
+					return nil
+				}
+				return retry.NonRetryableError(err)
+			}
+			return retry.RetryableError(fmt.Errorf("index not deleted. State: %s", index.Status.State))
+		})
+		return err
 	}
 }
 
