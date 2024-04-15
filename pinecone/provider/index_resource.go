@@ -310,8 +310,6 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	// resp.Diagnostics.Append(data.Read(ctx, index)...)
-
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -358,7 +356,9 @@ func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 
 	err := r.client.DeleteIndex(ctx, data.Name.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to delete index", err.Error())
+		if !strings.Contains(err.Error(), "not found") {
+			resp.Diagnostics.AddError("Failed to delete index", err.Error())
+		}
 		return
 	}
 
