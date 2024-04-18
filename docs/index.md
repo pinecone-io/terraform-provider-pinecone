@@ -30,3 +30,4 @@ provider "pinecone" {}
 ### Optional
 
 - `api_key` (String, Sensitive) Pinecone API Key. Can be configured by setting PINECONE_API_KEY environment variable.
+- `mgmt_api_key` (String, Sensitive) Pinecone Management API Key. Can be configured by setting PINECONE_MGMT_API_KEY environment variable.
