@@ -3,12 +3,12 @@
 page_title: "pinecone_index Resource - terraform-provider-pinecone"
 subcategory: ""
 description: |-
-  Index resource
+  The pinecone_index resource lets you create and manage indexes in Pinecone. Learn more about indexes in the docs https://docs.pinecone.io/guides/indexes/understanding-indexes.
 ---
 
 # pinecone_index (Resource)
 
-Index resource
+The `pinecone_index` resource lets you create and manage indexes in Pinecone. Learn more about indexes in the [docs](https://docs.pinecone.io/guides/indexes/understanding-indexes).
 
 ## Example Usage
 

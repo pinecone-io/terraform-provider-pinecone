@@ -32,12 +32,17 @@ type PineconeProviderModel struct {
 }
 
 func (p *PineconeProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
+
 	resp.TypeName = "pinecone"
 	resp.Version = p.version
 }
 
 func (p *PineconeProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		MarkdownDescription: `You can use the this Terraform provider to manage resources supported 
+by [Pinecone](https://www.pinecone.io/). The provider must be configured with the proper 
+credentials before use. You can provide credentials via the PINECONE_API_KEY environment variable.`,
+  
 		Attributes: map[string]schema.Attribute{
 			"api_key": schema.StringAttribute{
 				MarkdownDescription: "Pinecone API Key. Can be configured by setting PINECONE_API_KEY environment variable.",

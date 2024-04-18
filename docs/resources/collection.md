@@ -3,12 +3,12 @@
 page_title: "pinecone_collection Resource - terraform-provider-pinecone"
 subcategory: ""
 description: |-
-  Collection resource
+  The pinecone_collection resource lets you create and manage collections in Pinecone. Learn more about collections in the docs hhttps://docs.pinecone.io/guides/indexes/understanding-collections.
 ---
 
 # pinecone_collection (Resource)
 
-Collection resource
+The `pinecone_collection` resource lets you create and manage collections in Pinecone. Learn more about collections in the [docs](hhttps://docs.pinecone.io/guides/indexes/understanding-collections).
 
 ## Example Usage
 
