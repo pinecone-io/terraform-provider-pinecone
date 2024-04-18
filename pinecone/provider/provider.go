@@ -42,7 +42,7 @@ func (p *PineconeProvider) Schema(ctx context.Context, req provider.SchemaReques
 		MarkdownDescription: `You can use the this Terraform provider to manage resources supported 
 by [Pinecone](https://www.pinecone.io/). The provider must be configured with the proper 
 credentials before use. You can provide credentials via the PINECONE_API_KEY environment variable.`,
-  
+
 		Attributes: map[string]schema.Attribute{
 			"api_key": schema.StringAttribute{
 				MarkdownDescription: "Pinecone API Key. Can be configured by setting PINECONE_API_KEY environment variable.",
