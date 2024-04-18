@@ -54,7 +54,7 @@ func (r *IndexResource) Metadata(ctx context.Context, req resource.MetadataReque
 func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		// This description is used by the documentation generator and the language server.
-		MarkdownDescription: "Index resource",
+		MarkdownDescription: "The `pinecone_index` resource lets you create and manage indexes in Pinecone. Learn more about indexes in the [docs](https://docs.pinecone.io/guides/indexes/understanding-indexes).",
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{

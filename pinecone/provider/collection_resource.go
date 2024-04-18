@@ -43,7 +43,7 @@ func (r *CollectionResource) Metadata(ctx context.Context, req resource.Metadata
 
 func (r *CollectionResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Collection resource",
+		MarkdownDescription: "The `pinecone_collection` resource lets you create and manage collections in Pinecone. Learn more about collections in the [docs](hhttps://docs.pinecone.io/guides/indexes/understanding-collections).",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				MarkdownDescription: "Collection identifier",
