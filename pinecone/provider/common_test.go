@@ -24,13 +24,15 @@ func NewTestClient() (*pinecone.Client, error) {
 }
 
 func TestDatasource_Configure(t *testing.T) {
-	// Create a test *pinecone.Client
-	testClient := &pinecone.Client{}
-
+	// Create test pinecone clients
+	testClients := &PineconeClients{
+		Client:     &pinecone.Client{},
+		MgmtClient: &pinecone.ManagementClient{},
+	}
 	// Create a mock context and request
 	ctx := context.Background()
 	req := datasource.ConfigureRequest{
-		ProviderData: &testClient,
+		ProviderData: &testClients,
 	}
 	resp := &datasource.ConfigureResponse{}
 
@@ -40,11 +42,15 @@ func TestDatasource_Configure(t *testing.T) {
 	r.Configure(ctx, req, resp)
 
 	// Check if the client field in r has been correctly set
-	if r.client != nil && r.client != testClient {
+	if r.client != nil && r.client != testClients.Client {
 		t.Errorf("Expected r.client to be set to the test client, got: %v", r.client)
 	}
+	// Check if the mgmtClient field in r has been correctly set
+	if r.mgmtClient != nil && r.mgmtClient != testClients.MgmtClient {
+		t.Errorf("Expected r.mgmtClient to be set to the test client, got: %v", r.mgmtClient)
+	}
 
-	// Now, let's test the case where req.ProviderData is not *pinecone.Client
+	// Now, let's test the case where req.ProviderData is not ProviderClients
 	invalidReq := datasource.ConfigureRequest{
 		ProviderData: "not a *pinecone.Client", // Pass a non-*pinecone.Client value
 	}
@@ -67,13 +73,15 @@ func TestDatasource_Configure(t *testing.T) {
 }
 
 func TestResource_Configure(t *testing.T) {
-	// Create a test *pinecone.Client
-	testClient := &pinecone.Client{}
-
+	// Create test pinecone clients
+	testClients := &PineconeClients{
+		Client:     &pinecone.Client{},
+		MgmtClient: &pinecone.ManagementClient{},
+	}
 	// Create a mock context and request
 	ctx := context.Background()
 	req := resource.ConfigureRequest{
-		ProviderData: &testClient,
+		ProviderData: &testClients,
 	}
 	resp := &resource.ConfigureResponse{}
 
@@ -82,9 +90,12 @@ func TestResource_Configure(t *testing.T) {
 	// Call the Configure function with the test data
 	r.Configure(ctx, req, resp)
 
-	// Check if the client field in r has been correctly set
-	if r.client != nil && r.client != testClient {
+	// Check if the client fields in r have been correctly set
+	if r.client != nil && r.client != testClients.Client {
 		t.Errorf("Expected r.client to be set to the test client, got: %v", r.client)
+	}
+	if r.mgmtClient != nil && r.mgmtClient != testClients.MgmtClient {
+		t.Errorf("Expected r.mgmtClient to be set to the test mgmt client, got: %v", r.mgmtClient)
 	}
 
 	// Now, let's test the case where req.ProviderData is not *pinecone.Client
@@ -101,7 +112,7 @@ func TestResource_Configure(t *testing.T) {
 		t.Error("Expected an error in resp.Diagnostics.Errors, but found none")
 	} else {
 		// Check the error message
-		expectedErrorMessage := "Expected *pinecone.Client, got: string. Please report this issue to the provider developers."
+		expectedErrorMessage := "Expected *PineconeClients, got: string. Please report this issue to the provider developers."
 		actualErrorMessage := invalidResp.Diagnostics.Errors()[0].Detail()
 		if actualErrorMessage != expectedErrorMessage {
 			t.Errorf("Expected error message: %s, got: %s", expectedErrorMessage, actualErrorMessage)

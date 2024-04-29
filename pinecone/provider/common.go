@@ -10,7 +10,8 @@ import (
 )
 
 type PineconeDatasource struct {
-	client *pinecone.Client
+	client     *pinecone.Client
+	mgmtClient *pinecone.ManagementClient
 }
 
 func (d *PineconeDatasource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
@@ -19,21 +20,22 @@ func (d *PineconeDatasource) Configure(ctx context.Context, req datasource.Confi
 		return
 	}
 
-	client, ok := req.ProviderData.(*pinecone.Client)
-
+	clients, ok := req.ProviderData.(*PineconeClients)
 	if !ok {
 		resp.Diagnostics.AddError(
-			"Unexpected Client Type",
-			fmt.Sprintf("Expected *pinecone.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			"Unexpected Clients Type",
+			fmt.Sprintf("Expected *PineconeClients, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
 
-	d.client = client
+	d.client = clients.Client
+	d.mgmtClient = clients.MgmtClient
 }
 
 type PineconeResource struct {
-	client *pinecone.Client
+	client     *pinecone.Client
+	mgmtClient *pinecone.ManagementClient
 }
 
 func (d *PineconeResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -42,15 +44,15 @@ func (d *PineconeResource) Configure(ctx context.Context, req resource.Configure
 		return
 	}
 
-	client, ok := req.ProviderData.(*pinecone.Client)
-
+	clients, ok := req.ProviderData.(*PineconeClients)
 	if !ok {
 		resp.Diagnostics.AddError(
-			"Unexpected Client Type",
-			fmt.Sprintf("Expected *pinecone.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			"Unexpected Clients Type",
+			fmt.Sprintf("Expected *PineconeClients, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
 
-	d.client = client
+	d.client = clients.Client
+	d.mgmtClient = clients.MgmtClient
 }

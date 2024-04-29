@@ -28,7 +28,8 @@ type PineconeProvider struct {
 
 // PineconeProviderModel describes the provider data model.
 type PineconeProviderModel struct {
-	ApiKey types.String `tfsdk:"api_key"`
+	ApiKey     types.String `tfsdk:"api_key"`
+	MgmtApiKey types.String `tfsdk:"mgmt_api_key"`
 }
 
 func (p *PineconeProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -44,8 +45,18 @@ func (p *PineconeProvider) Schema(ctx context.Context, req provider.SchemaReques
 				Optional:            true,
 				Sensitive:           true,
 			},
+			"mgmt_api_key": schema.StringAttribute{
+				MarkdownDescription: "Pinecone Management API Key. Can be configured by setting PINECONE_MGMT_API_KEY environment variable.",
+				Optional:            true,
+				Sensitive:           true,
+			},
 		},
 	}
+}
+
+type PineconeClients struct {
+	Client     *pinecone.Client
+	MgmtClient *pinecone.ManagementClient
 }
 
 func (p *PineconeProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
@@ -73,14 +84,35 @@ func (p *PineconeProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
-	resp.DataSourceData = client
-	resp.ResourceData = client
+	mgmtApiKey := os.Getenv("PINECONE_MGMT_API_KEY")
+	if !data.MgmtApiKey.IsNull() {
+		mgmtApiKey = data.MgmtApiKey.ValueString()
+	}
+
+	mgmtClient, err := pinecone.NewManagementClient(pinecone.NewManagementClientParams{
+		ApiKey:    mgmtApiKey,
+		SourceTag: "terraform",
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to create pinecone mangement client", err.Error())
+		return
+	}
+
+	clients := &PineconeClients{
+		Client:     client,
+		MgmtClient: mgmtClient,
+	}
+
+	resp.DataSourceData = clients
+	resp.ResourceData = clients
 }
 
 func (p *PineconeProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewCollectionResource,
 		NewIndexResource,
+		NewProjectResource,
+		NewProjectApiKeyResource,
 	}
 }
 
@@ -90,6 +122,10 @@ func (p *PineconeProvider) DataSources(ctx context.Context) []func() datasource.
 		NewCollectionDataSource,
 		NewIndexesDataSource,
 		NewIndexDataSource,
+		NewProjectsDataSource,
+		NewProjectDataSource,
+		NewProjectApiKeysDataSource,
+		NewProjectApiKeyDataSource,
 	}
 }
 
