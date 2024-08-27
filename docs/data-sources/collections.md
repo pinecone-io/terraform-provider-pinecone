@@ -42,9 +42,13 @@ Required:
 
 - `name` (String) The name of the collection.
 
-Read-Only:
+Optional:
 
 - `dimension` (Number) The dimension of the vectors stored in each record held in the collection.
+- `vector_count` (Number) The number of records stored in the collection.
+
+Read-Only:
+
 - `environment` (String) The environment where the collection is hosted.
 - `size` (Number) The size of the collection in bytes.
 - `status` (String) The status of the collection.
