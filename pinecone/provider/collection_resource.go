@@ -182,7 +182,7 @@ func (r *CollectionResource) Delete(ctx context.Context, req resource.DeleteRequ
 		return
 	}
 
-	err := r.client.DeleteCollection(ctx, data.Id.ValueString())
+	err := r.client.DeleteCollection(ctx, data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to delete collection", err.Error())
 		return
