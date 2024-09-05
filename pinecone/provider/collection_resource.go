@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 	"github.com/pinecone-io/go-pinecone/pinecone"
 	"github.com/pinecone-io/terraform-provider-pinecone/pinecone/models"
@@ -59,21 +60,23 @@ func (r *CollectionResource) Schema(ctx context.Context, req resource.SchemaRequ
 			},
 			"size": schema.Int64Attribute{
 				MarkdownDescription: "The size of the collection in bytes.",
+				Optional:            true,
 				Computed:            true,
 			},
 			"status": schema.StringAttribute{
 				MarkdownDescription: "The status of the collection.",
 				Computed:            true,
 			},
-			"dimension": schema.Int64Attribute{
+			"dimension": schema.Int32Attribute{
 				MarkdownDescription: "The dimension of the vectors stored in each record held in the collection.",
+				Optional:            true,
 				Computed:            true,
 			},
-			// "vector_count": schema.Int64Attribute{
-			// 	MarkdownDescription: "The number of records stored in the collection.",
-			// 	Optional: true,
-			// 	Computed:            true,
-			// },
+			"vector_count": schema.Int32Attribute{
+				MarkdownDescription: "The number of records stored in the collection.",
+				Optional:            true,
+				Computed:            true,
+			},
 			"environment": schema.StringAttribute{
 				MarkdownDescription: "The environment where the collection is hosted.",
 				Computed:            true,
@@ -185,17 +188,16 @@ func (r *CollectionResource) Delete(ctx context.Context, req resource.DeleteRequ
 		return
 	}
 	// Wait for collection to be deleted
-	// Create() is passed a default timeout to use if no value
+	// Delete() is passed a default timeout to use if no value
 	// has been supplied in the Terraform configuration.
-	deleteTimeout, diags := data.Timeouts.Delete(ctx, defaultIndexDeleteTimeout)
+	deleteTimeout, diags := data.Timeouts.Delete(ctx, defaultCollectionDeleteTimeout)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	err = retry.RetryContext(ctx, deleteTimeout, func() *retry.RetryError {
-		collection, err := r.client.DescribeCollection(ctx, data.Id.ValueString())
-		// tflog.Info(ctx, fmt.Sprintf("Deleting Collection. Status: '%s'", collection.Status))
+		collection, err := r.client.DescribeCollection(ctx, data.Name.ValueString())
 
 		if err != nil {
 			if strings.Contains(err.Error(), "404") {
@@ -203,6 +205,7 @@ func (r *CollectionResource) Delete(ctx context.Context, req resource.DeleteRequ
 			}
 			return retry.NonRetryableError(err)
 		}
+		tflog.Info(ctx, fmt.Sprintf("Deleting Collection. Status: '%s'", collection.Status))
 		return retry.RetryableError(fmt.Errorf("collection not deleted. State: %s", collection.Status))
 	})
 	if err != nil {

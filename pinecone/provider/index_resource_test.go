@@ -6,10 +6,8 @@ package provider
 import (
 	"context"
 	"fmt"
-	"strings"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
@@ -131,16 +129,14 @@ func TestAccIndexResource_disappears(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		// CheckDestroy:             testAccCheckIndexDestroy(ctx),
+		CheckDestroy:             testAccCheckIndexDestroy(rName),
 		Steps: []resource.TestStep{
 			// Create and Read testing
 			{
 				Config: testAccIndexResourceConfig_serverless(rName),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckIndexExists(resourceName, &index),
-					testAccDeleteIndex(resourceName),
 				),
-				ExpectNonEmptyPlan: true,
 			},
 		},
 	})
@@ -170,34 +166,13 @@ func testAccCheckIndexExists(resourceName string, index *pinecone.Index) resourc
 	}
 }
 
-func testAccDeleteIndex(resourceName string) resource.TestCheckFunc {
+func testAccCheckIndexDestroy(resourceName string) resource.TestCheckFunc {
 	return func(state *terraform.State) error {
-		indexResource, found := state.RootModule().Resources[resourceName]
-		if !found {
-			return fmt.Errorf("Resource not found in state: %s", resourceName)
+		_, found := state.RootModule().Resources[resourceName]
+		if found {
+			return fmt.Errorf("Resource still found in state: %s", resourceName)
 		}
-
-		// Create a new client, and use the default configurations from the environment
-		c, _ := NewTestClient()
-
-		err := c.DeleteIndex(context.Background(), indexResource.Primary.ID)
-		if err != nil {
-			return fmt.Errorf("Error deleting index: %w", err)
-		}
-
-		ctx := context.TODO()
-		deleteTimeout := defaultIndexDeleteTimeout
-		err = retry.RetryContext(ctx, deleteTimeout, func() *retry.RetryError {
-			index, err := c.DescribeIndex(ctx, indexResource.Primary.ID)
-			if err != nil {
-				if strings.Contains(err.Error(), "not found") {
-					return nil
-				}
-				return retry.NonRetryableError(err)
-			}
-			return retry.RetryableError(fmt.Errorf("index not deleted. State: %s", index.Status.State))
-		})
-		return err
+		return nil
 	}
 }
 

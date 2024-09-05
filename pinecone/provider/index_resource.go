@@ -6,11 +6,12 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
-	"strings"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
@@ -326,7 +327,7 @@ func (r *IndexResource) Read(ctx context.Context, req resource.ReadRequest, resp
 
 	index, err := r.client.DescribeIndex(ctx, data.Id.ValueString())
 	if err != nil {
-		if err.Error() == fmt.Sprintf("failed to describe idx: Resource %s not found", data.Id.ValueString()) {
+		if strings.Contains(err.Error(), "not found") {
 			resp.State.RemoveResource(ctx)
 		} else {
 			resp.Diagnostics.AddError("Failed to describe index", err.Error())

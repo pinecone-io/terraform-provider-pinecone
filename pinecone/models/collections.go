@@ -11,11 +11,11 @@ import (
 
 // CollectionModel describes the collection data model.
 type CollectionModel struct {
-	Name      types.String `tfsdk:"name"`
-	Size      types.Int64  `tfsdk:"size"`
-	Status    types.String `tfsdk:"status"`
-	Dimension types.Int64  `tfsdk:"dimension"`
-	// VectorCount types.Int64  `tfsdk:"vector_count"`
+	Name        types.String `tfsdk:"name"`
+	Size        types.Int64  `tfsdk:"size"`
+	Status      types.String `tfsdk:"status"`
+	Dimension   types.Int32  `tfsdk:"dimension"`
+	VectorCount types.Int32  `tfsdk:"vector_count"`
 	Environment types.String `tfsdk:"environment"`
 }
 
@@ -25,12 +25,8 @@ func NewCollectionModel(collection *pinecone.Collection) *CollectionModel {
 			Name:        types.StringValue(collection.Name),
 			Status:      types.StringValue(string(collection.Status)),
 			Environment: types.StringValue(collection.Environment),
-		}
-		if collection.Size != nil {
-			newCollection.Size = types.Int64Value(*collection.Size)
-		}
-		if collection.Dimension != nil {
-			newCollection.Dimension = types.Int64Value(int64(*collection.Dimension))
+			Size:        types.Int64Value(collection.Size),
+			Dimension:   types.Int32Value(collection.Dimension),
 		}
 		return newCollection
 	}
@@ -39,11 +35,11 @@ func NewCollectionModel(collection *pinecone.Collection) *CollectionModel {
 
 // CollectionResourceModel describes the resource data model.
 type CollectionResourceModel struct {
-	Name      types.String `tfsdk:"name"`
-	Size      types.Int64  `tfsdk:"size"`
-	Status    types.String `tfsdk:"status"`
-	Dimension types.Int64  `tfsdk:"dimension"`
-	// VectorCount types.Int64    `tfsdk:"vector_count"`
+	Name        types.String   `tfsdk:"name"`
+	Size        types.Int64    `tfsdk:"size"`
+	Status      types.String   `tfsdk:"status"`
+	Dimension   types.Int32    `tfsdk:"dimension"`
+	VectorCount types.Int32    `tfsdk:"vector_count"`
 	Environment types.String   `tfsdk:"environment"`
 	Id          types.String   `tfsdk:"id"`
 	Source      types.String   `tfsdk:"source"`
@@ -56,27 +52,18 @@ func (model *CollectionResourceModel) Read(collection *pinecone.Collection) {
 	model.Source = types.StringValue(model.Source.ValueString())
 	model.Status = types.StringValue(string(collection.Status))
 	model.Environment = types.StringValue(collection.Environment)
-	if collection.Size != nil {
-		model.Size = types.Int64Value(*collection.Size)
-	}
-	if collection.Dimension != nil {
-		model.Dimension = types.Int64Value(int64(*collection.Dimension))
-	}
-	// var vectorCount *int64
-	// if collection.VectorCount != nil {
-	// 	tempVectorCount := int64(*collection.VectorCount)
-	// 	vectorCount = &tempVectorCount
-	// }
-	// model.VectorCount = types.Int64PointerValue(vectorCount)
+	model.Size = types.Int64Value(collection.Size)
+	model.Dimension = types.Int32Value(collection.Dimension)
+	model.VectorCount = types.Int32Value(collection.VectorCount)
 }
 
 // CollectionDataSourceModel describes the data source data model.
 type CollectionDataSourceModel struct {
-	Name      types.String `tfsdk:"name"`
-	Size      types.Int64  `tfsdk:"size"`
-	Status    types.String `tfsdk:"status"`
-	Dimension types.Int64  `tfsdk:"dimension"`
-	// VectorCount types.Int64  `tfsdk:"vector_count"`
+	Name        types.String `tfsdk:"name"`
+	Size        types.Int64  `tfsdk:"size"`
+	Status      types.String `tfsdk:"status"`
+	Dimension   types.Int32  `tfsdk:"dimension"`
+	VectorCount types.Int32  `tfsdk:"vector_count"`
 	Environment types.String `tfsdk:"environment"`
 	Id          types.String `tfsdk:"id"`
 }
@@ -86,13 +73,9 @@ func (model *CollectionDataSourceModel) Read(collection *pinecone.Collection) {
 	model.Name = types.StringValue(collection.Name)
 	model.Status = types.StringValue(string(collection.Status))
 	model.Environment = types.StringValue(collection.Environment)
-	if collection.Size != nil {
-		model.Size = types.Int64Value(*collection.Size)
-	}
-	if collection.Dimension != nil {
-		model.Dimension = types.Int64Value(int64(*collection.Dimension))
-	}
-	// model.VectorCount = types.Int64Value(int64(*collection.VectorCount))
+	model.Size = types.Int64Value(collection.Size)
+	model.Dimension = types.Int32Value(collection.Dimension)
+	model.VectorCount = types.Int32Value(collection.VectorCount)
 }
 
 // CollectionsDataSourceModel describes the data source data model.
