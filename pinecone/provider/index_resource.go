@@ -25,7 +25,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
-	"github.com/pinecone-io/go-pinecone/pinecone"
+	"github.com/pinecone-io/go-pinecone/v3/pinecone"
 	"github.com/pinecone-io/terraform-provider-pinecone/pinecone/models"
 )
 
@@ -235,10 +235,11 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	// Prepare the payload for the API request
 	if spec.Pod != nil {
+		metric := pinecone.IndexMetric(data.Metric.ValueString())
 		podReq := pinecone.CreatePodIndexRequest{
 			Name:        data.Name.ValueString(),
-			Dimension:   int32(data.Dimension.ValueInt64()),
-			Metric:      pinecone.IndexMetric(data.Metric.ValueString()),
+			Dimension:   int32(data.Dimension.ValueInt32()),
+			Metric:      &metric,
 			Environment: spec.Pod.Environment.ValueString(),
 			PodType:     spec.Pod.PodType.ValueString(),
 			Shards:      int32(spec.Pod.ShardCount.ValueInt64()),
@@ -266,10 +267,12 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 
 	if spec.Serverless != nil {
+		dimension := int32(data.Dimension.ValueInt32())
+		metric := pinecone.IndexMetric(data.Metric.ValueString())
 		serverlessReq := pinecone.CreateServerlessIndexRequest{
 			Name:      data.Name.ValueString(),
-			Dimension: int32(data.Dimension.ValueInt64()),
-			Metric:    pinecone.IndexMetric(data.Metric.ValueString()),
+			Dimension: &dimension,
+			Metric:    &metric,
 			Cloud:     pinecone.Cloud(spec.Serverless.Cloud.ValueString()),
 			Region:    spec.Serverless.Region.ValueString(),
 		}

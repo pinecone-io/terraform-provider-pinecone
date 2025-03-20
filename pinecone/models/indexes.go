@@ -11,12 +11,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
-	"github.com/pinecone-io/go-pinecone/pinecone"
+	"github.com/pinecone-io/go-pinecone/v3/pinecone"
 )
 
 type IndexModel struct {
 	Name      types.String `tfsdk:"name"`
-	Dimension types.Int64  `tfsdk:"dimension"`
+	Dimension types.Int32  `tfsdk:"dimension"`
 	Metric    types.String `tfsdk:"metric"`
 	Host      types.String `tfsdk:"host"`
 	Spec      types.Object `tfsdk:"spec"`
@@ -27,7 +27,7 @@ func (model *IndexModel) Read(ctx context.Context, index *pinecone.Index) diag.D
 	var diags diag.Diagnostics
 
 	model.Name = types.StringValue(index.Name)
-	model.Dimension = types.Int64Value(int64(index.Dimension))
+	model.Dimension = types.Int32PointerValue(index.Dimension)
 	model.Metric = types.StringValue(string(index.Metric))
 	model.Host = types.StringValue(index.Host)
 
@@ -60,7 +60,7 @@ func (model *IndexModel) Read(ctx context.Context, index *pinecone.Index) diag.D
 type IndexResourceModel struct {
 	Id        types.String   `tfsdk:"id"`
 	Name      types.String   `tfsdk:"name"`
-	Dimension types.Int64    `tfsdk:"dimension"`
+	Dimension types.Int32    `tfsdk:"dimension"`
 	Metric    types.String   `tfsdk:"metric"`
 	Host      types.String   `tfsdk:"host"`
 	Spec      types.Object   `tfsdk:"spec"`
@@ -73,7 +73,7 @@ func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index
 
 	model.Id = types.StringValue(index.Name)
 	model.Name = types.StringValue(index.Name)
-	model.Dimension = types.Int64Value(int64(index.Dimension))
+	model.Dimension = types.Int32PointerValue(index.Dimension)
 	model.Metric = types.StringValue(string(index.Metric))
 	model.Host = types.StringValue(index.Host)
 
@@ -106,7 +106,7 @@ func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index
 type IndexDatasourceModel struct {
 	Id        types.String `tfsdk:"id"`
 	Name      types.String `tfsdk:"name"`
-	Dimension types.Int64  `tfsdk:"dimension"`
+	Dimension types.Int32  `tfsdk:"dimension"`
 	Metric    types.String `tfsdk:"metric"`
 	Host      types.String `tfsdk:"host"`
 	Spec      types.Object `tfsdk:"spec"`
@@ -118,7 +118,7 @@ func (model *IndexDatasourceModel) Read(ctx context.Context, index *pinecone.Ind
 
 	model.Id = types.StringValue(index.Name)
 	model.Name = types.StringValue(index.Name)
-	model.Dimension = types.Int64Value(int64(index.Dimension))
+	model.Dimension = types.Int32PointerValue(index.Dimension)
 	model.Metric = types.StringValue(string(index.Metric))
 	model.Host = types.StringValue(index.Host)
 
@@ -173,7 +173,7 @@ func NewIndexPodSpec(ctx context.Context, spec *IndexPodSpecModel) (*pinecone.Po
 	if spec != nil {
 		newSpec := &pinecone.PodSpec{
 			Environment: spec.Environment.ValueString(),
-			PodCount:    int32(spec.PodCount.ValueInt64()),
+			PodCount:    int(spec.PodCount.ValueInt64()),
 			PodType:     spec.PodType.ValueString(),
 			Replicas:    int32(spec.Replicas.ValueInt64()),
 			ShardCount:  int32(spec.ShardCount.ValueInt64()),
