@@ -239,7 +239,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		metric := pinecone.IndexMetric(data.Metric.ValueString())
 		podReq := pinecone.CreatePodIndexRequest{
 			Name:        data.Name.ValueString(),
-			Dimension:   int32(data.Dimension.ValueInt32()),
+			Dimension:   data.Dimension.ValueInt32(),
 			Metric:      &metric,
 			Environment: spec.Pod.Environment.ValueString(),
 			PodType:     spec.Pod.PodType.ValueString(),
@@ -268,7 +268,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 
 	if spec.Serverless != nil {
-		dimension := int32(data.Dimension.ValueInt32())
+		dimension := data.Dimension.ValueInt32()
 		metric := pinecone.IndexMetric(data.Metric.ValueString())
 		serverlessReq := pinecone.CreateServerlessIndexRequest{
 			Name:      data.Name.ValueString(),
