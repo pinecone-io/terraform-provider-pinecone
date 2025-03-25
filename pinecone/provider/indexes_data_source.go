@@ -46,7 +46,7 @@ func (d *IndexesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 							MarkdownDescription: "Index name",
 							Computed:            true,
 						},
-						"dimension": schema.Int64Attribute{
+						"dimension": schema.Int32Attribute{
 							MarkdownDescription: "Index dimension",
 							Computed:            true,
 						},
