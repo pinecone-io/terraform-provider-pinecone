@@ -15,12 +15,14 @@ import (
 )
 
 type IndexModel struct {
-	Name      types.String `tfsdk:"name"`
-	Dimension types.Int32  `tfsdk:"dimension"`
-	Metric    types.String `tfsdk:"metric"`
-	Host      types.String `tfsdk:"host"`
-	Spec      types.Object `tfsdk:"spec"`
-	Status    types.Object `tfsdk:"status"`
+	Name               types.String `tfsdk:"name"`
+	Dimension          types.Int32  `tfsdk:"dimension"`
+	Metric             types.String `tfsdk:"metric"`
+	DeletionProtection types.String `tfsdk:"deletion_protection"`
+	Tags               types.Object `tfsdk:"tags"`
+	Host               types.String `tfsdk:"host"`
+	Spec               types.Object `tfsdk:"spec"`
+	Status             types.Object `tfsdk:"status"`
 }
 
 func (model *IndexModel) Read(ctx context.Context, index *pinecone.Index) diag.Diagnostics {
@@ -58,14 +60,16 @@ func (model *IndexModel) Read(ctx context.Context, index *pinecone.Index) diag.D
 
 // IndexResourceModel defined the Index model for the resource.
 type IndexResourceModel struct {
-	Id        types.String   `tfsdk:"id"`
-	Name      types.String   `tfsdk:"name"`
-	Dimension types.Int32    `tfsdk:"dimension"`
-	Metric    types.String   `tfsdk:"metric"`
-	Host      types.String   `tfsdk:"host"`
-	Spec      types.Object   `tfsdk:"spec"`
-	Status    types.Object   `tfsdk:"status"`
-	Timeouts  timeouts.Value `tfsdk:"timeouts"`
+	Id                 types.String   `tfsdk:"id"`
+	Name               types.String   `tfsdk:"name"`
+	Dimension          types.Int32    `tfsdk:"dimension"`
+	Metric             types.String   `tfsdk:"metric"`
+	DeletionProtection types.String   `tfsdk:"deletion_protection"`
+	Tags               types.Object   `tfsdk:"tags"`
+	Host               types.String   `tfsdk:"host"`
+	Spec               types.Object   `tfsdk:"spec"`
+	Status             types.Object   `tfsdk:"status"`
+	Timeouts           timeouts.Value `tfsdk:"timeouts"`
 }
 
 func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index) diag.Diagnostics {
@@ -73,9 +77,15 @@ func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index
 
 	model.Id = types.StringValue(index.Name)
 	model.Name = types.StringValue(index.Name)
-	model.Dimension = types.Int32PointerValue(index.Dimension)
 	model.Metric = types.StringValue(string(index.Metric))
 	model.Host = types.StringValue(index.Host)
+	model.DeletionProtection = types.StringValue(string(index.DeletionProtection))
+
+	if index.Dimension != nil {
+		model.Dimension = types.Int32Value(*index.Dimension)
+	} else {
+		model.Dimension = types.Int32Null()
+	}
 
 	pod, diags := NewIndexPodSpecModel(ctx, index.Spec.Pod)
 	if diags.HasError() {
@@ -91,12 +101,16 @@ func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index
 		return diags
 	}
 
-	model.Status, diags = types.ObjectValueFrom(ctx, IndexStatusModel{}.AttrTypes(), IndexStatusModel{
-		Ready: types.BoolValue(index.Status.Ready),
-		State: types.StringValue(string(index.Status.State)),
-	})
-	if diags.HasError() {
-		return diags
+	if index.Status != nil {
+		model.Status, diags = types.ObjectValueFrom(ctx, IndexStatusModel{}.AttrTypes(), IndexStatusModel{
+			Ready: types.BoolValue(index.Status.Ready),
+			State: types.StringValue(string(index.Status.State)),
+		})
+		if diags.HasError() {
+			return diags
+		}
+	} else {
+		model.Status = types.ObjectNull(IndexStatusModel{}.AttrTypes())
 	}
 
 	return diags
@@ -104,13 +118,15 @@ func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index
 
 // IndexDatasourceeModel defined the Index model for the datasource.
 type IndexDatasourceModel struct {
-	Id        types.String `tfsdk:"id"`
-	Name      types.String `tfsdk:"name"`
-	Dimension types.Int32  `tfsdk:"dimension"`
-	Metric    types.String `tfsdk:"metric"`
-	Host      types.String `tfsdk:"host"`
-	Spec      types.Object `tfsdk:"spec"`
-	Status    types.Object `tfsdk:"status"`
+	Id                 types.String `tfsdk:"id"`
+	Name               types.String `tfsdk:"name"`
+	Dimension          types.Int32  `tfsdk:"dimension"`
+	Metric             types.String `tfsdk:"metric"`
+	DeletionProtection types.String `tfsdk:"deletion_protection"`
+	Tags               types.Object `tfsdk:"tags"`
+	Host               types.String `tfsdk:"host"`
+	Spec               types.Object `tfsdk:"spec"`
+	Status             types.Object `tfsdk:"status"`
 }
 
 func (model *IndexDatasourceModel) Read(ctx context.Context, index *pinecone.Index) diag.Diagnostics {
@@ -118,9 +134,15 @@ func (model *IndexDatasourceModel) Read(ctx context.Context, index *pinecone.Ind
 
 	model.Id = types.StringValue(index.Name)
 	model.Name = types.StringValue(index.Name)
-	model.Dimension = types.Int32PointerValue(index.Dimension)
 	model.Metric = types.StringValue(string(index.Metric))
 	model.Host = types.StringValue(index.Host)
+	model.DeletionProtection = types.StringValue(string(index.DeletionProtection))
+
+	if index.Dimension != nil {
+		model.Dimension = types.Int32Value(*index.Dimension)
+	} else {
+		model.Dimension = types.Int32Null()
+	}
 
 	pod, diags := NewIndexPodSpecModel(ctx, index.Spec.Pod)
 	if diags.HasError() {
@@ -136,12 +158,16 @@ func (model *IndexDatasourceModel) Read(ctx context.Context, index *pinecone.Ind
 		return diags
 	}
 
-	model.Status, diags = types.ObjectValueFrom(ctx, IndexStatusModel{}.AttrTypes(), IndexStatusModel{
-		Ready: types.BoolValue(index.Status.Ready),
-		State: types.StringValue(string(index.Status.State)),
-	})
-	if diags.HasError() {
-		return diags
+	if index.Status != nil {
+		model.Status, diags = types.ObjectValueFrom(ctx, IndexStatusModel{}.AttrTypes(), IndexStatusModel{
+			Ready: types.BoolValue(index.Status.Ready),
+			State: types.StringValue(string(index.Status.State)),
+		})
+		if diags.HasError() {
+			return diags
+		}
+	} else {
+		model.Status = types.ObjectNull(IndexStatusModel{}.AttrTypes())
 	}
 
 	return diags
@@ -299,3 +325,5 @@ type IndexesDataSourceModel struct {
 	Indexes []IndexModel `tfsdk:"indexes"`
 	Id      types.String `tfsdk:"id"`
 }
+
+// TODO: Add Index.Embed stuff here for modeling

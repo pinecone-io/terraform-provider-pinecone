@@ -54,6 +54,10 @@ func (d *IndexesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 							MarkdownDescription: "Index metric",
 							Computed:            true,
 						},
+						"deletion_protection": schema.StringAttribute{
+							MarkdownDescription: "Index deletion protection configuration",
+							Computed:            true,
+						},
 						"host": schema.StringAttribute{
 							MarkdownDescription: "The URL address where the index is hosted.",
 							Computed:            true,

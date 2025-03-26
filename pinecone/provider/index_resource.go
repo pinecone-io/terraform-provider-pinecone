@@ -95,6 +95,15 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
+			"deletion_protection": schema.StringAttribute{
+				MarkdownDescription: "Whether deletion protection for the index is enabled. You can use 'enabled', or 'disabled'.",
+				Optional:            true,
+				Computed:            true,
+				Default:             stringdefault.StaticString("disabled"),
+				Validators: []validator.String{
+					stringvalidator.OneOf([]string{"enabled", "disabled"}...),
+				},
+			},
 			"host": schema.StringAttribute{
 				MarkdownDescription: "The URL address where the index is hosted.",
 				Computed:            true,
@@ -237,14 +246,16 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 	// Prepare the payload for the API request
 	if spec.Pod != nil {
 		metric := pinecone.IndexMetric(data.Metric.ValueString())
+		deletionProtection := pinecone.DeletionProtection(data.DeletionProtection.ValueString())
 		podReq := pinecone.CreatePodIndexRequest{
-			Name:        data.Name.ValueString(),
-			Dimension:   data.Dimension.ValueInt32(),
-			Metric:      &metric,
-			Environment: spec.Pod.Environment.ValueString(),
-			PodType:     spec.Pod.PodType.ValueString(),
-			Shards:      int32(spec.Pod.ShardCount.ValueInt64()),
-			Replicas:    int32(spec.Pod.Replicas.ValueInt64()),
+			Name:               data.Name.ValueString(),
+			Dimension:          data.Dimension.ValueInt32(),
+			Metric:             &metric,
+			DeletionProtection: &deletionProtection,
+			Environment:        spec.Pod.Environment.ValueString(),
+			PodType:            spec.Pod.PodType.ValueString(),
+			Shards:             int32(spec.Pod.ShardCount.ValueInt64()),
+			Replicas:           int32(spec.Pod.Replicas.ValueInt64()),
 		}
 
 		if !spec.Pod.SourceCollection.IsUnknown() {
@@ -270,12 +281,14 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 	if spec.Serverless != nil {
 		dimension := data.Dimension.ValueInt32()
 		metric := pinecone.IndexMetric(data.Metric.ValueString())
+		deletionProtection := pinecone.DeletionProtection(data.DeletionProtection.ValueString())
 		serverlessReq := pinecone.CreateServerlessIndexRequest{
-			Name:      data.Name.ValueString(),
-			Dimension: &dimension,
-			Metric:    &metric,
-			Cloud:     pinecone.Cloud(spec.Serverless.Cloud.ValueString()),
-			Region:    spec.Serverless.Region.ValueString(),
+			Name:               data.Name.ValueString(),
+			Dimension:          &dimension,
+			Metric:             &metric,
+			DeletionProtection: &deletionProtection,
+			Cloud:              pinecone.Cloud(spec.Serverless.Cloud.ValueString()),
+			Region:             spec.Serverless.Region.ValueString(),
 		}
 
 		_, err := r.client.CreateServerlessIndex(ctx, &serverlessReq)
