@@ -55,6 +55,15 @@ func (model *IndexModel) Read(ctx context.Context, index *pinecone.Index) diag.D
 		return diags
 	}
 
+	if index.Tags != nil {
+		model.Tags, diags = types.MapValueFrom(ctx, types.StringType, index.Tags)
+		if diags.HasError() {
+			return diags
+		}
+	} else {
+		model.Tags = types.MapNull(types.StringType)
+	}
+
 	return diags
 }
 
