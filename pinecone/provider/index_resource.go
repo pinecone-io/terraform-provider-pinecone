@@ -104,6 +104,12 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 					stringvalidator.OneOf([]string{"enabled", "disabled"}...),
 				},
 			},
+			"tags": schema.MapAttribute{
+				Description: "Custom user tags added to an index. Keys must be 80 characters or less. Values must be 120 characters or less. Keys must be alphanumeric, '', or '-'. Values must be alphanumeric, ';', '@', '', '-', '.', '+', or ' '. To unset a key, set the value to be an empty string.",
+				Optional:    true,
+				Computed:    true,
+				ElementType: types.StringType,
+			},
 			"host": schema.StringAttribute{
 				MarkdownDescription: "The URL address where the index is hosted.",
 				Computed:            true,

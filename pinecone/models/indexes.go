@@ -19,7 +19,7 @@ type IndexModel struct {
 	Dimension          types.Int32  `tfsdk:"dimension"`
 	Metric             types.String `tfsdk:"metric"`
 	DeletionProtection types.String `tfsdk:"deletion_protection"`
-	Tags               types.Object `tfsdk:"tags"`
+	Tags               types.Map    `tfsdk:"tags"`
 	Host               types.String `tfsdk:"host"`
 	Spec               types.Object `tfsdk:"spec"`
 	Status             types.Object `tfsdk:"status"`
@@ -65,7 +65,7 @@ type IndexResourceModel struct {
 	Dimension          types.Int32    `tfsdk:"dimension"`
 	Metric             types.String   `tfsdk:"metric"`
 	DeletionProtection types.String   `tfsdk:"deletion_protection"`
-	Tags               types.Object   `tfsdk:"tags"`
+	Tags               types.Map      `tfsdk:"tags"`
 	Host               types.String   `tfsdk:"host"`
 	Spec               types.Object   `tfsdk:"spec"`
 	Status             types.Object   `tfsdk:"status"`
@@ -113,6 +113,15 @@ func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index
 		model.Status = types.ObjectNull(IndexStatusModel{}.AttrTypes())
 	}
 
+	if index.Tags != nil {
+		model.Tags, diags = types.MapValueFrom(ctx, types.StringType, index.Tags)
+		if diags.HasError() {
+			return diags
+		}
+	} else {
+		model.Tags = types.MapNull(types.StringType)
+	}
+
 	return diags
 }
 
@@ -123,7 +132,7 @@ type IndexDatasourceModel struct {
 	Dimension          types.Int32  `tfsdk:"dimension"`
 	Metric             types.String `tfsdk:"metric"`
 	DeletionProtection types.String `tfsdk:"deletion_protection"`
-	Tags               types.Object `tfsdk:"tags"`
+	Tags               types.Map    `tfsdk:"tags"`
 	Host               types.String `tfsdk:"host"`
 	Spec               types.Object `tfsdk:"spec"`
 	Status             types.Object `tfsdk:"status"`
@@ -168,6 +177,15 @@ func (model *IndexDatasourceModel) Read(ctx context.Context, index *pinecone.Ind
 		}
 	} else {
 		model.Status = types.ObjectNull(IndexStatusModel{}.AttrTypes())
+	}
+
+	if index.Tags != nil {
+		model.Tags, diags = types.MapValueFrom(ctx, types.StringType, index.Tags)
+		if diags.HasError() {
+			return diags
+		}
+	} else {
+		model.Tags = types.MapNull(types.StringType)
 	}
 
 	return diags
