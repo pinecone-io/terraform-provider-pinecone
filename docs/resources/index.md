@@ -46,6 +46,7 @@ resource "pinecone_index" "test" {
 
 ### Optional
 
+- `deletion_protection` (String) Whether deletion protection for the index is enabled. You can use 'enabled', or 'disabled'.
 - `metric` (String) The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 

@@ -57,6 +57,7 @@ Optional:
 
 Read-Only:
 
+- `deletion_protection` (String) Index deletion protection configuration
 - `dimension` (Number) Index dimension
 - `host` (String) The URL address where the index is hosted.
 - `metric` (String) Index metric
