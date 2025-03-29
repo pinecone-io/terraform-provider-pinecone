@@ -104,6 +104,15 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 					stringvalidator.OneOf([]string{"enabled", "disabled"}...),
 				},
 			},
+			"vector_type": schema.StringAttribute{
+				MarkdownDescription: "The index vector type. You can use 'dense' or 'sparse'. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension should not be specified.",
+				Optional:            true,
+				Computed:            true,
+				Default:             stringdefault.StaticString("dense"),
+				Validators: []validator.String{
+					stringvalidator.OneOf([]string{"dense", "sparse"}...),
+				},
+			},
 			"tags": schema.MapAttribute{
 				Description: "Custom user tags added to an index. Keys must be 80 characters or less. Values must be 120 characters or less. Keys must be alphanumeric, '', or '-'. Values must be alphanumeric, ';', '@', '', '-', '.', '+', or ' '. To unset a key, set the value to be an empty string.",
 				Optional:    true,
@@ -288,6 +297,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		dimension := data.Dimension.ValueInt32()
 		metric := pinecone.IndexMetric(data.Metric.ValueString())
 		deletionProtection := pinecone.DeletionProtection(data.DeletionProtection.ValueString())
+
 		serverlessReq := pinecone.CreateServerlessIndexRequest{
 			Name:               data.Name.ValueString(),
 			Dimension:          &dimension,
@@ -295,6 +305,10 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 			DeletionProtection: &deletionProtection,
 			Cloud:              pinecone.Cloud(spec.Serverless.Cloud.ValueString()),
 			Region:             spec.Serverless.Region.ValueString(),
+		}
+
+		if vectorType := data.VectorType.ValueString(); vectorType != "" {
+			serverlessReq.VectorType = &vectorType
 		}
 
 		_, err := r.client.CreateServerlessIndex(ctx, &serverlessReq)

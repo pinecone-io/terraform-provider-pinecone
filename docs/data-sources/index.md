@@ -60,6 +60,7 @@ data "pinecone_index" "test" {
 - `id` (String) Index identifier
 - `metric` (String) Index metric
 - `tags` (Map of String) Custom user tags added to an index. Keys must be 80 characters or less. Values must be 120 characters or less. Keys must be alphanumeric, '', or '-'. Values must be alphanumeric, ';', '@', '', '-', '.', '+', or ' '. To unset a key, set the value to be an empty string.
+- `vector_type` (String) Index vector type
 
 <a id="nestedatt--spec"></a>
 ### Nested Schema for `spec`

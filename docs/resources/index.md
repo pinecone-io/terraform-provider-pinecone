@@ -50,6 +50,7 @@ resource "pinecone_index" "test" {
 - `metric` (String) The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'.
 - `tags` (Map of String) Custom user tags added to an index. Keys must be 80 characters or less. Values must be 120 characters or less. Keys must be alphanumeric, '', or '-'. Values must be alphanumeric, ';', '@', '', '-', '.', '+', or ' '. To unset a key, set the value to be an empty string.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
+- `vector_type` (String) The index vector type. You can use 'dense' or 'sparse'. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension should not be specified.
 
 ### Read-Only
 

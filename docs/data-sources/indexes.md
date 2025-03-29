@@ -63,6 +63,7 @@ Read-Only:
 - `host` (String) The URL address where the index is hosted.
 - `metric` (String) Index metric
 - `name` (String) Index name
+- `vector_type` (String) Index vector type
 
 <a id="nestedatt--indexes--spec"></a>
 ### Nested Schema for `indexes.spec`

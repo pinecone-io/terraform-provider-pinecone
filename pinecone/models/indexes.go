@@ -19,6 +19,7 @@ type IndexModel struct {
 	Dimension          types.Int32  `tfsdk:"dimension"`
 	Metric             types.String `tfsdk:"metric"`
 	DeletionProtection types.String `tfsdk:"deletion_protection"`
+	VectorType         types.String `tfsdk:"vector_type"`
 	Tags               types.Map    `tfsdk:"tags"`
 	Host               types.String `tfsdk:"host"`
 	Spec               types.Object `tfsdk:"spec"`
@@ -29,9 +30,15 @@ func (model *IndexModel) Read(ctx context.Context, index *pinecone.Index) diag.D
 	var diags diag.Diagnostics
 
 	model.Name = types.StringValue(index.Name)
-	model.Dimension = types.Int32PointerValue(index.Dimension)
 	model.Metric = types.StringValue(string(index.Metric))
+	model.VectorType = types.StringValue(string(index.VectorType))
 	model.Host = types.StringValue(index.Host)
+
+	if index.Dimension != nil {
+		model.Dimension = types.Int32Value(*index.Dimension)
+	} else {
+		model.Dimension = types.Int32Null()
+	}
 
 	pod, diags := NewIndexPodSpecModel(ctx, index.Spec.Pod)
 	if diags.HasError() {
@@ -74,6 +81,7 @@ type IndexResourceModel struct {
 	Dimension          types.Int32    `tfsdk:"dimension"`
 	Metric             types.String   `tfsdk:"metric"`
 	DeletionProtection types.String   `tfsdk:"deletion_protection"`
+	VectorType         types.String   `tfsdk:"vector_type"`
 	Tags               types.Map      `tfsdk:"tags"`
 	Host               types.String   `tfsdk:"host"`
 	Spec               types.Object   `tfsdk:"spec"`
@@ -89,6 +97,7 @@ func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index
 	model.Metric = types.StringValue(string(index.Metric))
 	model.Host = types.StringValue(index.Host)
 	model.DeletionProtection = types.StringValue(string(index.DeletionProtection))
+	model.VectorType = types.StringValue(string(index.VectorType))
 
 	if index.Dimension != nil {
 		model.Dimension = types.Int32Value(*index.Dimension)
@@ -141,6 +150,7 @@ type IndexDatasourceModel struct {
 	Dimension          types.Int32  `tfsdk:"dimension"`
 	Metric             types.String `tfsdk:"metric"`
 	DeletionProtection types.String `tfsdk:"deletion_protection"`
+	VectorType         types.String `tfsdk:"vector_type"`
 	Tags               types.Map    `tfsdk:"tags"`
 	Host               types.String `tfsdk:"host"`
 	Spec               types.Object `tfsdk:"spec"`
@@ -155,6 +165,7 @@ func (model *IndexDatasourceModel) Read(ctx context.Context, index *pinecone.Ind
 	model.Metric = types.StringValue(string(index.Metric))
 	model.Host = types.StringValue(index.Host)
 	model.DeletionProtection = types.StringValue(string(index.DeletionProtection))
+	model.VectorType = types.StringValue(string(index.VectorType))
 
 	if index.Dimension != nil {
 		model.Dimension = types.Int32Value(*index.Dimension)

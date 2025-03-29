@@ -64,6 +64,10 @@ func (d *IndexesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 							Computed:    true,
 							ElementType: types.StringType,
 						},
+						"vector_type": schema.StringAttribute{
+							MarkdownDescription: "Index vector type",
+							Computed:            true,
+						},
 						"host": schema.StringAttribute{
 							MarkdownDescription: "The URL address where the index is hosted.",
 							Computed:            true,
