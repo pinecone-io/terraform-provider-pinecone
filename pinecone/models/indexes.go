@@ -31,7 +31,7 @@ func (model *IndexModel) Read(ctx context.Context, index *pinecone.Index) diag.D
 
 	model.Name = types.StringValue(index.Name)
 	model.Metric = types.StringValue(string(index.Metric))
-	model.VectorType = types.StringValue(string(index.VectorType))
+	model.VectorType = types.StringValue(index.VectorType)
 	model.Host = types.StringValue(index.Host)
 
 	if index.Dimension != nil {
@@ -97,7 +97,7 @@ func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index
 	model.Metric = types.StringValue(string(index.Metric))
 	model.Host = types.StringValue(index.Host)
 	model.DeletionProtection = types.StringValue(string(index.DeletionProtection))
-	model.VectorType = types.StringValue(string(index.VectorType))
+	model.VectorType = types.StringValue(index.VectorType)
 
 	if index.Dimension != nil {
 		model.Dimension = types.Int32Value(*index.Dimension)
@@ -165,7 +165,7 @@ func (model *IndexDatasourceModel) Read(ctx context.Context, index *pinecone.Ind
 	model.Metric = types.StringValue(string(index.Metric))
 	model.Host = types.StringValue(index.Host)
 	model.DeletionProtection = types.StringValue(string(index.DeletionProtection))
-	model.VectorType = types.StringValue(string(index.VectorType))
+	model.VectorType = types.StringValue(index.VectorType)
 
 	if index.Dimension != nil {
 		model.Dimension = types.Int32Value(*index.Dimension)
