@@ -359,7 +359,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		if err != nil {
 			return retry.NonRetryableError(err)
 		}
-		if !index.Status.Ready {
+		if !index.Status.Ready && index.Status.State != "Ready" {
 			return retry.RetryableError(fmt.Errorf("index not ready. State: %s", index.Status.State))
 		}
 		return nil
