@@ -14,7 +14,7 @@ import (
 	"github.com/pinecone-io/go-pinecone/v3/pinecone"
 )
 
-func TestAccIndexResource_serverless(t *testing.T) {
+func TestAccIndexResource_serverless_basic(t *testing.T) {
 	rName := acctest.RandomWithPrefix("tftest")
 
 	resource.Test(t, resource.TestCase{
@@ -23,7 +23,19 @@ func TestAccIndexResource_serverless(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create and Read testing
 			{
-				Config: testAccIndexResourceConfig_serverless(rName),
+				Config: testAccIndexResourceConfig_serverless(rName, "enabled", map[string]string{"test": "testval", "remove": "testremove", "update": "testupdate"}),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
+					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
+					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1536"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.cloud", "aws"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.region", "us-west-2"),
+				),
+			},
+			// Disable deletion_protection, update tags
+			{
+				Config: testAccIndexResourceConfig_serverless(rName, "disabled", map[string]string{"test": "testval", "update": "testupdatenew"}),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
 					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
@@ -54,17 +66,42 @@ func TestAccIndexResource_pod_basic(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create and Read testing
 			{
-				Config: testAccIndexResourceConfig_pod_basic(rName, "2"),
+				Config: testAccIndexResourceConfig_pod(rName, "enabled", map[string]string{"test": "testval", "remove": "testremove", "update": "testupdate"}, "2"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
 					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
 					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1536"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "deletion_protection", "enabled"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "spec.pod.pod_type", "s1.x1"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "spec.pod.replicas", "2"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "spec.pod.pods", "2"),
-					// resource.TestCheckNoResourceAttr("pinecone_index.test", "metadata_config"),
-					// resource.TestCheckNoResourceAttr("pinecone_index.test", "source_collection"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "tags.%", "3"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "tags.test", "testval"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "tags.remove", "testremove"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "tags.update", "testupdate"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "tags.test", "testval"),
+					resource.TestCheckNoResourceAttr("pinecone_index.test", "metadata_config"),
+					resource.TestCheckNoResourceAttr("pinecone_index.test", "source_collection"),
+				),
+			},
+			// Disable deletion_protection, update tags
+			{
+				Config: testAccIndexResourceConfig_pod(rName, "disabled", map[string]string{"test": "testval", "update": "testupdatenew"}, "2"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
+					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
+					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1536"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "deletion_protection", "disabled"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.pod.pod_type", "s1.x1"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.pod.replicas", "2"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.pod.pods", "2"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "tags.%", "2"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "tags.test", "testval"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "tags.update", "testupdatenew"),
+					resource.TestCheckNoResourceAttr("pinecone_index.test", "metadata_config"),
+					resource.TestCheckNoResourceAttr("pinecone_index.test", "source_collection"),
 				),
 			},
 			// ImportState testing
@@ -79,22 +116,6 @@ func TestAccIndexResource_pod_basic(t *testing.T) {
 				// the upstream service, this can be removed.
 				// ImportStateVerifyIgnore: []string{"configurable_attribute", "defaulted"},
 			},
-			// Update not supported
-			// {
-			// 	Config: testAccIndexResourceConfig_pod_basic(rName, "2", "2"),
-			// 	Check: resource.ComposeAggregateTestCheckFunc(
-			// 		resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
-			// 		resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
-			// 		resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1536"),
-			// 		resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
-			// 		resource.TestCheckResourceAttr("pinecone_index.test", "spec.pod.pod_type", "s1.x1"),
-			// 		resource.TestCheckResourceAttr("pinecone_index.test", "spec.pod.replicas", "2"),
-			// 		resource.TestCheckResourceAttr("pinecone_index.test", "spec.pod.pods", "2"),
-			// 		// resource.TestCheckNoResourceAttr("pinecone_index.test", "metadata_config"),
-			// 		// resource.TestCheckNoResourceAttr("pinecone_index.test", "source_collection"),
-			// 	),
-			// },
-			// Delete testing automatically occurs in TestCase
 		},
 	})
 }
@@ -108,11 +129,11 @@ func TestAccIndexResource_dimension(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create and Read testing
 			{
-				Config: testAccIndexResourceConfig_dimension(rName, "1"),
+				Config: testAccIndexResourceConfig_serverless(rName, "disabled", nil),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
 					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
-					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1536"),
 				),
 			},
 			// Delete testing automatically occurs in TestCase
@@ -133,7 +154,7 @@ func TestAccIndexResource_disappears(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create and Read testing
 			{
-				Config: testAccIndexResourceConfig_serverless(rName),
+				Config: testAccIndexResourceConfig_serverless(rName, "disabled", nil),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckIndexExists(resourceName, &index),
 				),
@@ -176,7 +197,7 @@ func testAccCheckIndexDestroy(resourceName string) resource.TestCheckFunc {
 	}
 }
 
-func testAccIndexResourceConfig_serverless(name string) string {
+func testAccIndexResourceConfig_serverless(name string, deletionProtection string, tags map[string]string) string {
 	return fmt.Sprintf(`
 provider "pinecone" {
 }
@@ -190,11 +211,13 @@ resource "pinecone_index" "test" {
 		region = "us-west-2"
 	}
   }
+  deletion_protection = %q
+%s
 }
-`, name)
+`, name, deletionProtection, convertMapToString(tags))
 }
 
-func testAccIndexResourceConfig_pod_basic(name string, replicas string) string {
+func testAccIndexResourceConfig_pod(name string, deletionProtection string, tags map[string]string, replicas string) string {
 	return fmt.Sprintf(`
 provider "pinecone" {
 }
@@ -209,24 +232,20 @@ resource "pinecone_index" "test" {
 			replicas = %q
 		}
 	}
+	deletion_protection = %q
+%s
 }
-`, name, replicas)
-}
-
-func testAccIndexResourceConfig_dimension(name string, dimension string) string {
-	return fmt.Sprintf(`
-provider "pinecone" {
+`, name, replicas, deletionProtection, convertMapToString(tags))
 }
 
-resource "pinecone_index" "test" {
-  name = %q
-  dimension = %q
-  spec = {
-	serverless = {
-		cloud = "aws"
-		region = "us-west-2"
+func convertMapToString(in map[string]string) string {
+	var mapStr string
+	if len(in) > 0 {
+		mapStr = "  tags = {\n"
+		for k, v := range in {
+			mapStr += fmt.Sprintf("    %q = %q\n", k, v)
+		}
+		mapStr += "  }\n"
 	}
-  }
-}
-`, name, dimension)
+	return mapStr
 }

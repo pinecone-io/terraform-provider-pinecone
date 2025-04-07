@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int32planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -247,7 +248,6 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	// Read Terraform plan data into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -257,6 +257,19 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	// Extract tags
+	tagsMapValue, diags := data.Tags.ToMapValue(ctx)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
+	tagsMap, diags := toStringMap(ctx, tagsMapValue)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
+	tags := pinecone.IndexTags(tagsMap)
 
 	// Prepare the payload for the API request
 	if spec.Pod != nil {
@@ -271,6 +284,10 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 			PodType:            spec.Pod.PodType.ValueString(),
 			Shards:             int32(spec.Pod.ShardCount.ValueInt64()),
 			Replicas:           int32(spec.Pod.Replicas.ValueInt64()),
+		}
+
+		if tags != nil {
+			podReq.Tags = &tags
 		}
 
 		if !spec.Pod.SourceCollection.IsUnknown() {
@@ -305,6 +322,10 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 			DeletionProtection: &deletionProtection,
 			Cloud:              pinecone.Cloud(spec.Serverless.Cloud.ValueString()),
 			Region:             spec.Serverless.Region.ValueString(),
+		}
+
+		if tags != nil {
+			serverlessReq.Tags = &tags
 		}
 
 		if vectorType := data.VectorType.ValueString(); vectorType != "" {
@@ -379,7 +400,71 @@ func (r *IndexResource) Read(ctx context.Context, req resource.ReadRequest, resp
 }
 
 func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	// Update not supported.
+	var data models.IndexResourceModel
+	var newData models.IndexResourceModel
+
+	// Read Terraform prior state data into the model
+	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Read new data into the model
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &newData)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	var configureRequest pinecone.ConfigureIndexParams
+
+	// Update DeletionProtection if it has changed
+	if data.DeletionProtection != newData.DeletionProtection {
+		configureRequest.DeletionProtection = pinecone.DeletionProtection(newData.DeletionProtection.ValueString())
+	}
+
+	// Update Tags if they have changed
+	newTags, diags := newData.Tags.ToMapValue(ctx)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
+	newTagsMap, diags := toStringMap(ctx, newTags)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
+	if newTagsMap != nil {
+		oldTags, diags := data.Tags.ToMapValue(ctx)
+		resp.Diagnostics.Append(diags...)
+		if diags.HasError() {
+			return
+		}
+		oldTagsMap, diags := toStringMap(ctx, oldTags)
+		resp.Diagnostics.Append(diags...)
+		if diags.HasError() {
+			return
+		}
+
+		configureRequest.Tags = mergeTags(oldTagsMap, newTagsMap)
+	}
+
+	if configureRequest.DeletionProtection != "" || configureRequest.Embed != nil || configureRequest.Tags != nil {
+		_, err := r.client.ConfigureIndex(ctx, data.Name.ValueString(), configureRequest)
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to update index", err.Error())
+			return
+		}
+	}
+
+	index, err := r.client.DescribeIndex(ctx, newData.Name.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to describe index", err.Error())
+		return
+	}
+
+	newData.Read(ctx, index)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &newData)...)
 }
 
 func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -427,4 +512,33 @@ func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 
 func (r *IndexResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+func mergeTags(oldTags, newTags map[string]string) map[string]string {
+	mergedTags := make(map[string]string)
+
+	for k, newVal := range newTags {
+		if oldVal, ok := oldTags[k]; !ok || oldVal != newVal {
+			mergedTags[k] = newVal
+		}
+	}
+
+	for k := range oldTags {
+		if _, ok := newTags[k]; !ok {
+			mergedTags[k] = ""
+		}
+	}
+
+	return mergedTags
+}
+
+func toStringMap(ctx context.Context, value basetypes.MapValue) (map[string]string, diag.Diagnostics) {
+	if value.IsNull() || value.IsUnknown() {
+		return nil, nil
+	}
+
+	var result map[string]string
+	diags := value.ElementsAs(ctx, &result, false)
+
+	return result, diags
 }
