@@ -49,6 +49,9 @@ data "pinecone_index" "test" {
 
 ### Optional
 
+- `embed` (Attributes) Specify the integrated inference embedding configuration for the index. Once set, the model cannot be changed. However, you can later update the embedding configuration—including field map, read parameters, and write parameters.
+
+Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details. (see [below for nested schema](#nestedatt--embed))
 - `spec` (Attributes) Spec (see [below for nested schema](#nestedatt--spec))
 - `status` (Attributes) Configuration for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when metadata_config is present, only specified metadata fields are indexed. To specify metadata fields to index, provide an array of the following form: [example_metadata_field] (see [below for nested schema](#nestedatt--status))
 
@@ -61,6 +64,23 @@ data "pinecone_index" "test" {
 - `metric` (String) Index metric
 - `tags` (Map of String) Custom user tags added to an index. Keys must be 80 characters or less. Values must be 120 characters or less. Keys must be alphanumeric, '', or '-'. Values must be alphanumeric, ';', '@', '', '-', '.', '+', or ' '. To unset a key, set the value to be an empty string.
 - `vector_type` (String) Index vector type
+
+<a id="nestedatt--embed"></a>
+### Nested Schema for `embed`
+
+Optional:
+
+- `dimension` (Number) The dimension of the embedding model, specifying the size of the output vector.
+- `metric` (String) The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'.
+- `read_parameters` (Map of String) The read parameters for the embedding model.
+- `write_parameters` (Map of String) The write parameters for the embedding model.
+
+Read-Only:
+
+- `field_map` (Map of String) Identifies the name of the text field from your document model that will be embedded.
+- `model` (String) the name of the embedding model to use for the index.
+- `vector_type` (String) The index vector type associated with the model. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension will be nil.
+
 
 <a id="nestedatt--spec"></a>
 ### Nested Schema for `spec`

@@ -85,7 +85,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				},
 			},
 			"metric": schema.StringAttribute{
-				MarkdownDescription: "The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'.",
+				MarkdownDescription: "The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'.",
 				Optional:            true,
 				Computed:            true,
 				Default:             stringdefault.StaticString("cosine"),
@@ -126,7 +126,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 			},
 			"spec": schema.SingleNestedAttribute{
 				Description: "Spec",
-				Required:    true,
+				Optional:    true,
 				Attributes: map[string]schema.Attribute{
 					"pod": schema.SingleNestedAttribute{
 						Description: "Configuration needed to deploy a pod-based index.",
@@ -211,6 +211,54 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 					},
 				},
 			},
+			"embed": schema.SingleNestedAttribute{
+				Description: `Specify the integrated inference embedding configuration for the index. Once set, the model cannot be changed. However, you can later update the embedding configuration—including field map, read parameters, and write parameters.
+
+Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details.`,
+				Optional: true,
+				Attributes: map[string]schema.Attribute{
+					"model": schema.StringAttribute{
+						Required:    true,
+						Description: "the name of the embedding model to use for the index.",
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.RequiresReplace(),
+						},
+					},
+					"field_map": schema.MapAttribute{
+						Required:    true,
+						Description: "Identifies the name of the text field from your document model that will be embedded.",
+						ElementType: types.StringType,
+					},
+					"metric": schema.StringAttribute{
+						Optional:    true,
+						Description: "The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'.",
+						Validators: []validator.String{
+							stringvalidator.OneOf([]string{"euclidean", "cosine", "dotproduct"}...),
+						},
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.RequiresReplace(),
+						},
+					},
+					"dimension": schema.Int64Attribute{
+						Computed:    true,
+						Description: "The dimension of the embedding model, specifying the size of the output vector.",
+					},
+					"vector_type": schema.StringAttribute{
+						Computed:    true,
+						Description: "The index vector type associated with the model. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension will be nil.",
+					},
+					"read_parameters": schema.MapAttribute{
+						Optional:    true,
+						Description: "The read parameters for the embedding model.",
+						ElementType: types.StringType,
+					},
+					"write_parameters": schema.MapAttribute{
+						Optional:    true,
+						Description: "The write parameters for the embedding model.",
+						ElementType: types.StringType,
+					},
+				},
+			},
 			"status": schema.SingleNestedAttribute{
 				Description: "Status",
 				Computed:    true,
@@ -256,6 +304,14 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 	resp.Diagnostics.Append(data.Spec.As(ctx, &spec, basetypes.ObjectAsOptions{})...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	var embed *models.IndexEmbedModel
+	if !data.Embed.IsUnknown() && !data.Embed.IsNull() {
+		resp.Diagnostics.Append(data.Embed.As(ctx, &embed, basetypes.ObjectAsOptions{})...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
 	}
 
 	// Extract tags
@@ -311,13 +367,49 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 
 	if spec.Serverless != nil {
-		dimension := data.Dimension.ValueInt32()
-		metric := pinecone.IndexMetric(data.Metric.ValueString())
+		metric := pinecone.IndexMetric(*data.Metric.ValueStringPointer())
 		deletionProtection := pinecone.DeletionProtection(data.DeletionProtection.ValueString())
+
+		if embed != nil {
+			if spec.Pod != nil || spec.Serverless == nil {
+				resp.Diagnostics.AddError("Invalid configuration", "Integrated indexes must have a serverless spec.")
+				return
+			}
+
+			fieldMap := mapAttrToInterfacePtr(embed.FieldMap)
+			if fieldMap == nil {
+				resp.Diagnostics.AddError("Invalid configuration", "Integrated indexes must have a field_map")
+				return
+			}
+
+			indexForModelReq := pinecone.CreateIndexForModelRequest{
+				Name:   data.Name.ValueString(),
+				Cloud:  pinecone.Cloud(spec.Serverless.Cloud.ValueString()),
+				Region: spec.Serverless.Region.ValueString(),
+				Embed: pinecone.CreateIndexForModelEmbed{
+					Model:           embed.Model.ValueString(),
+					FieldMap:        *fieldMap,
+					Metric:          &metric,
+					ReadParameters:  mapAttrToInterfacePtr(embed.ReadParameters),
+					WriteParameters: mapAttrToInterfacePtr(embed.WriteParameters),
+				},
+				DeletionProtection: &deletionProtection,
+			}
+
+			if tags != nil {
+				indexForModelReq.Tags = &tags
+			}
+
+			_, err := r.client.CreateIndexForModel(ctx, &indexForModelReq)
+			if err != nil {
+				resp.Diagnostics.AddError("Failed to create integrated serverless index", err.Error())
+				return
+			}
+		}
 
 		serverlessReq := pinecone.CreateServerlessIndexRequest{
 			Name:               data.Name.ValueString(),
-			Dimension:          &dimension,
+			Dimension:          data.Dimension.ValueInt32Pointer(),
 			Metric:             &metric,
 			DeletionProtection: &deletionProtection,
 			Cloud:              pinecone.Cloud(spec.Serverless.Cloud.ValueString()),
@@ -541,4 +633,20 @@ func toStringMap(ctx context.Context, value basetypes.MapValue) (map[string]stri
 	diags := value.ElementsAs(ctx, &result, false)
 
 	return result, diags
+}
+
+func mapAttrToInterfacePtr(attr types.Map) *map[string]interface{} {
+	if attr.IsUnknown() || attr.IsNull() {
+		return nil
+	}
+
+	raw := make(map[string]interface{}, len(attr.Elements()))
+	for k, v := range attr.Elements() {
+		if sv, ok := v.(basetypes.StringValue); ok {
+			raw[k] = sv.ValueString()
+		} else {
+			raw[k] = v.String()
+		}
+	}
+	return &raw
 }

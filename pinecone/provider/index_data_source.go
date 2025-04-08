@@ -132,6 +132,50 @@ func (d *IndexDataSource) Schema(ctx context.Context, req datasource.SchemaReque
 					},
 				},
 			},
+			"embed": schema.SingleNestedAttribute{
+				Description: `Specify the integrated inference embedding configuration for the index. Once set, the model cannot be changed. However, you can later update the embedding configuration—including field map, read parameters, and write parameters.
+
+Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details.`,
+				Optional: true,
+				Computed: true,
+				Attributes: map[string]schema.Attribute{
+					"model": schema.StringAttribute{
+						Computed:    true,
+						Description: "the name of the embedding model to use for the index.",
+					},
+					"field_map": schema.MapAttribute{
+						Computed:    true,
+						Description: "Identifies the name of the text field from your document model that will be embedded.",
+						ElementType: types.StringType,
+					},
+					"metric": schema.StringAttribute{
+						Optional:    true,
+						Computed:    true,
+						Description: "The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'.",
+					},
+					"dimension": schema.Int64Attribute{
+						Optional:    true,
+						Computed:    true,
+						Description: "The dimension of the embedding model, specifying the size of the output vector.",
+					},
+					"vector_type": schema.StringAttribute{
+						Computed:    true,
+						Description: "The index vector type associated with the model. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension will be nil.",
+					},
+					"read_parameters": schema.MapAttribute{
+						Optional:    true,
+						Computed:    true,
+						Description: "The read parameters for the embedding model.",
+						ElementType: types.StringType,
+					},
+					"write_parameters": schema.MapAttribute{
+						Optional:    true,
+						Computed:    true,
+						Description: "The write parameters for the embedding model.",
+						ElementType: types.StringType,
+					},
+				},
+			},
 			"status": schema.SingleNestedAttribute{
 				Description: "Configuration for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when metadata_config is present, only specified metadata fields are indexed. To specify metadata fields to index, provide an array of the following form: [example_metadata_field]",
 				Optional:    true,
