@@ -218,26 +218,22 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 				Optional: true,
 				Attributes: map[string]schema.Attribute{
 					"model": schema.StringAttribute{
-						Required:    true,
+						Optional:    true,
+						Computed:    true,
 						Description: "the name of the embedding model to use for the index.",
 						PlanModifiers: []planmodifier.String{
 							stringplanmodifier.RequiresReplace(),
 						},
 					},
 					"field_map": schema.MapAttribute{
-						Required:    true,
+						Optional:    true,
+						Computed:    true,
 						Description: "Identifies the name of the text field from your document model that will be embedded.",
 						ElementType: types.StringType,
 					},
 					"metric": schema.StringAttribute{
-						Optional:    true,
+						Computed:    true,
 						Description: "The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'.",
-						Validators: []validator.String{
-							stringvalidator.OneOf([]string{"euclidean", "cosine", "dotproduct"}...),
-						},
-						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.RequiresReplace(),
-						},
 					},
 					"dimension": schema.Int64Attribute{
 						Computed:    true,
@@ -249,6 +245,7 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 					},
 					"read_parameters": schema.MapAttribute{
 						Optional:    true,
+						Computed:    true,
 						Description: "The read parameters for the embedding model.",
 						ElementType: types.StringType,
 					},
@@ -540,6 +537,8 @@ func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 
 		configureRequest.Tags = mergeTags(oldTagsMap, newTagsMap)
 	}
+
+	// Update Embed fields if they have changed
 
 	if configureRequest.DeletionProtection != "" || configureRequest.Embed != nil || configureRequest.Tags != nil {
 		_, err := r.client.ConfigureIndex(ctx, data.Name.ValueString(), configureRequest)

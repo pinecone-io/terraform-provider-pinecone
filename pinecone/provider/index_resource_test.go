@@ -11,8 +11,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
-	"github.com/pinecone-io/go-pinecone/v3/pinecone"
 )
+
+const providerName = "pinecone_index"
+const resourceName = "test"
+const resourceAddress = providerName + "." + resourceName
 
 func TestAccIndexResource_serverless_basic(t *testing.T) {
 	rName := acctest.RandomWithPrefix("tftest")
@@ -20,11 +23,13 @@ func TestAccIndexResource_serverless_basic(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckIndexDestroy(),
 		Steps: []resource.TestStep{
 			// Create and Read testing
 			{
 				Config: testAccIndexResourceConfig_serverless(rName, "enabled", map[string]string{"test": "testval", "remove": "testremove", "update": "testupdate"}),
 				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckIndexExists(),
 					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
 					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
 					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1536"),
@@ -37,6 +42,7 @@ func TestAccIndexResource_serverless_basic(t *testing.T) {
 			{
 				Config: testAccIndexResourceConfig_serverless(rName, "disabled", map[string]string{"test": "testval", "update": "testupdatenew"}),
 				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckIndexExists(),
 					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
 					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
 					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1536"),
@@ -63,11 +69,13 @@ func TestAccIndexResource_pod_basic(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckIndexDestroy(),
 		Steps: []resource.TestStep{
 			// Create and Read testing
 			{
 				Config: testAccIndexResourceConfig_pod(rName, "enabled", map[string]string{"test": "testval", "remove": "testremove", "update": "testupdate"}, "2"),
 				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckIndexExists(),
 					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
 					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
 					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1536"),
@@ -89,6 +97,7 @@ func TestAccIndexResource_pod_basic(t *testing.T) {
 			{
 				Config: testAccIndexResourceConfig_pod(rName, "disabled", map[string]string{"test": "testval", "update": "testupdatenew"}, "2"),
 				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckIndexExists(),
 					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
 					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
 					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1536"),
@@ -120,59 +129,15 @@ func TestAccIndexResource_pod_basic(t *testing.T) {
 	})
 }
 
-func TestAccIndexResource_dimension(t *testing.T) {
-	rName := acctest.RandomWithPrefix("tftest")
-
-	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		Steps: []resource.TestStep{
-			// Create and Read testing
-			{
-				Config: testAccIndexResourceConfig_serverless(rName, "disabled", nil),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
-					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
-					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1536"),
-				),
-			},
-			// Delete testing automatically occurs in TestCase
-		},
-	})
-}
-
-func TestAccIndexResource_disappears(t *testing.T) {
-	rName := acctest.RandomWithPrefix("tftest")
-	resourceName := "pinecone_index.test"
-
-	var index pinecone.Index
-
-	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckIndexDestroy(rName),
-		Steps: []resource.TestStep{
-			// Create and Read testing
-			{
-				Config: testAccIndexResourceConfig_serverless(rName, "disabled", nil),
-				Check: resource.ComposeTestCheckFunc(
-					testAccCheckIndexExists(resourceName, &index),
-				),
-			},
-		},
-	})
-}
-
-func testAccCheckIndexExists(resourceName string, index *pinecone.Index) resource.TestCheckFunc {
+func testAccCheckIndexExists() resource.TestCheckFunc {
 	return func(state *terraform.State) error {
-		indexResource, found := state.RootModule().Resources[resourceName]
+		indexResource, found := state.RootModule().Resources[resourceAddress]
+		fmt.Printf("testAccCheckIndexExists state: %+v\n", state.RootModule().Resources)
 		if !found {
 			return fmt.Errorf("Resource not found in state: %s", resourceName)
 		}
 
-		// Create a new client, and use the default configurations from the environment
 		c, _ := NewTestClient()
-
 		fetchedIndex, err := c.DescribeIndex(context.Background(), indexResource.Primary.ID)
 		if err != nil {
 			return fmt.Errorf("Error describing index: %w", err)
@@ -181,18 +146,25 @@ func testAccCheckIndexExists(resourceName string, index *pinecone.Index) resourc
 			return fmt.Errorf("Index not found for ID: %s", indexResource.Primary.ID)
 		}
 
-		*index = *fetchedIndex
-
 		return nil
 	}
 }
 
-func testAccCheckIndexDestroy(resourceName string) resource.TestCheckFunc {
+func testAccCheckIndexDestroy() resource.TestCheckFunc {
 	return func(state *terraform.State) error {
-		_, found := state.RootModule().Resources[resourceName]
-		if found {
-			return fmt.Errorf("Resource still found in state: %s", resourceName)
+		fmt.Printf("testAccCheckIndexDestroy state: %+v\n", state.RootModule().Resources)
+		rs, found := state.RootModule().Resources[resourceAddress]
+		if !found {
+			// If the terraform resource is not found we can assume it's destroyed
+			return nil
 		}
+
+		c, _ := NewTestClient()
+		_, err := c.DescribeIndex(context.Background(), rs.Primary.ID)
+		if err == nil {
+			return fmt.Errorf("Index still exists in backend: %s", rs.Primary.ID)
+		}
+
 		return nil
 	}
 }
@@ -202,7 +174,7 @@ func testAccIndexResourceConfig_serverless(name string, deletionProtection strin
 provider "pinecone" {
 }
 
-resource "pinecone_index" "test" {
+resource "pinecone_index" "%s" {
   name = %q
   dimension = 1536
   spec = {
@@ -214,7 +186,7 @@ resource "pinecone_index" "test" {
   deletion_protection = %q
 %s
 }
-`, name, deletionProtection, convertMapToString(tags))
+`, resourceName, name, deletionProtection, convertMapToString(tags))
 }
 
 func testAccIndexResourceConfig_pod(name string, deletionProtection string, tags map[string]string, replicas string) string {
@@ -222,7 +194,7 @@ func testAccIndexResourceConfig_pod(name string, deletionProtection string, tags
 provider "pinecone" {
 }
 
-resource "pinecone_index" "test" {
+resource "pinecone_index" "%s" {
 	name = %q
 	dimension = 1536
 	spec = {
@@ -235,7 +207,7 @@ resource "pinecone_index" "test" {
 	deletion_protection = %q
 %s
 }
-`, name, replicas, deletionProtection, convertMapToString(tags))
+`, resourceName, name, replicas, deletionProtection, convertMapToString(tags))
 }
 
 func convertMapToString(in map[string]string) string {
