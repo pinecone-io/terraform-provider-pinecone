@@ -132,7 +132,6 @@ func TestAccIndexResource_pod_basic(t *testing.T) {
 func testAccCheckIndexExists() resource.TestCheckFunc {
 	return func(state *terraform.State) error {
 		indexResource, found := state.RootModule().Resources[resourceAddress]
-		fmt.Printf("testAccCheckIndexExists state: %+v\n", state.RootModule().Resources)
 		if !found {
 			return fmt.Errorf("Resource not found in state: %s", resourceName)
 		}
@@ -152,7 +151,6 @@ func testAccCheckIndexExists() resource.TestCheckFunc {
 
 func testAccCheckIndexDestroy() resource.TestCheckFunc {
 	return func(state *terraform.State) error {
-		fmt.Printf("testAccCheckIndexDestroy state: %+v\n", state.RootModule().Resources)
 		rs, found := state.RootModule().Resources[resourceAddress]
 		if !found {
 			// If the terraform resource is not found we can assume it's destroyed
