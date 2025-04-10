@@ -135,6 +135,7 @@ func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index
 	}
 	if embed != nil {
 		model.Embed, diags = types.ObjectValueFrom(ctx, IndexEmbedModel{}.AttrTypes(), embed)
+		// fmt.Printf("embed object during IndexResource Read(): %+v\n", model.Embed)
 		if diags.HasError() {
 			return diags
 		}
@@ -217,6 +218,7 @@ func (model *IndexDatasourceModel) Read(ctx context.Context, index *pinecone.Ind
 	}
 	if embed != nil {
 		model.Embed, diags = types.ObjectValueFrom(ctx, IndexEmbedModel{}.AttrTypes(), embed)
+		// fmt.Printf("embed object during IndexDatasourceModel Read(): %+v\n", model.Embed)
 		if diags.HasError() {
 			return diags
 		}
@@ -387,6 +389,8 @@ func NewIndexEmbedModel(ctx context.Context, model *pinecone.IndexEmbed) (*Index
 				return nil, diags
 			}
 			newModel.ReadParameters = readParameters
+		} else {
+			newModel.ReadParameters = types.MapNull(types.StringType)
 		}
 
 		if model.WriteParameters != nil {
@@ -395,6 +399,8 @@ func NewIndexEmbedModel(ctx context.Context, model *pinecone.IndexEmbed) (*Index
 				return nil, diags
 			}
 			newModel.WriteParameters = writeParameters
+		} else {
+			newModel.WriteParameters = types.MapNull(types.StringType)
 		}
 
 		return newModel, nil

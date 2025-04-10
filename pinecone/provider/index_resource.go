@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int32planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 
@@ -216,6 +217,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 
 Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details.`,
 				Optional: true,
+				Computed: true,
 				Attributes: map[string]schema.Attribute{
 					"model": schema.StringAttribute{
 						Optional:    true,
@@ -230,12 +232,15 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 						Computed:    true,
 						Description: "Identifies the name of the text field from your document model that will be embedded.",
 						ElementType: types.StringType,
+						PlanModifiers: []planmodifier.Map{
+							mapplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"metric": schema.StringAttribute{
 						Computed:    true,
 						Description: "The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'.",
 					},
-					"dimension": schema.Int64Attribute{
+					"dimension": schema.Int32Attribute{
 						Computed:    true,
 						Description: "The dimension of the embedding model, specifying the size of the output vector.",
 					},
@@ -248,11 +253,18 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 						Computed:    true,
 						Description: "The read parameters for the embedding model.",
 						ElementType: types.StringType,
+						PlanModifiers: []planmodifier.Map{
+							mapplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"write_parameters": schema.MapAttribute{
 						Optional:    true,
+						Computed:    true,
 						Description: "The write parameters for the embedding model.",
 						ElementType: types.StringType,
+						PlanModifiers: []planmodifier.Map{
+							mapplanmodifier.UseStateForUnknown(),
+						},
 					},
 				},
 			},
@@ -326,6 +338,13 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	// Prepare the payload for the API request
 	if spec.Pod != nil {
+
+		// If trying to create a pod index with an embed configuration, reject
+		if embed != nil {
+			resp.Diagnostics.AddError("Invalid configuration", "Pod-based indexes cannot have an embed configuration.")
+			return
+		}
+
 		metric := pinecone.IndexMetric(data.Metric.ValueString())
 		deletionProtection := pinecone.DeletionProtection(data.DeletionProtection.ValueString())
 		podReq := pinecone.CreatePodIndexRequest{
@@ -402,29 +421,29 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 				resp.Diagnostics.AddError("Failed to create integrated serverless index", err.Error())
 				return
 			}
-		}
+		} else {
+			serverlessReq := pinecone.CreateServerlessIndexRequest{
+				Name:               data.Name.ValueString(),
+				Dimension:          data.Dimension.ValueInt32Pointer(),
+				Metric:             &metric,
+				DeletionProtection: &deletionProtection,
+				Cloud:              pinecone.Cloud(spec.Serverless.Cloud.ValueString()),
+				Region:             spec.Serverless.Region.ValueString(),
+			}
 
-		serverlessReq := pinecone.CreateServerlessIndexRequest{
-			Name:               data.Name.ValueString(),
-			Dimension:          data.Dimension.ValueInt32Pointer(),
-			Metric:             &metric,
-			DeletionProtection: &deletionProtection,
-			Cloud:              pinecone.Cloud(spec.Serverless.Cloud.ValueString()),
-			Region:             spec.Serverless.Region.ValueString(),
-		}
+			if tags != nil {
+				serverlessReq.Tags = &tags
+			}
 
-		if tags != nil {
-			serverlessReq.Tags = &tags
-		}
+			if vectorType := data.VectorType.ValueString(); vectorType != "" {
+				serverlessReq.VectorType = &vectorType
+			}
 
-		if vectorType := data.VectorType.ValueString(); vectorType != "" {
-			serverlessReq.VectorType = &vectorType
-		}
-
-		_, err := r.client.CreateServerlessIndex(ctx, &serverlessReq)
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to create serverless index", err.Error())
-			return
+			_, err := r.client.CreateServerlessIndex(ctx, &serverlessReq)
+			if err != nil {
+				resp.Diagnostics.AddError("Failed to create serverless index", err.Error())
+				return
+			}
 		}
 	}
 
