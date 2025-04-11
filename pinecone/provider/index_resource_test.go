@@ -6,6 +6,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -129,6 +130,78 @@ func TestAccIndexResource_pod_basic(t *testing.T) {
 	})
 }
 
+func TestAccIndexResource_pod_invalidEmbedConfig(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{{
+			Config: `
+resource "pinecone_index" "test" {
+  name = "test"
+  dimension = 1024
+  metric = "cosine"
+  spec = {
+	pod = {
+		environment = "us-west4-gcp"
+		pod_type = "s1.x1"
+	}
+  }
+  embed = {
+    model = "multilingual-e5-large"
+	field_map = {
+		text = "chunk_text"
+	}
+  }
+}`,
+			ExpectError: regexp.MustCompile("Pod-based indexes cannot have an embed configuration."),
+		}},
+	})
+}
+
+func TestAccIndexResource_pod_invalidDimension(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{{
+			Config: `
+resource "pinecone_index" "test" {
+  name = "test"
+  metric = "cosine"
+  spec = {
+	pod = {
+		environment = "us-west4-gcp"
+		pod_type = "s1.x1"
+	}
+  }
+}`,
+			ExpectError: regexp.MustCompile("Pod-based indexes must have a dimension."),
+		}},
+	})
+}
+
+func TestAccIndexResource_pod_invalidVectorType(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{{
+			Config: `
+resource "pinecone_index" "test" {
+  name = "test"
+  dimension = 1024
+  metric = "cosine"
+  spec = {
+	pod = {
+		environment = "us-west4-gcp"
+		pod_type = "s1.x1"
+	}
+  }
+  vector_type = "sparse"
+}`,
+			ExpectError: regexp.MustCompile("Pod-based indexes cannot have a sparse vector_type."),
+		}},
+	})
+}
+
 func testAccCheckIndexExists() resource.TestCheckFunc {
 	return func(state *terraform.State) error {
 		indexResource, found := state.RootModule().Resources[resourceAddress]
@@ -206,6 +279,27 @@ resource "pinecone_index" "%s" {
 %s
 }
 `, resourceName, name, replicas, deletionProtection, convertMapToString(tags))
+}
+
+func testAccIndexResourceConfig_pod_invalidEmbed() string {
+	return fmt.Sprintf(`
+resource "pinecone_index" "test" {
+  name = "test"
+  dimension = 1024
+  metric = "cosine"
+  spec = {
+	pod = {
+		environment = "us-west4-gcp"
+		pod_type = "s1.x1"
+	}
+  }
+  embed = {
+    model = "multilingual-e5-large"
+	field_map = {
+		text = "chunk_text"
+	}
+  }
+}`)
 }
 
 func convertMapToString(in map[string]string) string {

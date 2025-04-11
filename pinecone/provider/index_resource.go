@@ -350,8 +350,12 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 			return
 		}
 
-		if !data.VectorType.IsUnknown() && !data.VectorType.IsNull() {
-			resp.Diagnostics.AddError("Invalid configuration", "Pod-based indexes cannot have a vector_type.")
+		if data.VectorType.ValueString() == "sparse" {
+			resp.Diagnostics.AddError("Invalid configuration", "Pod-based indexes cannot have a sparse vector_type.")
+		}
+
+		if data.Dimension.IsUnknown() || data.Dimension.IsNull() {
+			resp.Diagnostics.AddError("Invalid configuration", "Pod-based indexes must have a dimension.")
 		}
 
 		metric := pinecone.IndexMetric(data.Metric.ValueString())
