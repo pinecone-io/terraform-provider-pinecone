@@ -281,27 +281,6 @@ resource "pinecone_index" "%s" {
 `, resourceName, name, replicas, deletionProtection, convertMapToString(tags))
 }
 
-func testAccIndexResourceConfig_pod_invalidEmbed() string {
-	return fmt.Sprintf(`
-resource "pinecone_index" "test" {
-  name = "test"
-  dimension = 1024
-  metric = "cosine"
-  spec = {
-	pod = {
-		environment = "us-west4-gcp"
-		pod_type = "s1.x1"
-	}
-  }
-  embed = {
-    model = "multilingual-e5-large"
-	field_map = {
-		text = "chunk_text"
-	}
-  }
-}`)
-}
-
 func convertMapToString(in map[string]string) string {
 	var mapStr string
 	if len(in) > 0 {
