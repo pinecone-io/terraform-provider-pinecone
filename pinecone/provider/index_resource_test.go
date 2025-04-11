@@ -51,13 +51,13 @@ func TestAccIndexResource_serverless_basic(t *testing.T) {
 					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.region", "us-west-2"),
 				),
 			},
+			// Convert to integrated inference
 			// ImportState testing
 			{
 				ResourceName:      "pinecone_index.test",
 				ImportState:       true,
 				ImportStateVerify: true,
 			},
-			// Update not supported for serverless specs
 			// Delete testing automatically occurs in TestCase
 		},
 	})

@@ -77,11 +77,13 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 			},
 			"dimension": schema.Int32Attribute{
 				MarkdownDescription: "The dimensions of the vectors to be inserted in the index",
-				Required:            true,
+				Optional:            true,
+				Computed:            true,
 				Validators: []validator.Int32{
 					int32validator.AtLeast(1),
 				},
 				PlanModifiers: []planmodifier.Int32{
+					int32planmodifier.UseStateForUnknown(),
 					int32planmodifier.RequiresReplace(),
 				},
 			},
@@ -94,6 +96,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 					stringvalidator.OneOf([]string{"euclidean", "cosine", "dotproduct"}...),
 				},
 				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
@@ -110,9 +113,11 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				MarkdownDescription: "The index vector type. You can use 'dense' or 'sparse'. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension should not be specified.",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString("dense"),
 				Validators: []validator.String{
 					stringvalidator.OneOf([]string{"dense", "sparse"}...),
+				},
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"tags": schema.MapAttribute{
@@ -345,6 +350,10 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 			return
 		}
 
+		if !data.VectorType.IsUnknown() && !data.VectorType.IsNull() {
+			resp.Diagnostics.AddError("Invalid configuration", "Pod-based indexes cannot have a vector_type.")
+		}
+
 		metric := pinecone.IndexMetric(data.Metric.ValueString())
 		deletionProtection := pinecone.DeletionProtection(data.DeletionProtection.ValueString())
 		podReq := pinecone.CreatePodIndexRequest{
@@ -396,6 +405,10 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 			if fieldMap == nil {
 				resp.Diagnostics.AddError("Invalid configuration", "Integrated indexes must have a field_map")
 				return
+			}
+
+			if !data.VectorType.IsUnknown() && !data.VectorType.IsNull() {
+				resp.Diagnostics.AddError("Invalid configuration", "Integrated indexes have an implicit vector_type")
 			}
 
 			indexForModelReq := pinecone.CreateIndexForModelRequest{
