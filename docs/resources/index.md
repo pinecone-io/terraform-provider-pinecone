@@ -40,12 +40,12 @@ resource "pinecone_index" "test" {
 
 ### Required
 
-- `dimension` (Number) The dimensions of the vectors to be inserted in the index
 - `name` (String) The name of the index to be created. The maximum length is 45 characters.
 
 ### Optional
 
 - `deletion_protection` (String) Whether deletion protection for the index is enabled. You can use 'enabled', or 'disabled'.
+- `dimension` (Number) The dimensions of the vectors to be inserted in the index
 - `embed` (Attributes) Specify the integrated inference embedding configuration for the index. Once set, the model cannot be changed. However, you can later update the embedding configuration—including field map, read parameters, and write parameters.
 
 Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details. (see [below for nested schema](#nestedatt--embed))
