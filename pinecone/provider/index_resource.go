@@ -343,7 +343,6 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	// Prepare the payload for the API request
 	if spec.Pod != nil {
-
 		// If trying to create a pod index with an embed configuration, reject
 		if embed != nil {
 			resp.Diagnostics.AddError("Invalid configuration", "Pod-based indexes cannot have an embed configuration.")

@@ -149,12 +149,10 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 						ElementType: types.StringType,
 					},
 					"metric": schema.StringAttribute{
-						Optional:    true,
 						Computed:    true,
 						Description: "The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'.",
 					},
 					"dimension": schema.Int64Attribute{
-						Optional:    true,
 						Computed:    true,
 						Description: "The dimension of the embedding model, specifying the size of the output vector.",
 					},
@@ -163,13 +161,11 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 						Description: "The index vector type associated with the model. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension will be nil.",
 					},
 					"read_parameters": schema.MapAttribute{
-						Optional:    true,
 						Computed:    true,
 						Description: "The read parameters for the embedding model.",
 						ElementType: types.StringType,
 					},
 					"write_parameters": schema.MapAttribute{
-						Optional:    true,
 						Computed:    true,
 						Description: "The write parameters for the embedding model.",
 						ElementType: types.StringType,
