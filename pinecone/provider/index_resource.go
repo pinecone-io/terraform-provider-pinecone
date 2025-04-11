@@ -352,10 +352,12 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 		if data.VectorType.ValueString() == "sparse" {
 			resp.Diagnostics.AddError("Invalid configuration", "Pod-based indexes cannot have a sparse vector_type.")
+			return
 		}
 
 		if data.Dimension.IsUnknown() || data.Dimension.IsNull() {
 			resp.Diagnostics.AddError("Invalid configuration", "Pod-based indexes must have a dimension.")
+			return
 		}
 
 		metric := pinecone.IndexMetric(data.Metric.ValueString())
@@ -400,7 +402,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		deletionProtection := pinecone.DeletionProtection(data.DeletionProtection.ValueString())
 
 		if embed != nil {
-			if spec.Pod != nil || spec.Serverless == nil {
+			if spec.Pod != nil {
 				resp.Diagnostics.AddError("Invalid configuration", "Integrated indexes must have a serverless spec.")
 				return
 			}
@@ -413,6 +415,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 			if !data.VectorType.IsUnknown() && !data.VectorType.IsNull() {
 				resp.Diagnostics.AddError("Invalid configuration", "Integrated indexes have an implicit vector_type")
+				return
 			}
 
 			indexForModelReq := pinecone.CreateIndexForModelRequest{
