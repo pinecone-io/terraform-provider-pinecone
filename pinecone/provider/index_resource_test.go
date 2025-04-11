@@ -134,6 +134,7 @@ func TestAccIndexResource_pod_invalidEmbedConfig(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckIndexDestroy(),
 		Steps: []resource.TestStep{{
 			Config: `
 resource "pinecone_index" "test" {
@@ -162,6 +163,7 @@ func TestAccIndexResource_pod_invalidDimension(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckIndexDestroy(),
 		Steps: []resource.TestStep{{
 			Config: `
 resource "pinecone_index" "test" {
@@ -183,6 +185,7 @@ func TestAccIndexResource_pod_invalidVectorType(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckIndexDestroy(),
 		Steps: []resource.TestStep{{
 			Config: `
 resource "pinecone_index" "test" {
