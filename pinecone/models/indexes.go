@@ -403,7 +403,15 @@ func NewIndexEmbedModel(ctx context.Context, model *pinecone.IndexEmbed) (*Index
 
 		return newModel, nil
 	}
-	return nil, nil
+	return &IndexEmbedModel{
+		Model:           types.StringNull(),
+		Dimension:       types.Int32Null(),
+		Metric:          types.StringNull(),
+		VectorType:      types.StringNull(),
+		FieldMap:        types.MapNull(types.StringType),
+		ReadParameters:  types.MapNull(types.StringType),
+		WriteParameters: types.MapNull(types.StringType),
+	}, nil
 }
 
 func NewIndexEmbed(ctx context.Context, model *IndexEmbedModel) (*pinecone.IndexEmbed, diag.Diagnostics) {
