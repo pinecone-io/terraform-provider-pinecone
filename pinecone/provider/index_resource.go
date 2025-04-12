@@ -234,6 +234,7 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 						Description: "the name of the embedding model to use for the index.",
 						PlanModifiers: []planmodifier.String{
 							stringplanmodifier.RequiresReplace(),
+							stringplanmodifier.UseStateForUnknown(),
 						},
 					},
 					"field_map": schema.MapAttribute{
@@ -248,14 +249,23 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 					"metric": schema.StringAttribute{
 						Computed:    true,
 						Description: "The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'.",
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"dimension": schema.Int32Attribute{
 						Computed:    true,
 						Description: "The dimension of the embedding model, specifying the size of the output vector.",
+						PlanModifiers: []planmodifier.Int32{
+							int32planmodifier.UseStateForUnknown(),
+						},
 					},
 					"vector_type": schema.StringAttribute{
 						Computed:    true,
 						Description: "The index vector type associated with the model. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension will be nil.",
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"read_parameters": schema.MapAttribute{
 						Optional:    true,
