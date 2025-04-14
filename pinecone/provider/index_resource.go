@@ -130,6 +130,9 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 			"host": schema.StringAttribute{
 				MarkdownDescription: "The URL address where the index is hosted.",
 				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"spec": schema.SingleNestedAttribute{
 				Description: "Spec",
@@ -290,6 +293,9 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 			"status": schema.SingleNestedAttribute{
 				Description: "Status",
 				Computed:    true,
+				PlanModifiers: []planmodifier.Object{
+					objectplanmodifier.UseStateForUnknown(),
+				},
 				Attributes: map[string]schema.Attribute{
 					"ready": schema.BoolAttribute{
 						Description: "Ready.",
