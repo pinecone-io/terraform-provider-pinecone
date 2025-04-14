@@ -2,29 +2,33 @@ package provider
 
 import (
 	"fmt"
+	"testing"
+
+	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-// func TestAccCollectionDataSource(t *testing.T) {
-// 	rName := acctest.RandomWithPrefix("tftest")
+func TestAccCollectionDataSource(t *testing.T) {
+	rName := acctest.RandomWithPrefix("tftest")
 
-// 	resource.Test(t, resource.TestCase{
-// 		PreCheck:                 func() { testAccPreCheck(t) },
-// 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-// 		Steps: []resource.TestStep{
-// 			{
-// 				Config: testAccCollectionDataSourceConfig(rName),
-// 				Check: resource.ComposeAggregateTestCheckFunc(
-// 					resource.TestCheckResourceAttr("data.pinecone_collection.test", "id", rName),
-// 					resource.TestCheckResourceAttr("data.pinecone_collection.test", "name", rName),
-// 					resource.TestCheckResourceAttr("data.pinecone_collection.test", "status", "Ready"),
-// 					resource.TestCheckResourceAttr("data.pinecone_collection.test", "dimension", "1536"),
-// 					resource.TestCheckResourceAttrSet("data.pinecone_collection.test", "size"),
-// 					// resource.TestCheckResourceAttrSet("data.pinecone_collection.test", "vector_count"),
-// 				),
-// 			},
-// 		},
-// 	})
-// }
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCollectionDataSourceConfig(rName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("data.pinecone_collection.test", "id", rName),
+					resource.TestCheckResourceAttr("data.pinecone_collection.test", "name", rName),
+					resource.TestCheckResourceAttr("data.pinecone_collection.test", "status", "Ready"),
+					resource.TestCheckResourceAttr("data.pinecone_collection.test", "dimension", "1536"),
+					resource.TestCheckResourceAttrSet("data.pinecone_collection.test", "size"),
+					// resource.TestCheckResourceAttrSet("data.pinecone_collection.test", "vector_count"),
+				),
+			},
+		},
+	})
+}
 
 func testAccCollectionDataSourceConfig(name string) string {
 	return fmt.Sprintf(`
