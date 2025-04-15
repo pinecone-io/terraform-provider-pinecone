@@ -617,9 +617,6 @@ func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 			return
 		}
 
-		fmt.Printf("newData.Embed: %+v\n", newData.Embed)
-		fmt.Printf("data.Embed: %+v\n", data.Embed)
-
 		// if existing Embed is present update it
 		if !oldEmbedModel.Model.IsUnknown() && !oldEmbedModel.Model.IsNull() {
 			// can only update field_map, read_parameters, and write_parameters for existing integrated index

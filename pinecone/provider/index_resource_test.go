@@ -40,7 +40,7 @@ func TestAccIndexResource_serverless_basic(t *testing.T) {
 					testAccCheckIndexExists(),
 					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
 					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
-					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1536"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1024"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.cloud", "aws"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.region", "us-west-2"),
@@ -58,7 +58,7 @@ func TestAccIndexResource_serverless_basic(t *testing.T) {
 					testAccCheckIndexExists(),
 					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
 					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
-					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1536"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1024"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.cloud", "aws"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.region", "us-west-2"),
@@ -79,18 +79,16 @@ func TestAccIndexResource_serverless_basic(t *testing.T) {
 					testAccCheckIndexExists(),
 					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
 					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
-					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1536"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1024"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.cloud", "aws"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.region", "us-west-2"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "embed.model", "multilingual-e5-large"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "embed.field_map.%", "1"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "embed.field_map.text", "chunk_text"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "tags.%", "3"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "tags.%", "2"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "tags.test", "testval"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "tags.remove", "testremove"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "tags.update", "testupdate"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "tags.test", "testval"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "tags.update", "testupdatenew"),
 				),
 			},
 			// Convert to integrated inference
@@ -303,7 +301,7 @@ provider "pinecone" {
 
 resource "pinecone_index" "%s" {
   name = %q
-  dimension = 1536
+  dimension = 1024
   spec = {
 	serverless = {
 		cloud = "aws"
@@ -312,8 +310,9 @@ resource "pinecone_index" "%s" {
   }
   deletion_protection = %q
 %s
+%s
 }
-`, resourceName, name, deletionProtection, convertTagsToString(tags))
+`, resourceName, name, deletionProtection, embed, convertTagsToString(tags))
 }
 
 func testAccIndexResourceConfig_pod(name string, deletionProtection string, embed string, tags map[string]string, replicas string) string {
@@ -333,8 +332,9 @@ resource "pinecone_index" "%s" {
 	}
 	deletion_protection = %q
 %s
+%s
 }
-`, resourceName, name, replicas, deletionProtection, convertTagsToString(tags))
+`, resourceName, name, replicas, deletionProtection, embed, convertTagsToString(tags))
 }
 
 func convertTagsToString(in map[string]string) string {
