@@ -20,6 +20,13 @@ const resourceAddress = providerName + "." + resourceName
 
 func TestAccIndexResource_serverless_basic(t *testing.T) {
 	rName := acctest.RandomWithPrefix("tftest")
+	embed := `
+  embed = {
+	model = "multilingual-e5-large"
+	field_map = {
+	  text = "chunk_text"
+	}
+  }`
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -28,7 +35,7 @@ func TestAccIndexResource_serverless_basic(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create and Read testing
 			{
-				Config: testAccIndexResourceConfig_serverless(rName, "enabled", map[string]string{"test": "testval", "remove": "testremove", "update": "testupdate"}),
+				Config: testAccIndexResourceConfig_serverless(rName, "enabled", "", map[string]string{"test": "testval", "remove": "testremove", "update": "testupdate"}),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckIndexExists(),
 					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
@@ -37,11 +44,37 @@ func TestAccIndexResource_serverless_basic(t *testing.T) {
 					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.cloud", "aws"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.region", "us-west-2"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "tags.%", "3"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "tags.test", "testval"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "tags.remove", "testremove"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "tags.update", "testupdate"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "tags.test", "testval"),
+				),
+			},
+			// Upgrade to integrated index
+			{
+				Config: testAccIndexResourceConfig_serverless(rName, "enabled", embed, map[string]string{"test": "testval", "remove": "testremove", "update": "testupdate"}),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckIndexExists(),
+					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
+					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
+					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1536"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.cloud", "aws"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.region", "us-west-2"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "embed.model", "multilingual-e5-large"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "embed.field_map.%", "1"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "embed.field_map.text", "chunk_text"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "tags.%", "3"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "tags.test", "testval"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "tags.remove", "testremove"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "tags.update", "testupdate"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "tags.test", "testval"),
 				),
 			},
 			// Disable deletion_protection, update tags
 			{
-				Config: testAccIndexResourceConfig_serverless(rName, "disabled", map[string]string{"test": "testval", "update": "testupdatenew"}),
+				Config: testAccIndexResourceConfig_serverless(rName, "disabled", embed, map[string]string{"test": "testval", "update": "testupdatenew"}),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckIndexExists(),
 					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
@@ -50,6 +83,14 @@ func TestAccIndexResource_serverless_basic(t *testing.T) {
 					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.cloud", "aws"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.region", "us-west-2"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "embed.model", "multilingual-e5-large"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "embed.field_map.%", "1"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "embed.field_map.text", "chunk_text"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "tags.%", "3"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "tags.test", "testval"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "tags.remove", "testremove"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "tags.update", "testupdate"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "tags.test", "testval"),
 				),
 			},
 			// Convert to integrated inference
@@ -66,6 +107,13 @@ func TestAccIndexResource_serverless_basic(t *testing.T) {
 
 func TestAccIndexResource_pod_basic(t *testing.T) {
 	rName := acctest.RandomWithPrefix("tftest")
+	embed := `
+  embed = {
+	model = "multilingual-e5-large"
+	field_map = {
+	  text = "chunk_text"
+	}
+  }`
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -74,7 +122,7 @@ func TestAccIndexResource_pod_basic(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create and Read testing
 			{
-				Config: testAccIndexResourceConfig_pod(rName, "enabled", map[string]string{"test": "testval", "remove": "testremove", "update": "testupdate"}, "2"),
+				Config: testAccIndexResourceConfig_pod(rName, "enabled", "", map[string]string{"test": "testval", "remove": "testremove", "update": "testupdate"}, "2"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckIndexExists(),
 					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
@@ -94,9 +142,14 @@ func TestAccIndexResource_pod_basic(t *testing.T) {
 					resource.TestCheckNoResourceAttr("pinecone_index.test", "source_collection"),
 				),
 			},
+			// Attempt to upgrade to an integrated index, which should error
+			{
+				Config:      testAccIndexResourceConfig_pod(rName, "enabled", embed, map[string]string{"test": "testval", "remove": "testremove", "update": "testupdate"}, "2"),
+				ExpectError: regexp.MustCompile("Pod-based indexes cannot have an embed configuration."),
+			},
 			// Disable deletion_protection, update tags
 			{
-				Config: testAccIndexResourceConfig_pod(rName, "disabled", map[string]string{"test": "testval", "update": "testupdatenew"}, "2"),
+				Config: testAccIndexResourceConfig_pod(rName, "disabled", "", map[string]string{"test": "testval", "update": "testupdatenew"}, "2"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckIndexExists(),
 					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
@@ -243,7 +296,7 @@ func testAccCheckIndexDestroy() resource.TestCheckFunc {
 	}
 }
 
-func testAccIndexResourceConfig_serverless(name string, deletionProtection string, tags map[string]string) string {
+func testAccIndexResourceConfig_serverless(name string, deletionProtection string, embed string, tags map[string]string) string {
 	return fmt.Sprintf(`
 provider "pinecone" {
 }
@@ -260,10 +313,10 @@ resource "pinecone_index" "%s" {
   deletion_protection = %q
 %s
 }
-`, resourceName, name, deletionProtection, convertMapToString(tags))
+`, resourceName, name, deletionProtection, convertTagsToString(tags))
 }
 
-func testAccIndexResourceConfig_pod(name string, deletionProtection string, tags map[string]string, replicas string) string {
+func testAccIndexResourceConfig_pod(name string, deletionProtection string, embed string, tags map[string]string, replicas string) string {
 	return fmt.Sprintf(`
 provider "pinecone" {
 }
@@ -281,10 +334,10 @@ resource "pinecone_index" "%s" {
 	deletion_protection = %q
 %s
 }
-`, resourceName, name, replicas, deletionProtection, convertMapToString(tags))
+`, resourceName, name, replicas, deletionProtection, convertTagsToString(tags))
 }
 
-func convertMapToString(in map[string]string) string {
+func convertTagsToString(in map[string]string) string {
 	var mapStr string
 	if len(in) > 0 {
 		mapStr = "  tags = {\n"

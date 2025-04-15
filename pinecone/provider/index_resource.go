@@ -239,7 +239,6 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 						Computed:    true,
 						Description: "the name of the embedding model to use for the index.",
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.RequiresReplace(),
 							stringplanmodifier.UseStateForUnknown(),
 						},
 					},
@@ -555,7 +554,6 @@ func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 
 	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -599,8 +597,50 @@ func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		configureRequest.Tags = mergeTags(oldTagsMap, newTagsMap)
 	}
 
-	// Update Embed fields if they have changed
+	// Update Embed fields if possible
+	if !newData.Embed.Equal(data.Embed) {
+		var embedConfig pinecone.ConfigureIndexEmbed
 
+		var embedModel models.IndexEmbedModel
+		resp.Diagnostics.Append(newData.Embed.As(ctx, &embedModel, basetypes.ObjectAsOptions{})...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		var oldEmbedModel models.IndexEmbedModel
+		resp.Diagnostics.Append(data.Embed.As(ctx, &oldEmbedModel, basetypes.ObjectAsOptions{})...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		var spec models.IndexSpecModel
+		resp.Diagnostics.Append(data.Spec.As(ctx, &spec, basetypes.ObjectAsOptions{})...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		fmt.Printf("newData.Embed: %+v\n", newData.Embed)
+		fmt.Printf("data.Embed: %+v\n", data.Embed)
+
+		// if existing Embed is present update it
+		if !oldEmbedModel.Model.IsUnknown() && !oldEmbedModel.Model.IsNull() {
+			// can only update field_map, read_parameters, and write_parameters for existing integrated index
+			embedConfig.FieldMap = mapAttrToInterfacePtr(embedModel.FieldMap)
+			embedConfig.ReadParameters = mapAttrToInterfacePtr(embedModel.ReadParameters)
+			embedConfig.WriteParameters = mapAttrToInterfacePtr(embedModel.WriteParameters)
+		} else {
+			// if existing Embed is not present upgrade to an integrated model (serverless only)
+			if spec.Serverless == nil {
+				resp.Diagnostics.AddError("Invalid configuration", "Pod-based indexes cannot have an embed configuration.")
+				return
+			}
+			embedConfig.Model = embedModel.Model.ValueStringPointer()
+			embedConfig.FieldMap = mapAttrToInterfacePtr(embedModel.FieldMap)
+			embedConfig.ReadParameters = mapAttrToInterfacePtr(embedModel.ReadParameters)
+			embedConfig.WriteParameters = mapAttrToInterfacePtr(embedModel.WriteParameters)
+		}
+		configureRequest.Embed = &embedConfig
+	}
+
+	// send configure index request if there are things that have been updated
 	if configureRequest.DeletionProtection != "" || configureRequest.Embed != nil || configureRequest.Tags != nil {
 		_, err := r.client.ConfigureIndex(ctx, data.Name.ValueString(), configureRequest)
 		if err != nil {
