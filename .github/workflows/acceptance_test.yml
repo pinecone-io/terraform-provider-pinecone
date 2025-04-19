@@ -38,4 +38,4 @@ jobs:
           PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
           TF_ACC: '1'
         run: go test -race -covermode=atomic -coverprofile=coverage.out -v ./pinecone/provider/
-        timeout-minutes: 10
+        timeout-minutes: 15

@@ -40,20 +40,43 @@ resource "pinecone_index" "test" {
 
 ### Required
 
-- `dimension` (Number) The dimensions of the vectors to be inserted in the index
 - `name` (String) The name of the index to be created. The maximum length is 45 characters.
-- `spec` (Attributes) Spec (see [below for nested schema](#nestedatt--spec))
 
 ### Optional
 
-- `metric` (String) The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'.
+- `deletion_protection` (String) Whether deletion protection for the index is enabled. You can use 'enabled', or 'disabled'.
+- `dimension` (Number) The dimensions of the vectors to be inserted in the index
+- `embed` (Attributes) Specify the integrated inference embedding configuration for the index. Once set, the model cannot be changed. However, you can later update the embedding configuration—including field map, read parameters, and write parameters.
+
+Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details. (see [below for nested schema](#nestedatt--embed))
+- `metric` (String) The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'.
+- `spec` (Attributes) Spec (see [below for nested schema](#nestedatt--spec))
+- `tags` (Map of String) Custom user tags added to an index. Keys must be 80 characters or less. Values must be 120 characters or less. Keys must be alphanumeric, '', or '-'. Values must be alphanumeric, ';', '@', '', '-', '.', '+', or ' '. To unset a key, set the value to be an empty string.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
+- `vector_type` (String) The index vector type. You can use 'dense' or 'sparse'. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension should not be specified.
 
 ### Read-Only
 
 - `host` (String) The URL address where the index is hosted.
 - `id` (String) Index identifier
 - `status` (Attributes) Status (see [below for nested schema](#nestedatt--status))
+
+<a id="nestedatt--embed"></a>
+### Nested Schema for `embed`
+
+Optional:
+
+- `field_map` (Map of String) Identifies the name of the text field from your document model that will be embedded.
+- `model` (String) the name of the embedding model to use for the index.
+- `read_parameters` (Map of String) The read parameters for the embedding model.
+- `write_parameters` (Map of String) The write parameters for the embedding model.
+
+Read-Only:
+
+- `dimension` (Number) The dimension of the embedding model, specifying the size of the output vector.
+- `metric` (String) The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'.
+- `vector_type` (String) The index vector type associated with the model. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension will be nil.
+
 
 <a id="nestedatt--spec"></a>
 ### Nested Schema for `spec`

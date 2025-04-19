@@ -46,12 +46,26 @@ func (d *IndexesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 							MarkdownDescription: "Index name",
 							Computed:            true,
 						},
-						"dimension": schema.Int64Attribute{
+						"dimension": schema.Int32Attribute{
 							MarkdownDescription: "Index dimension",
 							Computed:            true,
 						},
 						"metric": schema.StringAttribute{
 							MarkdownDescription: "Index metric",
+							Computed:            true,
+						},
+						"deletion_protection": schema.StringAttribute{
+							MarkdownDescription: "Index deletion protection configuration",
+							Computed:            true,
+						},
+						"tags": schema.MapAttribute{
+							Description: "Custom user tags added to an index. Keys must be 80 characters or less. Values must be 120 characters or less. Keys must be alphanumeric, '', or '-'. Values must be alphanumeric, ';', '@', '', '-', '.', '+', or ' '. To unset a key, set the value to be an empty string.",
+							Optional:    true,
+							Computed:    true,
+							ElementType: types.StringType,
+						},
+						"vector_type": schema.StringAttribute{
+							MarkdownDescription: "Index vector type",
 							Computed:            true,
 						},
 						"host": schema.StringAttribute{
@@ -120,6 +134,50 @@ func (d *IndexesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 											Computed:            true,
 										},
 									},
+								},
+							},
+						},
+						"embed": schema.SingleNestedAttribute{
+							Description: `Specify the integrated inference embedding configuration for the index. Once set, the model cannot be changed. However, you can later update the embedding configuration—including field map, read parameters, and write parameters.
+			
+Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details.`,
+							Optional: true,
+							Computed: true,
+							Attributes: map[string]schema.Attribute{
+								"model": schema.StringAttribute{
+									Computed:    true,
+									Description: "the name of the embedding model to use for the index.",
+								},
+								"field_map": schema.MapAttribute{
+									Computed:    true,
+									Description: "Identifies the name of the text field from your document model that will be embedded.",
+									ElementType: types.StringType,
+								},
+								"metric": schema.StringAttribute{
+									Optional:    true,
+									Computed:    true,
+									Description: "The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'.",
+								},
+								"dimension": schema.Int64Attribute{
+									Optional:    true,
+									Computed:    true,
+									Description: "The dimension of the embedding model, specifying the size of the output vector.",
+								},
+								"vector_type": schema.StringAttribute{
+									Computed:    true,
+									Description: "The index vector type associated with the model. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension will be nil.",
+								},
+								"read_parameters": schema.MapAttribute{
+									Optional:    true,
+									Computed:    true,
+									Description: "The read parameters for the embedding model.",
+									ElementType: types.StringType,
+								},
+								"write_parameters": schema.MapAttribute{
+									Optional:    true,
+									Computed:    true,
+									Description: "The write parameters for the embedding model.",
+									ElementType: types.StringType,
 								},
 							},
 						},

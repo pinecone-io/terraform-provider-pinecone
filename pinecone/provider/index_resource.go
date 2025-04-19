@@ -9,12 +9,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int32planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
-	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/int32validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -25,7 +29,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
-	"github.com/pinecone-io/go-pinecone/pinecone"
+	"github.com/pinecone-io/go-pinecone/v3/pinecone"
 	"github.com/pinecone-io/terraform-provider-pinecone/pinecone/models"
 )
 
@@ -61,6 +65,9 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 			"id": schema.StringAttribute{
 				MarkdownDescription: "Index identifier",
 				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"name": schema.StringAttribute{
 				MarkdownDescription: "The name of the index to be created. The maximum length is 45 characters.",
@@ -72,18 +79,20 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"dimension": schema.Int64Attribute{
+			"dimension": schema.Int32Attribute{
 				MarkdownDescription: "The dimensions of the vectors to be inserted in the index",
-				Required:            true,
-				Validators: []validator.Int64{
-					int64validator.AtLeast(1),
+				Optional:            true,
+				Computed:            true,
+				Validators: []validator.Int32{
+					int32validator.AtLeast(1),
 				},
-				PlanModifiers: []planmodifier.Int64{
-					int64planmodifier.RequiresReplace(),
+				PlanModifiers: []planmodifier.Int32{
+					int32planmodifier.UseStateForUnknown(),
+					int32planmodifier.RequiresReplace(),
 				},
 			},
 			"metric": schema.StringAttribute{
-				MarkdownDescription: "The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'.",
+				MarkdownDescription: "The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'.",
 				Optional:            true,
 				Computed:            true,
 				Default:             stringdefault.StaticString("cosine"),
@@ -91,16 +100,46 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 					stringvalidator.OneOf([]string{"euclidean", "cosine", "dotproduct"}...),
 				},
 				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
 					stringplanmodifier.RequiresReplace(),
 				},
+			},
+			"deletion_protection": schema.StringAttribute{
+				MarkdownDescription: "Whether deletion protection for the index is enabled. You can use 'enabled', or 'disabled'.",
+				Optional:            true,
+				Computed:            true,
+				Default:             stringdefault.StaticString("disabled"),
+				Validators: []validator.String{
+					stringvalidator.OneOf([]string{"enabled", "disabled"}...),
+				},
+			},
+			"vector_type": schema.StringAttribute{
+				MarkdownDescription: "The index vector type. You can use 'dense' or 'sparse'. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension should not be specified.",
+				Optional:            true,
+				Computed:            true,
+				Validators: []validator.String{
+					stringvalidator.OneOf([]string{"dense", "sparse"}...),
+				},
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"tags": schema.MapAttribute{
+				Description: "Custom user tags added to an index. Keys must be 80 characters or less. Values must be 120 characters or less. Keys must be alphanumeric, '', or '-'. Values must be alphanumeric, ';', '@', '', '-', '.', '+', or ' '. To unset a key, set the value to be an empty string.",
+				Optional:    true,
+				Computed:    true,
+				ElementType: types.StringType,
 			},
 			"host": schema.StringAttribute{
 				MarkdownDescription: "The URL address where the index is hosted.",
 				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"spec": schema.SingleNestedAttribute{
 				Description: "Spec",
-				Required:    true,
+				Optional:    true,
 				Attributes: map[string]schema.Attribute{
 					"pod": schema.SingleNestedAttribute{
 						Description: "Configuration needed to deploy a pod-based index.",
@@ -185,9 +224,80 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 					},
 				},
 			},
+			"embed": schema.SingleNestedAttribute{
+				Description: `Specify the integrated inference embedding configuration for the index. Once set, the model cannot be changed. However, you can later update the embedding configuration—including field map, read parameters, and write parameters.
+
+Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details.`,
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.Object{
+					objectplanmodifier.UseStateForUnknown(),
+				},
+				Attributes: map[string]schema.Attribute{
+					"model": schema.StringAttribute{
+						Optional:    true,
+						Computed:    true,
+						Description: "the name of the embedding model to use for the index.",
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
+					},
+					"field_map": schema.MapAttribute{
+						Optional:    true,
+						Computed:    true,
+						Description: "Identifies the name of the text field from your document model that will be embedded.",
+						ElementType: types.StringType,
+						PlanModifiers: []planmodifier.Map{
+							mapplanmodifier.UseStateForUnknown(),
+						},
+					},
+					"metric": schema.StringAttribute{
+						Computed:    true,
+						Description: "The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'.",
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
+					},
+					"dimension": schema.Int32Attribute{
+						Computed:    true,
+						Description: "The dimension of the embedding model, specifying the size of the output vector.",
+						PlanModifiers: []planmodifier.Int32{
+							int32planmodifier.UseStateForUnknown(),
+						},
+					},
+					"vector_type": schema.StringAttribute{
+						Computed:    true,
+						Description: "The index vector type associated with the model. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension will be nil.",
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
+					},
+					"read_parameters": schema.MapAttribute{
+						Optional:    true,
+						Computed:    true,
+						Description: "The read parameters for the embedding model.",
+						ElementType: types.StringType,
+						PlanModifiers: []planmodifier.Map{
+							mapplanmodifier.UseStateForUnknown(),
+						},
+					},
+					"write_parameters": schema.MapAttribute{
+						Optional:    true,
+						Computed:    true,
+						Description: "The write parameters for the embedding model.",
+						ElementType: types.StringType,
+						PlanModifiers: []planmodifier.Map{
+							mapplanmodifier.UseStateForUnknown(),
+						},
+					},
+				},
+			},
 			"status": schema.SingleNestedAttribute{
 				Description: "Status",
 				Computed:    true,
+				PlanModifiers: []planmodifier.Object{
+					objectplanmodifier.UseStateForUnknown(),
+				},
 				Attributes: map[string]schema.Attribute{
 					"ready": schema.BoolAttribute{
 						Description: "Ready.",
@@ -222,7 +332,6 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	// Read Terraform plan data into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -233,16 +342,60 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
+	var embed *models.IndexEmbedModel
+	if !data.Embed.IsUnknown() && !data.Embed.IsNull() {
+		resp.Diagnostics.Append(data.Embed.As(ctx, &embed, basetypes.ObjectAsOptions{})...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
+	// Extract tags
+	tagsMapValue, diags := data.Tags.ToMapValue(ctx)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
+	tagsMap, diags := toStringMap(ctx, tagsMapValue)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
+	tags := pinecone.IndexTags(tagsMap)
+
 	// Prepare the payload for the API request
 	if spec.Pod != nil {
+		// If trying to create a pod index with an embed configuration, reject
+		if embed != nil {
+			resp.Diagnostics.AddError("Invalid configuration", "Pod-based indexes cannot have an embed configuration.")
+			return
+		}
+
+		if data.VectorType.ValueString() == "sparse" {
+			resp.Diagnostics.AddError("Invalid configuration", "Pod-based indexes cannot have a sparse vector_type.")
+			return
+		}
+
+		if data.Dimension.IsUnknown() || data.Dimension.IsNull() {
+			resp.Diagnostics.AddError("Invalid configuration", "Pod-based indexes must have a dimension.")
+			return
+		}
+
+		metric := pinecone.IndexMetric(data.Metric.ValueString())
+		deletionProtection := pinecone.DeletionProtection(data.DeletionProtection.ValueString())
 		podReq := pinecone.CreatePodIndexRequest{
-			Name:        data.Name.ValueString(),
-			Dimension:   int32(data.Dimension.ValueInt64()),
-			Metric:      pinecone.IndexMetric(data.Metric.ValueString()),
-			Environment: spec.Pod.Environment.ValueString(),
-			PodType:     spec.Pod.PodType.ValueString(),
-			Shards:      int32(spec.Pod.ShardCount.ValueInt64()),
-			Replicas:    int32(spec.Pod.Replicas.ValueInt64()),
+			Name:               data.Name.ValueString(),
+			Dimension:          data.Dimension.ValueInt32(),
+			Metric:             &metric,
+			DeletionProtection: &deletionProtection,
+			Environment:        spec.Pod.Environment.ValueString(),
+			PodType:            spec.Pod.PodType.ValueString(),
+			Shards:             int32(spec.Pod.ShardCount.ValueInt64()),
+			Replicas:           int32(spec.Pod.Replicas.ValueInt64()),
+		}
+
+		if tags != nil {
+			podReq.Tags = &tags
 		}
 
 		if !spec.Pod.SourceCollection.IsUnknown() {
@@ -266,18 +419,58 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 
 	if spec.Serverless != nil {
-		serverlessReq := pinecone.CreateServerlessIndexRequest{
-			Name:      data.Name.ValueString(),
-			Dimension: int32(data.Dimension.ValueInt64()),
-			Metric:    pinecone.IndexMetric(data.Metric.ValueString()),
-			Cloud:     pinecone.Cloud(spec.Serverless.Cloud.ValueString()),
-			Region:    spec.Serverless.Region.ValueString(),
-		}
+		metric := pinecone.IndexMetric(*data.Metric.ValueStringPointer())
+		deletionProtection := pinecone.DeletionProtection(data.DeletionProtection.ValueString())
 
-		_, err := r.client.CreateServerlessIndex(ctx, &serverlessReq)
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to create serverless index", err.Error())
-			return
+		if embed != nil {
+			fieldMap := mapAttrToInterfacePtr(embed.FieldMap)
+
+			indexForModelReq := pinecone.CreateIndexForModelRequest{
+				Name:   data.Name.ValueString(),
+				Cloud:  pinecone.Cloud(spec.Serverless.Cloud.ValueString()),
+				Region: spec.Serverless.Region.ValueString(),
+				Embed: pinecone.CreateIndexForModelEmbed{
+					Model:           embed.Model.ValueString(),
+					FieldMap:        *fieldMap,
+					Metric:          &metric,
+					ReadParameters:  mapAttrToInterfacePtr(embed.ReadParameters),
+					WriteParameters: mapAttrToInterfacePtr(embed.WriteParameters),
+				},
+				DeletionProtection: &deletionProtection,
+			}
+
+			if tags != nil {
+				indexForModelReq.Tags = &tags
+			}
+
+			_, err := r.client.CreateIndexForModel(ctx, &indexForModelReq)
+			if err != nil {
+				resp.Diagnostics.AddError("Failed to create integrated serverless index", err.Error())
+				return
+			}
+		} else {
+			serverlessReq := pinecone.CreateServerlessIndexRequest{
+				Name:               data.Name.ValueString(),
+				Dimension:          data.Dimension.ValueInt32Pointer(),
+				Metric:             &metric,
+				DeletionProtection: &deletionProtection,
+				Cloud:              pinecone.Cloud(spec.Serverless.Cloud.ValueString()),
+				Region:             spec.Serverless.Region.ValueString(),
+			}
+
+			if tags != nil {
+				serverlessReq.Tags = &tags
+			}
+
+			if vectorType := data.VectorType.ValueString(); vectorType != "" {
+				serverlessReq.VectorType = &vectorType
+			}
+
+			_, err := r.client.CreateServerlessIndex(ctx, &serverlessReq)
+			if err != nil {
+				resp.Diagnostics.AddError("Failed to create serverless index", err.Error())
+				return
+			}
 		}
 	}
 
@@ -301,7 +494,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		if err != nil {
 			return retry.NonRetryableError(err)
 		}
-		if !index.Status.Ready {
+		if !index.Status.Ready && index.Status.State != "Ready" {
 			return retry.RetryableError(fmt.Errorf("index not ready. State: %s", index.Status.State))
 		}
 		return nil
@@ -342,7 +535,111 @@ func (r *IndexResource) Read(ctx context.Context, req resource.ReadRequest, resp
 }
 
 func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	// Update not supported.
+	var data models.IndexResourceModel
+	var newData models.IndexResourceModel
+
+	// Read Terraform prior state data into the model
+	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Read new data into the model
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &newData)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	var configureRequest pinecone.ConfigureIndexParams
+
+	// Update DeletionProtection if it has changed
+	if data.DeletionProtection != newData.DeletionProtection {
+		configureRequest.DeletionProtection = pinecone.DeletionProtection(newData.DeletionProtection.ValueString())
+	}
+
+	// Update Tags if they have changed
+	newTags, diags := newData.Tags.ToMapValue(ctx)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
+	newTagsMap, diags := toStringMap(ctx, newTags)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
+	if newTagsMap != nil {
+		oldTags, diags := data.Tags.ToMapValue(ctx)
+		resp.Diagnostics.Append(diags...)
+		if diags.HasError() {
+			return
+		}
+		oldTagsMap, diags := toStringMap(ctx, oldTags)
+		resp.Diagnostics.Append(diags...)
+		if diags.HasError() {
+			return
+		}
+
+		configureRequest.Tags = mergeTags(oldTagsMap, newTagsMap)
+	}
+
+	// Update Embed fields if possible
+	if !newData.Embed.Equal(data.Embed) {
+		var embedConfig pinecone.ConfigureIndexEmbed
+
+		var embedModel models.IndexEmbedModel
+		resp.Diagnostics.Append(newData.Embed.As(ctx, &embedModel, basetypes.ObjectAsOptions{})...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		var oldEmbedModel models.IndexEmbedModel
+		resp.Diagnostics.Append(data.Embed.As(ctx, &oldEmbedModel, basetypes.ObjectAsOptions{})...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		var spec models.IndexSpecModel
+		resp.Diagnostics.Append(data.Spec.As(ctx, &spec, basetypes.ObjectAsOptions{})...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		// if existing Embed is present update it
+		if !oldEmbedModel.Model.IsUnknown() && !oldEmbedModel.Model.IsNull() {
+			// can only update field_map, read_parameters, and write_parameters for existing integrated index
+			embedConfig.FieldMap = mapAttrToInterfacePtr(embedModel.FieldMap)
+			embedConfig.ReadParameters = mapAttrToInterfacePtr(embedModel.ReadParameters)
+			embedConfig.WriteParameters = mapAttrToInterfacePtr(embedModel.WriteParameters)
+		} else {
+			// if existing Embed is not present upgrade to an integrated model (serverless only)
+			if spec.Serverless == nil {
+				resp.Diagnostics.AddError("Invalid configuration", "Pod-based indexes cannot have an embed configuration.")
+				return
+			}
+			embedConfig.Model = embedModel.Model.ValueStringPointer()
+			embedConfig.FieldMap = mapAttrToInterfacePtr(embedModel.FieldMap)
+			embedConfig.ReadParameters = mapAttrToInterfacePtr(embedModel.ReadParameters)
+			embedConfig.WriteParameters = mapAttrToInterfacePtr(embedModel.WriteParameters)
+		}
+		configureRequest.Embed = &embedConfig
+	}
+
+	// send configure index request if there are things that have been updated
+	if configureRequest.DeletionProtection != "" || configureRequest.Embed != nil || configureRequest.Tags != nil {
+		_, err := r.client.ConfigureIndex(ctx, data.Name.ValueString(), configureRequest)
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to update index", err.Error())
+			return
+		}
+	}
+
+	index, err := r.client.DescribeIndex(ctx, newData.Name.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to describe index", err.Error())
+		return
+	}
+
+	newData.Read(ctx, index)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &newData)...)
 }
 
 func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -390,4 +687,49 @@ func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 
 func (r *IndexResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+func mergeTags(oldTags, newTags map[string]string) map[string]string {
+	mergedTags := make(map[string]string)
+
+	for k, newVal := range newTags {
+		if oldVal, ok := oldTags[k]; !ok || oldVal != newVal {
+			mergedTags[k] = newVal
+		}
+	}
+
+	for k := range oldTags {
+		if _, ok := newTags[k]; !ok {
+			mergedTags[k] = ""
+		}
+	}
+
+	return mergedTags
+}
+
+func toStringMap(ctx context.Context, value basetypes.MapValue) (map[string]string, diag.Diagnostics) {
+	if value.IsNull() || value.IsUnknown() {
+		return nil, nil
+	}
+
+	var result map[string]string
+	diags := value.ElementsAs(ctx, &result, false)
+
+	return result, diags
+}
+
+func mapAttrToInterfacePtr(attr types.Map) *map[string]interface{} {
+	if attr.IsUnknown() || attr.IsNull() {
+		return nil
+	}
+
+	raw := make(map[string]interface{}, len(attr.Elements()))
+	for k, v := range attr.Elements() {
+		if sv, ok := v.(basetypes.StringValue); ok {
+			raw[k] = sv.ValueString()
+		} else {
+			raw[k] = v.String()
+		}
+	}
+	return &raw
 }

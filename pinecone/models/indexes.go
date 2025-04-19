@@ -11,25 +11,35 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
-	"github.com/pinecone-io/go-pinecone/pinecone"
+	"github.com/pinecone-io/go-pinecone/v3/pinecone"
 )
 
 type IndexModel struct {
-	Name      types.String `tfsdk:"name"`
-	Dimension types.Int64  `tfsdk:"dimension"`
-	Metric    types.String `tfsdk:"metric"`
-	Host      types.String `tfsdk:"host"`
-	Spec      types.Object `tfsdk:"spec"`
-	Status    types.Object `tfsdk:"status"`
+	Name               types.String `tfsdk:"name"`
+	Dimension          types.Int32  `tfsdk:"dimension"`
+	Metric             types.String `tfsdk:"metric"`
+	DeletionProtection types.String `tfsdk:"deletion_protection"`
+	VectorType         types.String `tfsdk:"vector_type"`
+	Tags               types.Map    `tfsdk:"tags"`
+	Host               types.String `tfsdk:"host"`
+	Spec               types.Object `tfsdk:"spec"`
+	Status             types.Object `tfsdk:"status"`
+	Embed              types.Object `tfsdk:"embed"`
 }
 
 func (model *IndexModel) Read(ctx context.Context, index *pinecone.Index) diag.Diagnostics {
 	var diags diag.Diagnostics
 
 	model.Name = types.StringValue(index.Name)
-	model.Dimension = types.Int64Value(int64(index.Dimension))
 	model.Metric = types.StringValue(string(index.Metric))
+	model.VectorType = types.StringValue(index.VectorType)
 	model.Host = types.StringValue(index.Host)
+
+	if index.Dimension != nil {
+		model.Dimension = types.Int32Value(*index.Dimension)
+	} else {
+		model.Dimension = types.Int32Null()
+	}
 
 	pod, diags := NewIndexPodSpecModel(ctx, index.Spec.Pod)
 	if diags.HasError() {
@@ -38,6 +48,19 @@ func (model *IndexModel) Read(ctx context.Context, index *pinecone.Index) diag.D
 	spec := IndexSpecModel{
 		Pod:        pod,
 		Serverless: NewIndexServerlessSpecModel(index.Spec.Serverless),
+	}
+
+	embed, diags := NewIndexEmbedModel(ctx, index.Embed)
+	if diags.HasError() {
+		return diags
+	}
+	if embed != nil {
+		model.Embed, diags = types.ObjectValueFrom(ctx, IndexEmbedModel{}.AttrTypes(), embed)
+		if diags.HasError() {
+			return diags
+		}
+	} else {
+		model.Embed = types.ObjectNull(IndexEmbedModel{}.AttrTypes())
 	}
 
 	model.Spec, diags = types.ObjectValueFrom(ctx, IndexSpecModel{}.AttrTypes(), spec)
@@ -51,6 +74,15 @@ func (model *IndexModel) Read(ctx context.Context, index *pinecone.Index) diag.D
 	})
 	if diags.HasError() {
 		return diags
+	}
+
+	if index.Tags != nil {
+		model.Tags, diags = types.MapValueFrom(ctx, types.StringType, index.Tags)
+		if diags.HasError() {
+			return diags
+		}
+	} else {
+		model.Tags = types.MapNull(types.StringType)
 	}
 
 	return diags
@@ -58,14 +90,18 @@ func (model *IndexModel) Read(ctx context.Context, index *pinecone.Index) diag.D
 
 // IndexResourceModel defined the Index model for the resource.
 type IndexResourceModel struct {
-	Id        types.String   `tfsdk:"id"`
-	Name      types.String   `tfsdk:"name"`
-	Dimension types.Int64    `tfsdk:"dimension"`
-	Metric    types.String   `tfsdk:"metric"`
-	Host      types.String   `tfsdk:"host"`
-	Spec      types.Object   `tfsdk:"spec"`
-	Status    types.Object   `tfsdk:"status"`
-	Timeouts  timeouts.Value `tfsdk:"timeouts"`
+	Id                 types.String   `tfsdk:"id"`
+	Name               types.String   `tfsdk:"name"`
+	Dimension          types.Int32    `tfsdk:"dimension"`
+	Metric             types.String   `tfsdk:"metric"`
+	DeletionProtection types.String   `tfsdk:"deletion_protection"`
+	VectorType         types.String   `tfsdk:"vector_type"`
+	Tags               types.Map      `tfsdk:"tags"`
+	Host               types.String   `tfsdk:"host"`
+	Spec               types.Object   `tfsdk:"spec"`
+	Status             types.Object   `tfsdk:"status"`
+	Embed              types.Object   `tfsdk:"embed"`
+	Timeouts           timeouts.Value `tfsdk:"timeouts"`
 }
 
 func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index) diag.Diagnostics {
@@ -73,9 +109,16 @@ func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index
 
 	model.Id = types.StringValue(index.Name)
 	model.Name = types.StringValue(index.Name)
-	model.Dimension = types.Int64Value(int64(index.Dimension))
 	model.Metric = types.StringValue(string(index.Metric))
 	model.Host = types.StringValue(index.Host)
+	model.DeletionProtection = types.StringValue(string(index.DeletionProtection))
+	model.VectorType = types.StringValue(index.VectorType)
+
+	if index.Dimension != nil {
+		model.Dimension = types.Int32Value(*index.Dimension)
+	} else {
+		model.Dimension = types.Int32Null()
+	}
 
 	pod, diags := NewIndexPodSpecModel(ctx, index.Spec.Pod)
 	if diags.HasError() {
@@ -86,17 +129,43 @@ func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index
 		Serverless: NewIndexServerlessSpecModel(index.Spec.Serverless),
 	}
 
+	embed, diags := NewIndexEmbedModel(ctx, index.Embed)
+	if diags.HasError() {
+		return diags
+	}
+	if embed != nil {
+		model.Embed, diags = types.ObjectValueFrom(ctx, IndexEmbedModel{}.AttrTypes(), embed)
+		if diags.HasError() {
+			return diags
+		}
+	} else {
+		model.Embed = types.ObjectNull(IndexEmbedModel{}.AttrTypes())
+	}
+
 	model.Spec, diags = types.ObjectValueFrom(ctx, IndexSpecModel{}.AttrTypes(), spec)
 	if diags.HasError() {
 		return diags
 	}
 
-	model.Status, diags = types.ObjectValueFrom(ctx, IndexStatusModel{}.AttrTypes(), IndexStatusModel{
-		Ready: types.BoolValue(index.Status.Ready),
-		State: types.StringValue(string(index.Status.State)),
-	})
-	if diags.HasError() {
-		return diags
+	if index.Status != nil {
+		model.Status, diags = types.ObjectValueFrom(ctx, IndexStatusModel{}.AttrTypes(), IndexStatusModel{
+			Ready: types.BoolValue(index.Status.Ready),
+			State: types.StringValue(string(index.Status.State)),
+		})
+		if diags.HasError() {
+			return diags
+		}
+	} else {
+		model.Status = types.ObjectNull(IndexStatusModel{}.AttrTypes())
+	}
+
+	if index.Tags != nil {
+		model.Tags, diags = types.MapValueFrom(ctx, types.StringType, index.Tags)
+		if diags.HasError() {
+			return diags
+		}
+	} else {
+		model.Tags = types.MapNull(types.StringType)
 	}
 
 	return diags
@@ -104,13 +173,17 @@ func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index
 
 // IndexDatasourceeModel defined the Index model for the datasource.
 type IndexDatasourceModel struct {
-	Id        types.String `tfsdk:"id"`
-	Name      types.String `tfsdk:"name"`
-	Dimension types.Int64  `tfsdk:"dimension"`
-	Metric    types.String `tfsdk:"metric"`
-	Host      types.String `tfsdk:"host"`
-	Spec      types.Object `tfsdk:"spec"`
-	Status    types.Object `tfsdk:"status"`
+	Id                 types.String `tfsdk:"id"`
+	Name               types.String `tfsdk:"name"`
+	Dimension          types.Int32  `tfsdk:"dimension"`
+	Metric             types.String `tfsdk:"metric"`
+	DeletionProtection types.String `tfsdk:"deletion_protection"`
+	VectorType         types.String `tfsdk:"vector_type"`
+	Tags               types.Map    `tfsdk:"tags"`
+	Host               types.String `tfsdk:"host"`
+	Spec               types.Object `tfsdk:"spec"`
+	Status             types.Object `tfsdk:"status"`
+	Embed              types.Object `tfsdk:"embed"`
 }
 
 func (model *IndexDatasourceModel) Read(ctx context.Context, index *pinecone.Index) diag.Diagnostics {
@@ -118,9 +191,16 @@ func (model *IndexDatasourceModel) Read(ctx context.Context, index *pinecone.Ind
 
 	model.Id = types.StringValue(index.Name)
 	model.Name = types.StringValue(index.Name)
-	model.Dimension = types.Int64Value(int64(index.Dimension))
 	model.Metric = types.StringValue(string(index.Metric))
 	model.Host = types.StringValue(index.Host)
+	model.DeletionProtection = types.StringValue(string(index.DeletionProtection))
+	model.VectorType = types.StringValue(index.VectorType)
+
+	if index.Dimension != nil {
+		model.Dimension = types.Int32Value(*index.Dimension)
+	} else {
+		model.Dimension = types.Int32Null()
+	}
 
 	pod, diags := NewIndexPodSpecModel(ctx, index.Spec.Pod)
 	if diags.HasError() {
@@ -131,17 +211,43 @@ func (model *IndexDatasourceModel) Read(ctx context.Context, index *pinecone.Ind
 		Serverless: NewIndexServerlessSpecModel(index.Spec.Serverless),
 	}
 
+	embed, diags := NewIndexEmbedModel(ctx, index.Embed)
+	if diags.HasError() {
+		return diags
+	}
+	if embed != nil {
+		model.Embed, diags = types.ObjectValueFrom(ctx, IndexEmbedModel{}.AttrTypes(), embed)
+		if diags.HasError() {
+			return diags
+		}
+	} else {
+		model.Embed = types.ObjectNull(IndexEmbedModel{}.AttrTypes())
+	}
+
 	model.Spec, diags = types.ObjectValueFrom(ctx, IndexSpecModel{}.AttrTypes(), spec)
 	if diags.HasError() {
 		return diags
 	}
 
-	model.Status, diags = types.ObjectValueFrom(ctx, IndexStatusModel{}.AttrTypes(), IndexStatusModel{
-		Ready: types.BoolValue(index.Status.Ready),
-		State: types.StringValue(string(index.Status.State)),
-	})
-	if diags.HasError() {
-		return diags
+	if index.Status != nil {
+		model.Status, diags = types.ObjectValueFrom(ctx, IndexStatusModel{}.AttrTypes(), IndexStatusModel{
+			Ready: types.BoolValue(index.Status.Ready),
+			State: types.StringValue(string(index.Status.State)),
+		})
+		if diags.HasError() {
+			return diags
+		}
+	} else {
+		model.Status = types.ObjectNull(IndexStatusModel{}.AttrTypes())
+	}
+
+	if index.Tags != nil {
+		model.Tags, diags = types.MapValueFrom(ctx, types.StringType, index.Tags)
+		if diags.HasError() {
+			return diags
+		}
+	} else {
+		model.Tags = types.MapNull(types.StringType)
 	}
 
 	return diags
@@ -173,7 +279,7 @@ func NewIndexPodSpec(ctx context.Context, spec *IndexPodSpecModel) (*pinecone.Po
 	if spec != nil {
 		newSpec := &pinecone.PodSpec{
 			Environment: spec.Environment.ValueString(),
-			PodCount:    int32(spec.PodCount.ValueInt64()),
+			PodCount:    int(spec.PodCount.ValueInt64()),
 			PodType:     spec.PodType.ValueString(),
 			Replicas:    int32(spec.Replicas.ValueInt64()),
 			ShardCount:  int32(spec.ShardCount.ValueInt64()),
@@ -185,8 +291,8 @@ func NewIndexPodSpec(ctx context.Context, spec *IndexPodSpecModel) (*pinecone.Po
 			if diags.HasError() {
 				return nil, diags
 			}
+			newSpec.MetadataConfig = &metadataConfig
 		}
-		newSpec.MetadataConfig = &metadataConfig
 		return newSpec, nil
 	}
 	return nil, nil
@@ -238,6 +344,112 @@ func (model IndexPodSpecModel) AttrTypes() map[string]attr.Type {
 		"pods":              types.Int64Type,
 		"metadata_config":   types.ObjectType{AttrTypes: IndexMetadataConfigModel{}.AttrTypes()},
 		"source_collection": types.StringType,
+	}
+}
+
+func NewIndexEmbedModel(ctx context.Context, model *pinecone.IndexEmbed) (*IndexEmbedModel, diag.Diagnostics) {
+	if model != nil {
+		newModel := &IndexEmbedModel{
+			Model: types.StringValue(model.Model),
+		}
+
+		if model.Dimension != nil {
+			newModel.Dimension = types.Int32Value(*model.Dimension)
+		} else {
+			newModel.Dimension = types.Int32Null()
+		}
+
+		if model.Metric != nil {
+			newModel.Metric = types.StringValue(string(*model.Metric))
+		} else {
+			newModel.Metric = types.StringNull()
+		}
+
+		if model.VectorType != nil {
+			newModel.VectorType = types.StringValue(*model.VectorType)
+		} else {
+			newModel.VectorType = types.StringNull()
+		}
+
+		if model.FieldMap != nil {
+			fieldMap, diags := types.MapValueFrom(ctx, types.StringType, model.FieldMap)
+			if diags.HasError() {
+				return nil, diags
+			}
+			newModel.FieldMap = fieldMap
+		} else {
+			newModel.FieldMap = types.MapNull(types.StringType)
+		}
+
+		if model.ReadParameters != nil {
+			readParameters, diags := types.MapValueFrom(ctx, types.StringType, model.ReadParameters)
+			if diags.HasError() {
+				return nil, diags
+			}
+			newModel.ReadParameters = readParameters
+		} else {
+			newModel.ReadParameters = types.MapNull(types.StringType)
+		}
+
+		if model.WriteParameters != nil {
+			writeParameters, diags := types.MapValueFrom(ctx, types.StringType, model.WriteParameters)
+			if diags.HasError() {
+				return nil, diags
+			}
+			newModel.WriteParameters = writeParameters
+		} else {
+			newModel.WriteParameters = types.MapNull(types.StringType)
+		}
+
+		return newModel, nil
+	}
+	return &IndexEmbedModel{
+		Model:           types.StringNull(),
+		Dimension:       types.Int32Null(),
+		Metric:          types.StringNull(),
+		VectorType:      types.StringNull(),
+		FieldMap:        types.MapNull(types.StringType),
+		ReadParameters:  types.MapNull(types.StringType),
+		WriteParameters: types.MapNull(types.StringType),
+	}, nil
+}
+
+func NewIndexEmbed(ctx context.Context, model *IndexEmbedModel) (*pinecone.IndexEmbed, diag.Diagnostics) {
+	if model != nil {
+		newModel := &pinecone.IndexEmbed{
+			Model:           model.Model.ValueString(),
+			Dimension:       model.Dimension.ValueInt32Pointer(),
+			VectorType:      model.VectorType.ValueStringPointer(),
+			Metric:          (*pinecone.IndexMetric)(model.Metric.ValueStringPointer()),
+			FieldMap:        mapAttrToInterfacePtr(model.FieldMap),
+			ReadParameters:  mapAttrToInterfacePtr(model.ReadParameters),
+			WriteParameters: mapAttrToInterfacePtr(model.WriteParameters),
+		}
+
+		return newModel, nil
+	}
+	return nil, nil
+}
+
+type IndexEmbedModel struct {
+	Model           types.String `tfsdk:"model"`
+	Dimension       types.Int32  `tfsdk:"dimension"`
+	Metric          types.String `tfsdk:"metric"`
+	VectorType      types.String `tfsdk:"vector_type"`
+	FieldMap        types.Map    `tfsdk:"field_map"`
+	ReadParameters  types.Map    `tfsdk:"read_parameters"`
+	WriteParameters types.Map    `tfsdk:"write_parameters"`
+}
+
+func (model IndexEmbedModel) AttrTypes() map[string]attr.Type {
+	return map[string]attr.Type{
+		"model":            types.StringType,
+		"dimension":        types.Int32Type,
+		"metric":           types.StringType,
+		"vector_type":      types.StringType,
+		"field_map":        types.MapType{ElemType: types.StringType},
+		"read_parameters":  types.MapType{ElemType: types.StringType},
+		"write_parameters": types.MapType{ElemType: types.StringType},
 	}
 }
 
@@ -298,4 +510,20 @@ func (status IndexStatusModel) AttrTypes() map[string]attr.Type {
 type IndexesDataSourceModel struct {
 	Indexes []IndexModel `tfsdk:"indexes"`
 	Id      types.String `tfsdk:"id"`
+}
+
+func mapAttrToInterfacePtr(attr types.Map) *map[string]interface{} {
+	if attr.IsUnknown() || attr.IsNull() {
+		return nil
+	}
+
+	raw := make(map[string]interface{}, len(attr.Elements()))
+	for k, v := range attr.Elements() {
+		if sv, ok := v.(basetypes.StringValue); ok {
+			raw[k] = sv.ValueString()
+		} else {
+			raw[k] = v.String()
+		}
+	}
+	return &raw
 }

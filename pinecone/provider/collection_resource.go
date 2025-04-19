@@ -16,7 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
-	"github.com/pinecone-io/go-pinecone/pinecone"
+	"github.com/pinecone-io/go-pinecone/v3/pinecone"
 	"github.com/pinecone-io/terraform-provider-pinecone/pinecone/models"
 )
 
@@ -141,12 +141,11 @@ func (r *CollectionResource) Create(ctx context.Context, req resource.CreateRequ
 		}
 		return nil
 	})
+
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to wait for collection to become ready.", err.Error())
 		return
 	}
-
-	// data.Read(collection)
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
