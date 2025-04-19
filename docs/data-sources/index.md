@@ -57,13 +57,13 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 
 ### Read-Only
 
-- `deletion_protection` (String) Index deletion protection configuration
+- `deletion_protection` (String) Index deletion protection can be one of 'enabled' or 'disabled'.
 - `dimension` (Number) Index dimension
 - `host` (String) The URL address where the index is hosted.
 - `id` (String) Index identifier
-- `metric` (String) Index metric
+- `metric` (String) Index metric can be one of 'cosine', 'dotproduct', or 'euclidean'.
 - `tags` (Map of String) Custom user tags added to an index. Keys must be 80 characters or less. Values must be 120 characters or less. Keys must be alphanumeric, '', or '-'. Values must be alphanumeric, ';', '@', '', '-', '.', '+', or ' '. To unset a key, set the value to be an empty string.
-- `vector_type` (String) Index vector type
+- `vector_type` (String) Index vector type, for example 'dense' or 'sprase'.
 
 <a id="nestedatt--embed"></a>
 ### Nested Schema for `embed`

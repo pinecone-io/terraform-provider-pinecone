@@ -47,15 +47,15 @@ func (d *IndexDataSource) Schema(ctx context.Context, req datasource.SchemaReque
 				Computed:            true,
 			},
 			"metric": schema.StringAttribute{
-				MarkdownDescription: "Index metric",
+				MarkdownDescription: "Index metric can be one of 'cosine', 'dotproduct', or 'euclidean'.",
 				Computed:            true,
 			},
 			"deletion_protection": schema.StringAttribute{
-				MarkdownDescription: "Index deletion protection configuration",
+				MarkdownDescription: "Index deletion protection can be one of 'enabled' or 'disabled'.",
 				Computed:            true,
 			},
 			"vector_type": schema.StringAttribute{
-				MarkdownDescription: "Index vector type",
+				MarkdownDescription: "Index vector type, for example 'dense' or 'sprase'.",
 				Computed:            true,
 			},
 			"tags": schema.MapAttribute{
