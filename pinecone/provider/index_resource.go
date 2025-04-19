@@ -423,21 +423,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		deletionProtection := pinecone.DeletionProtection(data.DeletionProtection.ValueString())
 
 		if embed != nil {
-			if spec.Pod != nil {
-				resp.Diagnostics.AddError("Invalid configuration", "Integrated indexes must have a serverless spec.")
-				return
-			}
-
 			fieldMap := mapAttrToInterfacePtr(embed.FieldMap)
-			if fieldMap == nil {
-				resp.Diagnostics.AddError("Invalid configuration", "Integrated indexes must have a field_map")
-				return
-			}
-
-			if !data.VectorType.IsUnknown() && !data.VectorType.IsNull() {
-				resp.Diagnostics.AddError("Invalid configuration", "Integrated indexes have an implicit vector_type")
-				return
-			}
 
 			indexForModelReq := pinecone.CreateIndexForModelRequest{
 				Name:   data.Name.ValueString(),
