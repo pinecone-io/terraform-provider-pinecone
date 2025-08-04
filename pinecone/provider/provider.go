@@ -12,7 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/pinecone-io/go-pinecone/v3/pinecone"
+	"github.com/pinecone-io/go-pinecone/v4/pinecone"
 )
 
 // Ensure PineconeProvider satisfies various provider interfaces.
@@ -28,7 +28,10 @@ type PineconeProvider struct {
 
 // PineconeProviderModel describes the provider data model.
 type PineconeProviderModel struct {
-	ApiKey types.String `tfsdk:"api_key"`
+	ApiKey      types.String `tfsdk:"api_key"`
+	ClientId    types.String `tfsdk:"client_id"`
+	ClientSecret types.String `tfsdk:"client_secret"`
+	AccessToken types.String `tfsdk:"access_token"`
 }
 
 func (p *PineconeProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -46,6 +49,21 @@ credentials before use. You can provide credentials via the PINECONE_API_KEY env
 		Attributes: map[string]schema.Attribute{
 			"api_key": schema.StringAttribute{
 				MarkdownDescription: "Pinecone API Key. Can be configured by setting PINECONE_API_KEY environment variable.",
+				Optional:            true,
+				Sensitive:           true,
+			},
+			"client_id": schema.StringAttribute{
+				MarkdownDescription: "Pinecone OAuth Client ID. Can be configured by setting PINECONE_CLIENT_ID environment variable.",
+				Optional:            true,
+				Sensitive:           true,
+			},
+			"client_secret": schema.StringAttribute{
+				MarkdownDescription: "Pinecone OAuth Client Secret. Can be configured by setting PINECONE_CLIENT_SECRET environment variable.",
+				Optional:            true,
+				Sensitive:           true,
+			},
+			"access_token": schema.StringAttribute{
+				MarkdownDescription: "Pinecone OAuth Access Token. Can be configured by setting PINECONE_ACCESS_TOKEN environment variable.",
 				Optional:            true,
 				Sensitive:           true,
 			},
@@ -69,6 +87,7 @@ func (p *PineconeProvider) Configure(ctx context.Context, req provider.Configure
 		apiKey = data.ApiKey.ValueString()
 	}
 
+	// Create regular client for index and collection operations
 	client, err := pinecone.NewClient(pinecone.NewClientParams{
 		ApiKey:    apiKey,
 		SourceTag: "terraform",
@@ -78,14 +97,65 @@ func (p *PineconeProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
+	// Create admin client for project and API key operations
+	// Note: Admin API requires OAuth credentials, not API key
+	// For now, we'll create the admin client only if OAuth credentials are available
+	var adminClient *pinecone.AdminClient
+	
+	// Check for OAuth credentials from provider config first, then environment variables
+	clientId := data.ClientId.ValueString()
+	clientSecret := data.ClientSecret.ValueString()
+	accessToken := data.AccessToken.ValueString()
+	
+	if clientId == "" {
+		clientId = os.Getenv("PINECONE_CLIENT_ID")
+	}
+	if clientSecret == "" {
+		clientSecret = os.Getenv("PINECONE_CLIENT_SECRET")
+	}
+	if accessToken == "" {
+		accessToken = os.Getenv("PINECONE_ACCESS_TOKEN")
+	}
+	
+	if clientId != "" && clientSecret != "" {
+		sourceTag := "terraform"
+		adminClient, err = pinecone.NewAdminClient(pinecone.NewAdminClientParams{
+			ClientId:     clientId,
+			ClientSecret: clientSecret,
+			SourceTag:    &sourceTag,
+		})
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to create pinecone admin client", err.Error())
+			return
+		}
+	} else if accessToken != "" {
+		sourceTag := "terraform"
+		adminClient, err = pinecone.NewAdminClient(pinecone.NewAdminClientParams{
+			AccessToken: accessToken,
+			SourceTag:   &sourceTag,
+		})
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to create pinecone admin client", err.Error())
+			return
+		}
+	}
+
+	// Create a combined client structure for resources that might need both
+	clientData := map[string]interface{}{
+		"client":      client,
+		"adminClient": adminClient,
+	}
+
 	resp.DataSourceData = client
-	resp.ResourceData = client
+	resp.ResourceData = clientData
 }
 
 func (p *PineconeProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewCollectionResource,
 		NewIndexResource,
+		NewProjectResource,
+		NewAPIKeyResource,
 	}
 }
 
@@ -95,6 +165,10 @@ func (p *PineconeProvider) DataSources(ctx context.Context) []func() datasource.
 		NewCollectionDataSource,
 		NewIndexesDataSource,
 		NewIndexDataSource,
+		NewProjectsDataSource,
+		NewProjectDataSource,
+		NewAPIKeysDataSource,
+		NewAPIKeyDataSource,
 	}
 }
 
