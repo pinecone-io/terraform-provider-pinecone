@@ -10,7 +10,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/pinecone-io/go-pinecone/v3/pinecone"
+	"github.com/pinecone-io/go-pinecone/v4/pinecone"
 )
 
 // NewTestClient returns a new Pinecone API client instance
@@ -58,7 +58,7 @@ func TestDatasource_Configure(t *testing.T) {
 		t.Error("Expected an error in resp.Diagnostics.Errors, but found none")
 	} else {
 		// Check the error message
-		expectedErrorMessage := "Expected *pinecone.Client, got: string. Please report this issue to the provider developers."
+		expectedErrorMessage := "Expected *pinecone.Client or *pinecone.AdminClient, got: string. Please report this issue to the provider developers."
 		actualErrorMessage := invalidResp.Diagnostics.Errors()[0].Detail()
 		if actualErrorMessage != expectedErrorMessage {
 			t.Errorf("Expected error message: %s, got: %s", expectedErrorMessage, actualErrorMessage)
@@ -101,7 +101,7 @@ func TestResource_Configure(t *testing.T) {
 		t.Error("Expected an error in resp.Diagnostics.Errors, but found none")
 	} else {
 		// Check the error message
-		expectedErrorMessage := "Expected *pinecone.Client, got: string. Please report this issue to the provider developers."
+		expectedErrorMessage := "Expected *pinecone.Client or *pinecone.AdminClient, got: string. Please report this issue to the provider developers."
 		actualErrorMessage := invalidResp.Diagnostics.Errors()[0].Detail()
 		if actualErrorMessage != expectedErrorMessage {
 			t.Errorf("Expected error message: %s, got: %s", expectedErrorMessage, actualErrorMessage)
