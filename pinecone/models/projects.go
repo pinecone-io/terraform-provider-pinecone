@@ -15,13 +15,13 @@ import (
 
 // ProjectResourceModel defines the Project model for the resource.
 type ProjectResourceModel struct {
-	Id                    types.String   `tfsdk:"id"`
-	Name                  types.String   `tfsdk:"name"`
-	OrganizationId        types.String   `tfsdk:"organization_id"`
-	CreatedAt             types.String   `tfsdk:"created_at"`
-	ForceEncryptionWithCmek types.Bool   `tfsdk:"force_encryption_with_cmek"`
-	MaxPods               types.Int64    `tfsdk:"max_pods"`
-	Timeouts              timeouts.Value `tfsdk:"timeouts"`
+	Id                      types.String   `tfsdk:"id"`
+	Name                    types.String   `tfsdk:"name"`
+	OrganizationId          types.String   `tfsdk:"organization_id"`
+	CreatedAt               types.String   `tfsdk:"created_at"`
+	ForceEncryptionWithCmek types.Bool     `tfsdk:"force_encryption_with_cmek"`
+	MaxPods                 types.Int64    `tfsdk:"max_pods"`
+	Timeouts                timeouts.Value `tfsdk:"timeouts"`
 }
 
 func (model *ProjectResourceModel) Read(ctx context.Context, project *pinecone.Project) diag.Diagnostics {
@@ -32,7 +32,7 @@ func (model *ProjectResourceModel) Read(ctx context.Context, project *pinecone.P
 	model.OrganizationId = types.StringValue(project.OrganizationId)
 	model.ForceEncryptionWithCmek = types.BoolValue(project.ForceEncryptionWithCmek)
 	model.MaxPods = types.Int64Value(int64(project.MaxPods))
-	
+
 	if project.CreatedAt != nil {
 		model.CreatedAt = types.StringValue(project.CreatedAt.Format(time.RFC3339))
 	} else {
@@ -44,12 +44,12 @@ func (model *ProjectResourceModel) Read(ctx context.Context, project *pinecone.P
 
 // ProjectDatasourceModel defines the Project model for the datasource.
 type ProjectDatasourceModel struct {
-	Id                    types.String `tfsdk:"id"`
-	Name                  types.String `tfsdk:"name"`
-	OrganizationId        types.String `tfsdk:"organization_id"`
-	CreatedAt             types.String `tfsdk:"created_at"`
-	ForceEncryptionWithCmek types.Bool `tfsdk:"force_encryption_with_cmek"`
-	MaxPods               types.Int64  `tfsdk:"max_pods"`
+	Id                      types.String `tfsdk:"id"`
+	Name                    types.String `tfsdk:"name"`
+	OrganizationId          types.String `tfsdk:"organization_id"`
+	CreatedAt               types.String `tfsdk:"created_at"`
+	ForceEncryptionWithCmek types.Bool   `tfsdk:"force_encryption_with_cmek"`
+	MaxPods                 types.Int64  `tfsdk:"max_pods"`
 }
 
 func (model *ProjectDatasourceModel) Read(ctx context.Context, project *pinecone.Project) diag.Diagnostics {
@@ -60,7 +60,7 @@ func (model *ProjectDatasourceModel) Read(ctx context.Context, project *pinecone
 	model.OrganizationId = types.StringValue(project.OrganizationId)
 	model.ForceEncryptionWithCmek = types.BoolValue(project.ForceEncryptionWithCmek)
 	model.MaxPods = types.Int64Value(int64(project.MaxPods))
-	
+
 	if project.CreatedAt != nil {
 		model.CreatedAt = types.StringValue(project.CreatedAt.Format(time.RFC3339))
 	} else {
@@ -77,12 +77,12 @@ type ProjectsDataSourceModel struct {
 }
 
 type ProjectModel struct {
-	Id                    types.String `tfsdk:"id"`
-	Name                  types.String `tfsdk:"name"`
-	OrganizationId        types.String `tfsdk:"organization_id"`
-	CreatedAt             types.String `tfsdk:"created_at"`
-	ForceEncryptionWithCmek types.Bool `tfsdk:"force_encryption_with_cmek"`
-	MaxPods               types.Int64  `tfsdk:"max_pods"`
+	Id                      types.String `tfsdk:"id"`
+	Name                    types.String `tfsdk:"name"`
+	OrganizationId          types.String `tfsdk:"organization_id"`
+	CreatedAt               types.String `tfsdk:"created_at"`
+	ForceEncryptionWithCmek types.Bool   `tfsdk:"force_encryption_with_cmek"`
+	MaxPods                 types.Int64  `tfsdk:"max_pods"`
 }
 
 func (model *ProjectModel) Read(ctx context.Context, project *pinecone.Project) diag.Diagnostics {
@@ -93,7 +93,7 @@ func (model *ProjectModel) Read(ctx context.Context, project *pinecone.Project) 
 	model.OrganizationId = types.StringValue(project.OrganizationId)
 	model.ForceEncryptionWithCmek = types.BoolValue(project.ForceEncryptionWithCmek)
 	model.MaxPods = types.Int64Value(int64(project.MaxPods))
-	
+
 	if project.CreatedAt != nil {
 		model.CreatedAt = types.StringValue(project.CreatedAt.Format(time.RFC3339))
 	} else {
@@ -101,4 +101,4 @@ func (model *ProjectModel) Read(ctx context.Context, project *pinecone.Project) 
 	}
 
 	return diags
-} 
+}

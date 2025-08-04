@@ -14,12 +14,12 @@ import (
 
 // APIKeyResourceModel defines the API Key model for the resource.
 type APIKeyResourceModel struct {
-	Id          types.String   `tfsdk:"id"`
-	Name        types.String   `tfsdk:"name"`
-	ProjectId   types.String   `tfsdk:"project_id"`
-	Roles       types.List     `tfsdk:"roles"`
-	Value       types.String   `tfsdk:"value"`
-	Timeouts    timeouts.Value `tfsdk:"timeouts"`
+	Id        types.String   `tfsdk:"id"`
+	Name      types.String   `tfsdk:"name"`
+	ProjectId types.String   `tfsdk:"project_id"`
+	Roles     types.List     `tfsdk:"roles"`
+	Value     types.String   `tfsdk:"value"`
+	Timeouts  timeouts.Value `tfsdk:"timeouts"`
 }
 
 func (model *APIKeyResourceModel) Read(ctx context.Context, apiKey *pinecone.APIKey) diag.Diagnostics {
@@ -28,7 +28,7 @@ func (model *APIKeyResourceModel) Read(ctx context.Context, apiKey *pinecone.API
 	model.Id = types.StringValue(apiKey.Id)
 	model.Name = types.StringValue(apiKey.Name)
 	model.ProjectId = types.StringValue(apiKey.ProjectId)
-	
+
 	// Convert roles to list
 	roles, diags := types.ListValueFrom(ctx, types.StringType, apiKey.Roles)
 	if diags.HasError() {
@@ -44,7 +44,7 @@ func (model *APIKeyResourceModel) ReadWithSecret(ctx context.Context, apiKeyWith
 
 	// Read the regular API key details
 	diags.Append(model.Read(ctx, &apiKeyWithSecret.Key)...)
-	
+
 	// Set the secret value
 	model.Value = types.StringValue(apiKeyWithSecret.Value)
 
@@ -65,7 +65,7 @@ func (model *APIKeyDatasourceModel) Read(ctx context.Context, apiKey *pinecone.A
 	model.Id = types.StringValue(apiKey.Id)
 	model.Name = types.StringValue(apiKey.Name)
 	model.ProjectId = types.StringValue(apiKey.ProjectId)
-	
+
 	// Convert roles to list
 	roles, diags := types.ListValueFrom(ctx, types.StringType, apiKey.Roles)
 	if diags.HasError() {
@@ -95,7 +95,7 @@ func (model *APIKeyModel) Read(ctx context.Context, apiKey *pinecone.APIKey) dia
 	model.Id = types.StringValue(apiKey.Id)
 	model.Name = types.StringValue(apiKey.Name)
 	model.ProjectId = types.StringValue(apiKey.ProjectId)
-	
+
 	// Convert roles to list
 	roles, diags := types.ListValueFrom(ctx, types.StringType, apiKey.Roles)
 	if diags.HasError() {
@@ -104,4 +104,4 @@ func (model *APIKeyModel) Read(ctx context.Context, apiKey *pinecone.APIKey) dia
 	model.Roles = roles
 
 	return diags
-} 
+}

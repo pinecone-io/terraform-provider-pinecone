@@ -50,4 +50,4 @@ resource "pinecone_api_key" "test" {
   project_id = pinecone_project.test.id
 }
 `
-} 
+}

@@ -10,7 +10,7 @@ import (
 )
 
 type PineconeDatasource struct {
-	client *pinecone.Client
+	client      *pinecone.Client
 	adminClient *pinecone.AdminClient
 }
 

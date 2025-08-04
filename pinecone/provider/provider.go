@@ -28,10 +28,10 @@ type PineconeProvider struct {
 
 // PineconeProviderModel describes the provider data model.
 type PineconeProviderModel struct {
-	ApiKey      types.String `tfsdk:"api_key"`
-	ClientId    types.String `tfsdk:"client_id"`
+	ApiKey       types.String `tfsdk:"api_key"`
+	ClientId     types.String `tfsdk:"client_id"`
 	ClientSecret types.String `tfsdk:"client_secret"`
-	AccessToken types.String `tfsdk:"access_token"`
+	AccessToken  types.String `tfsdk:"access_token"`
 }
 
 func (p *PineconeProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -101,12 +101,12 @@ func (p *PineconeProvider) Configure(ctx context.Context, req provider.Configure
 	// Note: Admin API requires OAuth credentials, not API key
 	// For now, we'll create the admin client only if OAuth credentials are available
 	var adminClient *pinecone.AdminClient
-	
+
 	// Check for OAuth credentials from provider config first, then environment variables
 	clientId := data.ClientId.ValueString()
 	clientSecret := data.ClientSecret.ValueString()
 	accessToken := data.AccessToken.ValueString()
-	
+
 	if clientId == "" {
 		clientId = os.Getenv("PINECONE_CLIENT_ID")
 	}
@@ -116,7 +116,7 @@ func (p *PineconeProvider) Configure(ctx context.Context, req provider.Configure
 	if accessToken == "" {
 		accessToken = os.Getenv("PINECONE_ACCESS_TOKEN")
 	}
-	
+
 	if clientId != "" && clientSecret != "" {
 		sourceTag := "terraform"
 		adminClient, err = pinecone.NewAdminClient(pinecone.NewAdminClientParams{

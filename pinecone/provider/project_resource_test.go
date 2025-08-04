@@ -43,4 +43,4 @@ resource "pinecone_project" "test" {
   name = "` + name + `"
 }
 `
-} 
+}
