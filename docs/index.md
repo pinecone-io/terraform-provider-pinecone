@@ -33,7 +33,7 @@ provider "pinecone" {}
 
 ### Optional
 
+- `access_token` (String, Sensitive) Pinecone OAuth Access Token. Can be configured by setting PINECONE_ACCESS_TOKEN environment variable.
 - `api_key` (String, Sensitive) Pinecone API Key. Can be configured by setting PINECONE_API_KEY environment variable.
 - `client_id` (String, Sensitive) Pinecone OAuth Client ID. Can be configured by setting PINECONE_CLIENT_ID environment variable.
 - `client_secret` (String, Sensitive) Pinecone OAuth Client Secret. Can be configured by setting PINECONE_CLIENT_SECRET environment variable.
-- `access_token` (String, Sensitive) Pinecone OAuth Access Token. Can be configured by setting PINECONE_ACCESS_TOKEN environment variable.
