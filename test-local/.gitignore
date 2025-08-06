@@ -1,0 +1,23 @@
+# Terraform files that should not be committed
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
+*.tfstate
+*.tfstate.*
+
+# Environment files with secrets
+.env
+
+# Provider binary (if copied locally)
+terraform-provider-pinecone
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo 

@@ -28,7 +28,15 @@ type PineconeProvider struct {
 
 // PineconeProviderModel describes the provider data model.
 type PineconeProviderModel struct {
-	ApiKey types.String `tfsdk:"api_key"`
+	ApiKey      types.String `tfsdk:"api_key"`
+	ClientId    types.String `tfsdk:"client_id"`
+	ClientSecret types.String `tfsdk:"client_secret"`
+}
+
+// PineconeProviderData holds the provider data including both regular and admin clients
+type PineconeProviderData struct {
+	Client      *pinecone.Client
+	AdminClient *pinecone.AdminClient
 }
 
 func (p *PineconeProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -46,6 +54,16 @@ credentials before use. You can provide credentials via the PINECONE_API_KEY env
 		Attributes: map[string]schema.Attribute{
 			"api_key": schema.StringAttribute{
 				MarkdownDescription: "Pinecone API Key. Can be configured by setting PINECONE_API_KEY environment variable.",
+				Optional:            true,
+				Sensitive:           true,
+			},
+			"client_id": schema.StringAttribute{
+				MarkdownDescription: "Pinecone Client ID for admin operations. Can be configured by setting PINECONE_CLIENT_ID environment variable.",
+				Optional:            true,
+				Sensitive:           true,
+			},
+			"client_secret": schema.StringAttribute{
+				MarkdownDescription: "Pinecone Client Secret for admin operations. Can be configured by setting PINECONE_CLIENT_SECRET environment variable.",
 				Optional:            true,
 				Sensitive:           true,
 			},
@@ -69,23 +87,60 @@ func (p *PineconeProvider) Configure(ctx context.Context, req provider.Configure
 		apiKey = data.ApiKey.ValueString()
 	}
 
-	client, err := pinecone.NewClient(pinecone.NewClientParams{
-		ApiKey:    apiKey,
-		SourceTag: "terraform",
-	})
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to create pinecone client", err.Error())
+	clientId := os.Getenv("PINECONE_CLIENT_ID")
+	if !data.ClientId.IsNull() {
+		clientId = data.ClientId.ValueString()
+	}
+
+	clientSecret := os.Getenv("PINECONE_CLIENT_SECRET")
+	if !data.ClientSecret.IsNull() {
+		clientSecret = data.ClientSecret.ValueString()
+	}
+
+	// Create provider data structure
+	providerData := &PineconeProviderData{}
+
+	// Create regular client only if API key is provided
+	if apiKey != "" {
+		client, err := pinecone.NewClient(pinecone.NewClientParams{
+			ApiKey:    apiKey,
+			SourceTag: "terraform",
+		})
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to create pinecone client", err.Error())
+			return
+		}
+		providerData.Client = client
+	}
+
+	// Create admin client only if admin credentials are provided
+	if clientId != "" && clientSecret != "" {
+		adminClient, err := pinecone.NewAdminClient(pinecone.NewAdminClientParams{
+			ClientId:     clientId,
+			ClientSecret: clientSecret,
+		})
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to create pinecone admin client", err.Error())
+			return
+		}
+		providerData.AdminClient = adminClient
+	}
+
+	// Check if at least one client is available
+	if providerData.Client == nil && providerData.AdminClient == nil {
+		resp.Diagnostics.AddError("No credentials provided", "Either API key (for regular operations) or client_id/client_secret (for admin operations) must be provided.")
 		return
 	}
 
-	resp.DataSourceData = client
-	resp.ResourceData = client
+	resp.DataSourceData = providerData
+	resp.ResourceData = providerData
 }
 
 func (p *PineconeProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewCollectionResource,
 		NewIndexResource,
+		NewApiKeyResource,
 	}
 }
 
