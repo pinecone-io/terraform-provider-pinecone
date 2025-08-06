@@ -14,9 +14,4 @@ provider "pinecone" {
 resource "pinecone_api_key" "example" {
   name       = "example-api-key"
   project_id = "your-project-id"
-
-  timeouts {
-    create = "10m"
-    delete = "10m"
-  }
 } 

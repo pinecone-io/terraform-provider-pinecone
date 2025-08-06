@@ -12,17 +12,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 	"github.com/pinecone-io/go-pinecone/v4/pinecone"
 	"github.com/pinecone-io/terraform-provider-pinecone/pinecone/models"
-)
-
-const (
-	defaultApiKeyCreateTimeout time.Duration = 5 * time.Minute
-	defaultApiKeyDeleteTimeout time.Duration = 5 * time.Minute
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -80,20 +74,6 @@ func (r *ApiKeyResource) Schema(ctx context.Context, req resource.SchemaRequest,
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
-		},
-		Blocks: map[string]schema.Block{
-			"timeouts": timeouts.Block(ctx,
-				timeouts.Opts{
-					Create: true,
-					CreateDescription: `Timeout defaults to 5 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) ` +
-						`consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are ` +
-						`"s" (seconds), "m" (minutes), "h" (hours).`,
-					Delete: true,
-					DeleteDescription: `Timeout defaults to 5 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) ` +
-						`consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are ` +
-						`"s" (seconds), "m" (minutes), "h" (hours).`,
-				},
-			),
 		},
 	}
 }
@@ -221,13 +201,7 @@ func (r *ApiKeyResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	}
 
 	// Wait for API key to be deleted
-	deleteTimeout, diags := data.Timeouts.Delete(ctx, defaultApiKeyDeleteTimeout)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	err = retry.RetryContext(ctx, deleteTimeout, func() *retry.RetryError {
+	err = retry.RetryContext(ctx, 5*time.Minute, func() *retry.RetryError {
 		// List API keys to check if the key still exists
 		apiKeys, err := r.adminClient.APIKey.List(ctx, data.ProjectId.ValueString())
 		if err != nil {

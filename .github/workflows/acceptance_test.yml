@@ -36,6 +36,9 @@ jobs:
       - run: go mod download
       - env:
           PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+          PINECONE_CLIENT_ID: ${{ secrets.PINECONE_CLIENT_ID }}
+          PINECONE_CLIENT_SECRET: ${{ secrets.PINECONE_CLIENT_SECRET }}
+          PINECONE_PROJECT_ID: ${{ secrets.PINECONE_PROJECT_ID }}
           TF_ACC: '1'
         run: go test -race -covermode=atomic -coverprofile=coverage.out -v ./pinecone/provider/
         timeout-minutes: 15
