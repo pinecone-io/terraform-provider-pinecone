@@ -11,7 +11,7 @@ require (
 	github.com/hashicorp/terraform-plugin-log v0.9.0
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.36.1
 	github.com/hashicorp/terraform-plugin-testing v1.12.0
-	github.com/pinecone-io/go-pinecone/v3 v3.1.0
+	github.com/pinecone-io/go-pinecone/v4 v4.1.3
 )
 
 require (
