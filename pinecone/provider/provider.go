@@ -28,12 +28,12 @@ type PineconeProvider struct {
 
 // PineconeProviderModel describes the provider data model.
 type PineconeProviderModel struct {
-	ApiKey      types.String `tfsdk:"api_key"`
-	ClientId    types.String `tfsdk:"client_id"`
+	ApiKey       types.String `tfsdk:"api_key"`
+	ClientId     types.String `tfsdk:"client_id"`
 	ClientSecret types.String `tfsdk:"client_secret"`
 }
 
-// PineconeProviderData holds the provider data including both regular and admin clients
+// PineconeProviderData holds the provider data including both regular and admin clients.
 type PineconeProviderData struct {
 	Client      *pinecone.Client
 	AdminClient *pinecone.AdminClient

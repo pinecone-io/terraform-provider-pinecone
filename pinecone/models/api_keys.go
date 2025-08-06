@@ -10,4 +10,4 @@ type ApiKeyResourceModel struct {
 	Name      types.String `tfsdk:"name"`
 	ProjectId types.String `tfsdk:"project_id"`
 	Key       types.String `tfsdk:"key"`
-} 
+}
