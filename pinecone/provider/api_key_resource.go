@@ -74,6 +74,11 @@ func (r *ApiKeyResource) Schema(ctx context.Context, req resource.SchemaRequest,
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
+			"roles": schema.ListAttribute{
+				ElementType:         types.StringType,
+				MarkdownDescription: "The roles assigned to the API key.",
+				Computed:            true,
+			},
 		},
 	}
 }
@@ -105,6 +110,10 @@ func (r *ApiKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 	// Set the computed values
 	data.Id = types.StringValue(apiKeyWithSecret.Key.Id)
 	data.Key = types.StringValue(apiKeyWithSecret.Value)
+
+	// Convert roles from []string to types.List
+	rolesList, _ := types.ListValueFrom(ctx, types.StringType, apiKeyWithSecret.Key.Roles)
+	data.Roles = rolesList
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -155,6 +164,10 @@ func (r *ApiKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 	data.Name = types.StringValue(foundApiKey.Name)
 	// Note: The API key value is not returned in the list operation for security reasons
 	// So we keep the existing key value from state
+
+	// Convert roles from []string to types.List
+	rolesList, _ := types.ListValueFrom(ctx, types.StringType, foundApiKey.Roles)
+	data.Roles = rolesList
 
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
