@@ -8,6 +8,7 @@ terraform.tfstate.backup
 
 # Environment files with secrets
 .env
+setup-env.sh
 
 # Provider binary (if copied locally)
 terraform-provider-pinecone

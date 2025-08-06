@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Set your Pinecone admin credentials
+# Set your Pinecone admin credentials, changes in this file will not be committed to the repo
 export PINECONE_CLIENT_ID="pinecone-client-id"
 export PINECONE_CLIENT_SECRET="pinecone-client-secret"
 
