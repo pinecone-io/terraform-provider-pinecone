@@ -143,38 +143,24 @@ func (r *ApiKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	// List API keys to find the one with matching ID
-	apiKeys, err := r.adminClient.APIKey.List(ctx, data.ProjectId.ValueString())
+	// Describe the API key directly
+	apiKey, err := r.adminClient.APIKey.Describe(ctx, data.Id.ValueString())
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			resp.State.RemoveResource(ctx)
 		} else {
-			resp.Diagnostics.AddError("Failed to list API keys", err.Error())
+			resp.Diagnostics.AddError("Failed to describe API key", err.Error())
 		}
-		return
-	}
-
-	// Find the API key with matching ID
-	var foundApiKey *pinecone.APIKey
-	for _, key := range apiKeys {
-		if key.Id == data.Id.ValueString() {
-			foundApiKey = key
-			break
-		}
-	}
-
-	if foundApiKey == nil {
-		resp.State.RemoveResource(ctx)
 		return
 	}
 
 	// Update the model with the found API key
-	data.Name = types.StringValue(foundApiKey.Name)
-	// Note: The API key value is not returned in the list operation for security reasons
+	data.Name = types.StringValue(apiKey.Name)
+	// Note: The API key value is not returned in the describe operation for security reasons
 	// So we keep the existing key value from state
 
 	// Convert roles from []string to types.Set
-	rolesSet, _ := types.SetValueFrom(ctx, types.StringType, foundApiKey.Roles)
+	rolesSet, _ := types.SetValueFrom(ctx, types.StringType, apiKey.Roles)
 	data.Roles = rolesSet
 
 	// Save updated data into Terraform state
