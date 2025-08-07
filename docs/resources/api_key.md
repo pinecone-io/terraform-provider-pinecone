@@ -55,7 +55,7 @@ output "api_key_roles" {
 
 ### Optional
 
-- `roles` (List of String) The roles assigned to the API key. Valid values are: ProjectEditor, ProjectViewer, ControlPlaneEditor, ControlPlaneViewer, DataPlaneEditor, DataPlaneViewer. Defaults to ["ProjectEditor"].
+- `roles` (Set of String) The roles assigned to the API key. Valid values are: ProjectEditor, ProjectViewer, ControlPlaneEditor, ControlPlaneViewer, DataPlaneEditor, DataPlaneViewer. Defaults to ["ProjectEditor"].
 
 ### Read-Only
 
