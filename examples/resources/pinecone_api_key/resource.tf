@@ -11,9 +11,17 @@ provider "pinecone" {
   client_secret = "your-client-secret"
 }
 
+# Create API key with default roles (ProjectEditor)
 resource "pinecone_api_key" "example" {
   name       = "example-api-key"
   project_id = "your-project-id"
+}
+
+# Create API key with custom roles
+resource "pinecone_api_key" "custom_roles" {
+  name       = "custom-roles-api-key"
+  project_id = "your-project-id"
+  roles      = ["ProjectViewer", "DataPlaneViewer"]
 }
 
 output "api_key_roles" {

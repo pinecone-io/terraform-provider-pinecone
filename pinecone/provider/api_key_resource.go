@@ -50,10 +50,10 @@ func (r *ApiKeyResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				},
 			},
 			"name": schema.StringAttribute{
-				MarkdownDescription: "The name of the API key to be created.",
+				MarkdownDescription: "The name of the API key to be created. Must be 1-80 characters long.",
 				Required:            true,
 				Validators: []validator.String{
-					stringvalidator.LengthAtLeast(1),
+					stringvalidator.LengthBetween(1, 80),
 				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -74,9 +74,10 @@ func (r *ApiKeyResource) Schema(ctx context.Context, req resource.SchemaRequest,
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"roles": schema.ListAttribute{
+			"roles": schema.SetAttribute{
 				ElementType:         types.StringType,
-				MarkdownDescription: "The roles assigned to the API key.",
+				MarkdownDescription: "The roles assigned to the API key. Valid values are: ProjectEditor, ProjectViewer, ControlPlaneEditor, ControlPlaneViewer, DataPlaneEditor, DataPlaneViewer. Defaults to [\"ProjectEditor\"].",
+				Optional:            true,
 				Computed:            true,
 			},
 		},
@@ -98,10 +99,23 @@ func (r *ApiKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	// Create the API key
-	apiKeyWithSecret, err := r.adminClient.APIKey.Create(ctx, data.ProjectId.ValueString(), &pinecone.CreateAPIKeyParams{
+	// Prepare create parameters
+	createParams := &pinecone.CreateAPIKeyParams{
 		Name: data.Name.ValueString(),
-	})
+	}
+
+	// Handle roles field
+	if !data.Roles.IsNull() && !data.Roles.IsUnknown() {
+		var roles []string
+		resp.Diagnostics.Append(data.Roles.ElementsAs(ctx, &roles, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		createParams.Roles = &roles
+	}
+
+	// Create the API key
+	apiKeyWithSecret, err := r.adminClient.APIKey.Create(ctx, data.ProjectId.ValueString(), createParams)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create API key", err.Error())
 		return
@@ -111,9 +125,9 @@ func (r *ApiKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 	data.Id = types.StringValue(apiKeyWithSecret.Key.Id)
 	data.Key = types.StringValue(apiKeyWithSecret.Value)
 
-	// Convert roles from []string to types.List
-	rolesList, _ := types.ListValueFrom(ctx, types.StringType, apiKeyWithSecret.Key.Roles)
-	data.Roles = rolesList
+	// Convert roles from []string to types.Set
+	rolesSet, _ := types.SetValueFrom(ctx, types.StringType, apiKeyWithSecret.Key.Roles)
+	data.Roles = rolesSet
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -165,9 +179,9 @@ func (r *ApiKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 	// Note: The API key value is not returned in the list operation for security reasons
 	// So we keep the existing key value from state
 
-	// Convert roles from []string to types.List
-	rolesList, _ := types.ListValueFrom(ctx, types.StringType, foundApiKey.Roles)
-	data.Roles = rolesList
+	// Convert roles from []string to types.Set
+	rolesSet, _ := types.SetValueFrom(ctx, types.StringType, foundApiKey.Roles)
+	data.Roles = rolesSet
 
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)

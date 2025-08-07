@@ -10,5 +10,5 @@ type ApiKeyResourceModel struct {
 	Name      types.String `tfsdk:"name"`
 	ProjectId types.String `tfsdk:"project_id"`
 	Key       types.String `tfsdk:"key"`
-	Roles     types.List   `tfsdk:"roles"`
+	Roles     types.Set    `tfsdk:"roles"`
 }

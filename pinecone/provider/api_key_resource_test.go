@@ -22,29 +22,75 @@ func TestAccApiKeyResource(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccApiKeyResourceConfig("test-api-key", projectId),
+				Config: testAccApiKeyResourceConfig(projectId),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("pinecone_api_key.test", "name", "test-api-key"),
-					resource.TestCheckResourceAttr("pinecone_api_key.test", "project_id", projectId),
-					resource.TestCheckResourceAttrSet("pinecone_api_key.test", "id"),
-					resource.TestCheckResourceAttrSet("pinecone_api_key.test", "key"),
-					resource.TestCheckResourceAttr("pinecone_api_key.test", "roles.#", "1"),
+					// Test default roles
+					resource.TestCheckResourceAttr("pinecone_api_key.default", "name", "test-api-key-default"),
+					resource.TestCheckResourceAttr("pinecone_api_key.default", "project_id", projectId),
+					resource.TestCheckResourceAttrSet("pinecone_api_key.default", "id"),
+					resource.TestCheckResourceAttrSet("pinecone_api_key.default", "key"),
+					resource.TestCheckResourceAttr("pinecone_api_key.default", "roles.#", "1"),
 				),
 			},
 		},
 	})
 }
 
-func testAccApiKeyResourceConfig(name, projectId string) string {
+func TestAccApiKeyResourceWithCustomRoles(t *testing.T) {
+	projectId := os.Getenv("PINECONE_PROJECT_ID")
+	clientId := os.Getenv("PINECONE_CLIENT_ID")
+	clientSecret := os.Getenv("PINECONE_CLIENT_SECRET")
+
+	if projectId == "" || clientId == "" || clientSecret == "" {
+		t.Skip("PINECONE_PROJECT_ID, PINECONE_CLIENT_ID, and PINECONE_CLIENT_SECRET environment variables are required for this test")
+	}
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccApiKeyResourceWithCustomRolesConfig(projectId),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					// Test custom roles
+					resource.TestCheckResourceAttr("pinecone_api_key.custom", "name", "test-api-key-custom"),
+					resource.TestCheckResourceAttr("pinecone_api_key.custom", "project_id", projectId),
+					resource.TestCheckResourceAttrSet("pinecone_api_key.custom", "id"),
+					resource.TestCheckResourceAttrSet("pinecone_api_key.custom", "key"),
+					resource.TestCheckResourceAttr("pinecone_api_key.custom", "roles.#", "2"),
+				),
+			},
+		},
+	})
+}
+
+func testAccApiKeyResourceConfig(projectId string) string {
 	return fmt.Sprintf(`
 provider "pinecone" {
   client_id     = "%s"
   client_secret = "%s"
 }
 
-resource "pinecone_api_key" "test" {
-  name       = %[3]q
-  project_id = %[4]q
+# Test API key with default roles (ProjectEditor)
+resource "pinecone_api_key" "default" {
+  name       = "test-api-key-default"
+  project_id = %[3]q
 }
-`, os.Getenv("PINECONE_CLIENT_ID"), os.Getenv("PINECONE_CLIENT_SECRET"), name, projectId)
+`, os.Getenv("PINECONE_CLIENT_ID"), os.Getenv("PINECONE_CLIENT_SECRET"), projectId)
+}
+
+func testAccApiKeyResourceWithCustomRolesConfig(projectId string) string {
+	return fmt.Sprintf(`
+provider "pinecone" {
+  client_id     = "%s"
+  client_secret = "%s"
+}
+
+# Test API key with custom roles
+resource "pinecone_api_key" "custom" {
+  name       = "test-api-key-custom"
+  project_id = %[3]q
+  roles      = ["ProjectViewer", "DataPlaneViewer"]
+}
+`, os.Getenv("PINECONE_CLIENT_ID"), os.Getenv("PINECONE_CLIENT_SECRET"), projectId)
 }
