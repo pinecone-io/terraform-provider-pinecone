@@ -55,16 +55,10 @@ func (r *ApiKeyResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				Validators: []validator.String{
 					stringvalidator.LengthBetween(1, 80),
 				},
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
 			},
 			"project_id": schema.StringAttribute{
 				MarkdownDescription: "The project ID where the API key will be created.",
 				Required:            true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
 			},
 			"key": schema.StringAttribute{
 				MarkdownDescription: "The generated API key value.",
@@ -188,17 +182,74 @@ func (r *ApiKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 }
 
 func (r *ApiKeyResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	// API keys don't support updates, so we'll just read the current state
 	var data models.ApiKeyResourceModel
+	var state models.ApiKeyResourceModel
 
-	// Read Terraform prior state data into the model
-	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-
+	// Read Terraform plan data into the model
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Since API keys don't support updates, we'll just save the current state
+	// Read Terraform prior state data into the model
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Check if admin client is available
+	if r.adminClient == nil {
+		resp.Diagnostics.AddError("Admin client not configured", "Admin client credentials (client_id and client_secret) are required to update API keys.")
+		return
+	}
+
+	// Prepare update parameters
+	updateParams := &pinecone.UpdateAPIKeyParams{}
+
+	// Check if name has changed
+	if !data.Name.Equal(state.Name) {
+		name := data.Name.ValueString()
+		updateParams.Name = &name
+	}
+
+	// Check if roles have changed
+	if !data.Roles.Equal(state.Roles) {
+		if !data.Roles.IsNull() && !data.Roles.IsUnknown() {
+			var roles []string
+			resp.Diagnostics.Append(data.Roles.ElementsAs(ctx, &roles, false)...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+			updateParams.Roles = &roles
+		} else {
+			// If roles is null/unknown, set to empty slice
+			emptyRoles := []string{}
+			updateParams.Roles = &emptyRoles
+		}
+	}
+
+	// Only update if there are changes
+	if updateParams.Name == nil && updateParams.Roles == nil {
+		// No changes, just save the current state
+		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+		return
+	}
+
+	// Update the API key
+	updatedApiKey, err := r.adminClient.APIKey.Update(ctx, data.Id.ValueString(), updateParams)
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to update API key", err.Error())
+		return
+	}
+
+	// Update the model with the updated API key
+	data.Name = types.StringValue(updatedApiKey.Name)
+
+	// Convert roles from []string to types.Set
+	rolesSet, _ := types.SetValueFrom(ctx, types.StringType, updatedApiKey.Roles)
+	data.Roles = rolesSet
+
+	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 

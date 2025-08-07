@@ -64,6 +64,43 @@ func TestAccApiKeyResourceWithCustomRoles(t *testing.T) {
 	})
 }
 
+func TestAccApiKeyResourceUpdate(t *testing.T) {
+	projectId := os.Getenv("PINECONE_PROJECT_ID")
+	clientId := os.Getenv("PINECONE_CLIENT_ID")
+	clientSecret := os.Getenv("PINECONE_CLIENT_SECRET")
+
+	if projectId == "" || clientId == "" || clientSecret == "" {
+		t.Skip("PINECONE_PROJECT_ID, PINECONE_CLIENT_ID, and PINECONE_CLIENT_SECRET environment variables are required for this test")
+	}
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccApiKeyResourceUpdateConfig(projectId, "test-api-key-update", ""),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("pinecone_api_key.update_test", "name", "test-api-key-update"),
+					resource.TestCheckResourceAttr("pinecone_api_key.update_test", "project_id", projectId),
+					resource.TestCheckResourceAttrSet("pinecone_api_key.update_test", "id"),
+					resource.TestCheckResourceAttrSet("pinecone_api_key.update_test", "key"),
+					resource.TestCheckResourceAttr("pinecone_api_key.update_test", "roles.#", "1"),
+				),
+			},
+			{
+				Config: testAccApiKeyResourceUpdateConfig(projectId, "test-api-key-updated", `roles = ["ProjectViewer", "DataPlaneViewer"]`),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("pinecone_api_key.update_test", "name", "test-api-key-updated"),
+					resource.TestCheckResourceAttr("pinecone_api_key.update_test", "project_id", projectId),
+					resource.TestCheckResourceAttrSet("pinecone_api_key.update_test", "id"),
+					resource.TestCheckResourceAttrSet("pinecone_api_key.update_test", "key"),
+					resource.TestCheckResourceAttr("pinecone_api_key.update_test", "roles.#", "2"),
+				),
+			},
+		},
+	})
+}
+
 func testAccApiKeyResourceConfig(projectId string) string {
 	return fmt.Sprintf(`
 provider "pinecone" {
@@ -93,4 +130,24 @@ resource "pinecone_api_key" "custom" {
   roles      = ["ProjectViewer", "DataPlaneViewer"]
 }
 `, os.Getenv("PINECONE_CLIENT_ID"), os.Getenv("PINECONE_CLIENT_SECRET"), projectId)
+}
+
+func testAccApiKeyResourceUpdateConfig(projectId, name, roles string) string {
+	rolesConfig := ""
+	if roles != "" {
+		rolesConfig = fmt.Sprintf("\n  %s", roles)
+	}
+
+	return fmt.Sprintf(`
+provider "pinecone" {
+  client_id     = "%s"
+  client_secret = "%s"
+}
+
+# Test API key with update functionality
+resource "pinecone_api_key" "update_test" {
+  name       = %[3]q
+  project_id = %[4]q%[5]s
+}
+`, os.Getenv("PINECONE_CLIENT_ID"), os.Getenv("PINECONE_CLIENT_SECRET"), name, projectId, rolesConfig)
 }
