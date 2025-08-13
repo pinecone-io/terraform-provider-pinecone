@@ -12,7 +12,7 @@ provider "pinecone" {}
 # Test create API key resource
 resource "pinecone_api_key" "test" {
   name       = "terraform-test-api-key"
-  project_id = "7fc0d584-1b12-4c70-872b-281d65426961"  # Update this with your actual project ID
+  project_id = "pinecone-project-id"  # Update this with your actual project ID
 }
 
 # Output the results
