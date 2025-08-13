@@ -8,7 +8,7 @@ terraform.tfstate.backup
 
 # Environment files with secrets
 .env
-setup-env.sh
+# setup-env.sh # TODO: remove this
 
 # Provider binary (if copied locally)
 terraform-provider-pinecone
