@@ -156,15 +156,21 @@ The following roles can be assigned to API keys:
 
 #### Managing API Keys
 
-You can update API key names and roles:
+You can update API key names and roles.
 
 ```terraform
-# Update API key name and roles
+# Create an API key that can be updated later
 resource "pinecone_api_key" "updatable" {
-  name       = "updated-name"
+  name       = "example-updatable-key"
   project_id = "your-project-id"
-  roles      = ["ProjectViewer", "DataPlaneViewer"]
+  roles      = ["ProjectEditor"]
 }
+
+# To update the API key, modify the name and/or roles fields:
+# resource "pinecone_api_key" "updatable" {
+#   name  = "updated-name"
+#   roles = ["ProjectViewer", "DataPlaneViewer"]
+# }
 ```
 
 #### Importing Existing API Keys

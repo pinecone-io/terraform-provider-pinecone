@@ -24,21 +24,20 @@ resource "pinecone_api_key" "custom_roles" {
   roles      = ["ProjectViewer", "DataPlaneViewer"]
 }
 
-# Update API key name and roles
+# Create an API key that can be updated later
 resource "pinecone_api_key" "updatable" {
-  name       = "initial-name"
+  name       = "example-updatable-key"
   project_id = "your-project-id"
   roles      = ["ProjectEditor"]
 }
 
-# Later, you can update the name and roles
-resource "pinecone_api_key" "updatable" {
-  name       = "updated-name"
-  project_id = "your-project-id"
-  roles      = ["ProjectViewer", "DataPlaneViewer"]
-}
+# Example of how to update the API key
+# resource "pinecone_api_key" "updatable" {
+#   name  = "updated-name"
+#   roles = ["ProjectViewer", "DataPlaneViewer"]
+# }
 
 output "api_key_roles" {
   description = "The roles assigned to the API key"
   value       = pinecone_api_key.example.roles
-} 
+}

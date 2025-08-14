@@ -10,8 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
@@ -45,9 +44,6 @@ func (r *ApiKeyResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			"id": schema.StringAttribute{
 				MarkdownDescription: "API key identifier",
 				Computed:            true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
 			},
 			"name": schema.StringAttribute{
 				MarkdownDescription: "The name of the API key to be created. Must be 1-80 characters long.",
@@ -57,16 +53,13 @@ func (r *ApiKeyResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				},
 			},
 			"project_id": schema.StringAttribute{
-				MarkdownDescription: "The project ID where the API key will be created.",
-				Required:            true,
+				MarkdownDescription: "The project ID where the API key will be created. Required for creation, optional for updates.",
+				Optional:            true,
 			},
 			"key": schema.StringAttribute{
 				MarkdownDescription: "The generated API key value.",
 				Computed:            true,
 				Sensitive:           true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
 			},
 			"roles": schema.SetAttribute{
 				ElementType:         types.StringType,
@@ -106,6 +99,12 @@ func (r *ApiKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 			return
 		}
 		createParams.Roles = &roles
+	}
+
+	// Validate project_id is provided for create
+	if data.ProjectId.IsNull() || data.ProjectId.IsUnknown() {
+		resp.Diagnostics.AddError("Project ID required", "project_id is required when creating an API key.")
+		return
 	}
 
 	// Create the API key
@@ -207,11 +206,8 @@ func (r *ApiKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 				return
 			}
 			updateParams.Roles = &roles
-		} else {
-			// If roles is null/unknown, set to empty slice
-			emptyRoles := []string{}
-			updateParams.Roles = &emptyRoles
 		}
+		// If roles is null/unknown, omit the field entirely to avoid updating roles
 	}
 
 	// Only update if there are changes
