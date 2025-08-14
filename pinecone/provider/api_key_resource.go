@@ -218,18 +218,22 @@ func (r *ApiKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 	}
 
 	// Update the API key
-	updatedApiKey, err := r.adminClient.APIKey.Update(ctx, data.Id.ValueString(), updateParams)
+	updatedApiKey, err := r.adminClient.APIKey.Update(ctx, state.Id.ValueString(), updateParams)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to update API key", err.Error())
 		return
 	}
 
 	// Update the model with the updated API key
+	data.Id = types.StringValue(updatedApiKey.Id)
 	data.Name = types.StringValue(updatedApiKey.Name)
 
 	// Convert roles from []string to types.Set
 	rolesSet, _ := types.SetValueFrom(ctx, types.StringType, updatedApiKey.Roles)
 	data.Roles = rolesSet
+
+	// Set key to null since Update API doesn't return it
+	data.Key = types.StringNull()
 
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)

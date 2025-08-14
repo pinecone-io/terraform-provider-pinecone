@@ -67,7 +67,7 @@ output "api_key_roles" {
 
 ### Optional
 
-- `project_id` (String) The project ID where the API key will be created.
+- `project_id` (String) The project ID where the API key will be created. Required for creation, optional for updates.
 - `roles` (Set of String) The roles assigned to the API key. Valid values are: ProjectEditor, ProjectViewer, ControlPlaneEditor, ControlPlaneViewer, DataPlaneEditor, DataPlaneViewer. Defaults to ["ProjectEditor"].
 
 ### Read-Only

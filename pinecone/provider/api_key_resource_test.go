@@ -93,7 +93,6 @@ func TestAccApiKeyResourceUpdate(t *testing.T) {
 					resource.TestCheckResourceAttr("pinecone_api_key.update_test", "name", "test-api-key-updated"),
 					resource.TestCheckResourceAttr("pinecone_api_key.update_test", "project_id", projectId),
 					resource.TestCheckResourceAttrSet("pinecone_api_key.update_test", "id"),
-					resource.TestCheckResourceAttrSet("pinecone_api_key.update_test", "key"),
 					resource.TestCheckResourceAttr("pinecone_api_key.update_test", "roles.#", "2"),
 				),
 			},
