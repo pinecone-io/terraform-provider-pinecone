@@ -126,23 +126,6 @@ provider "pinecone" {
 
 The Terraform Provider for Pinecone supports creating and managing Pinecone API keys. This is useful for automating the creation of API keys for different environments or applications.
 
-#### Creating API Keys
-
-```terraform
-# Create an API key with default roles (ProjectEditor)
-resource "pinecone_api_key" "example" {
-  name       = "example-api-key"
-  project_id = "your-project-id"
-}
-
-# Create an API key with custom roles
-resource "pinecone_api_key" "readonly" {
-  name       = "readonly-api-key"
-  project_id = "your-project-id"
-  roles      = ["ProjectViewer", "DataPlaneViewer"]
-}
-```
-
 #### Available Roles
 
 The following roles can be assigned to API keys:
@@ -153,69 +136,6 @@ The following roles can be assigned to API keys:
 - `ControlPlaneViewer`: Read-only access to control plane operations
 - `DataPlaneEditor`: Full access to data plane operations
 - `DataPlaneViewer`: Read-only access to data plane operations
-
-#### Managing API Keys
-
-You can update API key names and roles.
-
-```terraform
-# Create an API key that can be updated later
-resource "pinecone_api_key" "updatable" {
-  name       = "example-updatable-key"
-  project_id = "your-project-id"
-  roles      = ["ProjectEditor"]
-}
-
-# To update the API key, modify the name and/or roles fields:
-# resource "pinecone_api_key" "updatable" {
-#   name  = "updated-name"
-#   roles = ["ProjectViewer", "DataPlaneViewer"]
-# }
-```
-
-#### Importing Existing API Keys
-
-You can import existing API keys using the format `project_id:api_key_id`:
-
-```bash
-terraform import pinecone_api_key.example your-project-id:your-api-key-id
-```
-
-#### Example: Complete API Key Management Workflow
-
-```terraform
-# Provider configuration for admin operations
-provider "pinecone" {
-  client_id     = var.pinecone_client_id
-  client_secret = var.pinecone_client_secret
-}
-
-# Create API keys for different environments
-resource "pinecone_api_key" "dev" {
-  name       = "dev-environment-key"
-  project_id = var.pinecone_project_id
-  roles      = ["ProjectEditor", "DataPlaneEditor"]
-}
-
-resource "pinecone_api_key" "prod" {
-  name       = "prod-environment-key"
-  project_id = var.pinecone_project_id
-  roles      = ["ProjectViewer", "DataPlaneViewer"]
-}
-
-# Output the generated API keys (sensitive)
-output "dev_api_key" {
-  description = "Development environment API key"
-  value       = pinecone_api_key.dev.key
-  sensitive   = true
-}
-
-output "prod_api_key" {
-  description = "Production environment API key"
-  value       = pinecone_api_key.prod.key
-  sensitive   = true
-}
-```
 
 ## Documentation
 
