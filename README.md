@@ -63,12 +63,15 @@ terraform {
 }
 ```
 
-### Pinecone API Key
+### Authentication
 
-Your Pinecone API Key is required to use the Terraform Provider. There are a
-couple of ways to configure this.
+The Terraform Provider for Pinecone supports two types of authentication depending on the operations you need to perform:
 
-### As a `PINECONE_API_KEY` environment variable
+#### Regular Operations (Indexes, Collections)
+
+For managing indexes and collections, you need a Pinecone API Key.
+
+##### As a `PINECONE_API_KEY` environment variable
 
 You can configure the Pinecone client using environment variables to avoid
 setting sensitive values in the Terraform configuration file. To do so, set
@@ -79,8 +82,7 @@ is simply:
 provider "pinecone" {}
 ```
 
-
-### As part of the `provider` declaration
+##### As part of the `provider` declaration
 
 If your API key was set as an [Input Variable](https://developer.hashicorp.com/terraform/language/values/variables),
 you can use that value in the declaration. For example:
@@ -94,6 +96,46 @@ provider "pinecone" {
 Remember, your API Key should be a protected secret. See how to 
 [protect sensitive input variables](https://developer.hashicorp.com/terraform/tutorials/configuration-language/sensitive-variables)
 when setting your API Key this way.
+
+#### Admin Operations (API Key Management)
+
+For creating and managing API keys, you need admin credentials (Client ID and Client Secret).
+
+##### Using Environment Variables
+
+Set the following environment variables:
+- `PINECONE_CLIENT_ID`: Your Pinecone Client ID
+- `PINECONE_CLIENT_SECRET`: Your Pinecone Client Secret
+
+```terraform
+provider "pinecone" {}
+```
+
+##### Using Provider Configuration
+
+```terraform
+provider "pinecone" {
+  client_id     = var.pinecone_client_id
+  client_secret = var.pinecone_client_secret
+}
+```
+
+**Note**: Admin credentials are required for API key management operations. Regular API keys cannot be used to create or manage other API keys.
+
+### API Key Management
+
+The Terraform Provider for Pinecone supports creating and managing Pinecone API keys. This is useful for automating the creation of API keys for different environments or applications.
+
+#### Available Roles
+
+The following roles can be assigned to API keys:
+
+- `ProjectEditor`: Full access to project resources (default)
+- `ProjectViewer`: Read-only access to project resources
+- `ControlPlaneEditor`: Full access to control plane operations
+- `ControlPlaneViewer`: Read-only access to control plane operations
+- `DataPlaneEditor`: Full access to data plane operations
+- `DataPlaneViewer`: Read-only access to data plane operations
 
 ## Documentation
 

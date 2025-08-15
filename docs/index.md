@@ -34,3 +34,5 @@ provider "pinecone" {}
 ### Optional
 
 - `api_key` (String, Sensitive) Pinecone API Key. Can be configured by setting PINECONE_API_KEY environment variable.
+- `client_id` (String, Sensitive) Pinecone Client ID for admin operations. Can be configured by setting PINECONE_CLIENT_ID environment variable.
+- `client_secret` (String, Sensitive) Pinecone Client Secret for admin operations. Can be configured by setting PINECONE_CLIENT_SECRET environment variable.

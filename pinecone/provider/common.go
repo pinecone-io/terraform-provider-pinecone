@@ -6,11 +6,12 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/pinecone-io/go-pinecone/v3/pinecone"
+	"github.com/pinecone-io/go-pinecone/v4/pinecone"
 )
 
 type PineconeDatasource struct {
-	client *pinecone.Client
+	client      *pinecone.Client
+	adminClient *pinecone.AdminClient
 }
 
 func (d *PineconeDatasource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
@@ -19,21 +20,23 @@ func (d *PineconeDatasource) Configure(ctx context.Context, req datasource.Confi
 		return
 	}
 
-	client, ok := req.ProviderData.(*pinecone.Client)
+	providerData, ok := req.ProviderData.(*PineconeProviderData)
 
 	if !ok {
 		resp.Diagnostics.AddError(
-			"Unexpected Client Type",
-			fmt.Sprintf("Expected *pinecone.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			"Unexpected Provider Data Type",
+			fmt.Sprintf("Expected *PineconeProviderData, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
 
-	d.client = client
+	d.client = providerData.Client
+	d.adminClient = providerData.AdminClient
 }
 
 type PineconeResource struct {
-	client *pinecone.Client
+	client      *pinecone.Client
+	adminClient *pinecone.AdminClient
 }
 
 func (d *PineconeResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -42,15 +45,16 @@ func (d *PineconeResource) Configure(ctx context.Context, req resource.Configure
 		return
 	}
 
-	client, ok := req.ProviderData.(*pinecone.Client)
+	providerData, ok := req.ProviderData.(*PineconeProviderData)
 
 	if !ok {
 		resp.Diagnostics.AddError(
-			"Unexpected Client Type",
-			fmt.Sprintf("Expected *pinecone.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			"Unexpected Provider Data Type",
+			fmt.Sprintf("Expected *PineconeProviderData, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
 
-	d.client = client
+	d.client = providerData.Client
+	d.adminClient = providerData.AdminClient
 }
