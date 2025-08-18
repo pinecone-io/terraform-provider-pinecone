@@ -141,6 +141,7 @@ func (p *PineconeProvider) Resources(ctx context.Context) []func() resource.Reso
 		NewCollectionResource,
 		NewIndexResource,
 		NewApiKeyResource,
+		NewProjectResource,
 	}
 }
 

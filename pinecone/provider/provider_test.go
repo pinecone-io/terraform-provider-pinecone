@@ -4,6 +4,7 @@
 package provider
 
 import (
+	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
@@ -22,4 +23,14 @@ func testAccPreCheck(t *testing.T) {
 	// You can add code here to run prior to any test case execution, for example assertions
 	// about the appropriate environment variables being set are common to see in a pre-check
 	// function.
+}
+
+func testAccPreCheckAdmin(t *testing.T) {
+	// Check for admin client credentials
+	if v := os.Getenv("PINECONE_CLIENT_ID"); v == "" {
+		t.Fatal("PINECONE_CLIENT_ID environment variable must be set for admin acceptance tests")
+	}
+	if v := os.Getenv("PINECONE_CLIENT_SECRET"); v == "" {
+		t.Fatal("PINECONE_CLIENT_SECRET environment variable must be set for admin acceptance tests")
+	}
 }

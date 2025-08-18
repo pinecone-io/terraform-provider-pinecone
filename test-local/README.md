@@ -49,6 +49,7 @@ resource "pinecone_api_key" "test" {
 **Note**: You can modify `main.tf` to test any resource type. Refer to the `../examples/` folder for examples of how to create different resources:
 - `../examples/resources/pinecone_index/` - For index creation
 - `../examples/resources/pinecone_collection/` - For collection creation
+- `../examples/resources/pinecone_project/` - For project creation (requires admin credentials)
 - `../examples/data-sources/` - For data source usage
 
 ### Step 3: Initialize with Published Provider
@@ -92,7 +93,6 @@ provider "pinecone" {}
 
 - The local provider will have access to new features not yet in the published version
 - If you get checksum errors, remove `.terraform.lock.hcl` and re-run `terraform init`
-- This setup allows you to test new resources like `pinecone_api_key` before they're published
 - Credentials are stored in `setup-env.sh` which is gitignored for security
 - You can test any resource type by updating `main.tf` - see the `../examples/` folder for reference
 - The warning about missing `.terraformrc` file is expected and harmless

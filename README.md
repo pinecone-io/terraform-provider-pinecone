@@ -9,7 +9,7 @@ Workflow](https://github.com/pinecone-io/terraform-provider-pinecone/actions/wor
 ![GitHub release (latest by
 date)](https://img.shields.io/github/v/release/pinecone-io/terraform-provider-pinecone)
 
-The Terraform Provider for Pinecone allows Terraform to manage Pinecone resources.
+The Terraform Provider for Pinecone allows Terraform to manage Pinecone resources including indexes, collections, API keys, and projects.
 
 Note: We take Terraform's security and our users' trust very seriously. If you
 believe you have found a security issue in the Terraform Provider for Pinecone,
@@ -97,9 +97,9 @@ Remember, your API Key should be a protected secret. See how to
 [protect sensitive input variables](https://developer.hashicorp.com/terraform/tutorials/configuration-language/sensitive-variables)
 when setting your API Key this way.
 
-#### Admin Operations (API Key Management)
+#### Admin Operations (API Key and Project Management)
 
-For creating and managing API keys, you need admin credentials (Client ID and Client Secret).
+For creating and managing API keys and projects, you need admin credentials (Client ID and Client Secret).
 
 ##### Using Environment Variables
 
@@ -120,7 +120,28 @@ provider "pinecone" {
 }
 ```
 
-**Note**: Admin credentials are required for API key management operations. Regular API keys cannot be used to create or manage other API keys.
+#### Example: Creating a Project
+
+```terraform
+# Create a basic project
+resource "pinecone_project" "example" {
+  name = "my-production-project"
+}
+
+# Create a project with CMEK encryption
+resource "pinecone_project" "encrypted" {
+  name                        = "secure-project"
+  force_encryption_with_cmek  = true
+}
+
+# Create a project with custom pod limits
+resource "pinecone_project" "custom_pods" {
+  name     = "high-capacity-project"
+  max_pods = 10
+}
+```
+
+**Note**: Admin credentials are required for API key and project management operations. Regular API keys cannot be used to create or manage other API keys or projects.
 
 ### API Key Management
 
@@ -136,6 +157,25 @@ The following roles can be assigned to API keys:
 - `ControlPlaneViewer`: Read-only access to control plane operations
 - `DataPlaneEditor`: Full access to data plane operations
 - `DataPlaneViewer`: Read-only access to data plane operations
+
+### Project Management
+
+The Terraform Provider for Pinecone supports creating and managing Pinecone projects. This is useful for organizing your Pinecone resources and managing project-level configurations.
+
+#### Project Features
+
+- **Project Creation**: Create new projects with custom names
+- **CMEK Encryption**: Enable customer-managed encryption keys for enhanced security
+- **Pod Limits**: Configure maximum number of pods per project
+- **Project Import**: Import existing projects into Terraform state
+
+#### Project Configuration Options
+
+- `name`: The name of the project (required)
+- `force_encryption_with_cmek`: Enable CMEK encryption (optional, cannot be disabled once enabled)
+- `max_pods`: Maximum number of pods allowed in the project (optional, default varies by plan)
+
+**Note**: Project management requires admin credentials (Client ID and Client Secret). Regular API keys cannot be used to manage projects.
 
 ## Documentation
 

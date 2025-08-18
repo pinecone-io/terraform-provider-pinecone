@@ -6,4 +6,11 @@ The document generation tool looks for files in the following locations by defau
 
 * **provider/provider.tf** example file for the provider index page
 * **data-sources/`full data source name`/data-source.tf** example file for the named data source page
-* **resources/`full resource name`/resource.tf** example file for the named data source page
+* **resources/`full resource name`/resource.tf** example file for the named resource page
+
+## Available Resources
+
+* **pinecone_api_key** - Manage API keys in Pinecone projects
+* **pinecone_collection** - Manage Pinecone collections
+* **pinecone_index** - Manage Pinecone indexes
+* **pinecone_project** - Manage Pinecone projects (requires admin credentials)
