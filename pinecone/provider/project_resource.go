@@ -309,7 +309,7 @@ func (r *ProjectResource) Delete(ctx context.Context, req resource.DeleteRequest
 		return nil
 	})
 	if err != nil {
-		// If we get a retryable error that's related to the quota issue, 
+		// If we get a retryable error that's related to the quota issue,
 		// we can assume the project was likely deleted successfully
 		if strings.Contains(err.Error(), "Resource Quota PodsPerProject not found") ||
 			strings.Contains(err.Error(), "deletion verification in progress") {
