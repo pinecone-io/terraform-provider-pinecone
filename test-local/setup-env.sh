@@ -2,7 +2,7 @@
 
 # Clean up previous setup
 echo "Cleaning up previous setup..."
-rm -f .terraformrc
+rm -f .terraform
 rm -rf .terraform .terraform.lock.hcl
 echo "Cleanup complete!"
 
