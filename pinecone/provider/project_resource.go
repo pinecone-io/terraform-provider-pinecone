@@ -273,40 +273,23 @@ func (r *ProjectResource) Delete(ctx context.Context, req resource.DeleteRequest
 		return
 	}
 
-	// Wait for project to be deleted with more robust error handling
+	// Wait for project to be deleted with simplified verification
 	err = retry.RetryContext(ctx, 5*time.Minute, func() *retry.RetryError {
-		// First try to list projects to check if the project still exists
-		projects, err := r.adminClient.Project.List(ctx)
+		// Try to describe the specific project to check if it still exists
+		_, err := r.adminClient.Project.Describe(ctx, data.Id.ValueString())
 		if err != nil {
-			// Handle specific error cases that might be transient
-			if strings.Contains(err.Error(), "Resource Quota PodsPerProject not found") ||
+			// If we can't describe the project, it's likely deleted
+			if strings.Contains(err.Error(), "not found") ||
 				strings.Contains(err.Error(), "NOT_FOUND") ||
 				strings.Contains(err.Error(), "404") {
-				// Try fallback approach - directly check if the specific project exists
-				_, getErr := r.adminClient.Project.Describe(ctx, data.Id.ValueString())
-				if getErr != nil {
-					// If we can't describe the project, it's likely deleted
-					if strings.Contains(getErr.Error(), "not found") ||
-						strings.Contains(getErr.Error(), "NOT_FOUND") ||
-						strings.Contains(getErr.Error(), "404") {
-						return nil // Project is deleted
-					}
-				}
-				// This error might be transient, retry with a delay
-				return retry.RetryableError(fmt.Errorf("deletion verification in progress, retrying: %v", err))
+				return nil // Project is deleted
 			}
-			// For other errors, treat as non-retryable
-			return retry.NonRetryableError(err)
+			// For other errors, retry
+			return retry.RetryableError(fmt.Errorf("deletion verification in progress, retrying: %v", err))
 		}
 
-		// Check if the project still exists
-		for _, project := range projects {
-			if project.Id == data.Id.ValueString() {
-				return retry.RetryableError(fmt.Errorf("project not deleted yet"))
-			}
-		}
-
-		return nil
+		// Project still exists, retry
+		return retry.RetryableError(fmt.Errorf("project not deleted yet"))
 	})
 	if err != nil {
 		// If we get a retryable error that's related to the quota issue,
