@@ -151,6 +151,8 @@ func (p *PineconeProvider) DataSources(ctx context.Context) []func() datasource.
 		NewCollectionDataSource,
 		NewIndexesDataSource,
 		NewIndexDataSource,
+		NewProjectsDataSource,
+		NewProjectDataSource,
 	}
 }
 

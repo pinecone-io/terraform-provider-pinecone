@@ -12,8 +12,11 @@ provider "pinecone" {
   client_secret = "your-client-secret"
 }
 
-# Example API key resource
+# List all available projects
+data "pinecone_projects" "all" {}
+
+# Example API key resource using the first available project
 resource "pinecone_api_key" "example" {
   name       = "example-api-key"
-  project_id = "your-project-id"
+  project_id = data.pinecone_projects.all.projects[0].id
 } 
