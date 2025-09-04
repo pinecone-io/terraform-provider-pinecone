@@ -267,9 +267,7 @@ func (r *ProjectResource) Delete(ctx context.Context, req resource.DeleteRequest
 	// Delete the project
 	err := r.adminClient.Project.Delete(ctx, data.Id.ValueString())
 	if err != nil {
-		if !strings.Contains(err.Error(), "not found") {
-			resp.Diagnostics.AddError("Failed to delete project", err.Error())
-		}
+		resp.Diagnostics.AddError("Failed to delete project", err.Error())
 		return
 	}
 
@@ -292,10 +290,10 @@ func (r *ProjectResource) Delete(ctx context.Context, req resource.DeleteRequest
 		return retry.RetryableError(fmt.Errorf("project not deleted yet"))
 	})
 	if err != nil {
-		// If we get a retryable error that's related to the quota issue,
+		// If we get a retryable error that's related to deletion verification,
 		// we can assume the project was likely deleted successfully
-		if strings.Contains(err.Error(), "Resource Quota PodsPerProject not found") ||
-			strings.Contains(err.Error(), "deletion verification in progress") {
+		if strings.Contains(err.Error(), "deletion verification in progress") ||
+			strings.Contains(err.Error(), "not found") {
 			// Log a warning but don't fail the deletion
 			// The project deletion was successful, but verification failed due to timing issues
 			return

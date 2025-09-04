@@ -16,8 +16,7 @@ Project data source
 terraform {
   required_providers {
     pinecone = {
-      source  = "pinecone-io/pinecone"
-      version = "~> 1.0"
+      source = "pinecone-io/pinecone"
     }
   }
 }

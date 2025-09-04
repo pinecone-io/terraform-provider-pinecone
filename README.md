@@ -167,7 +167,6 @@ The Terraform Provider for Pinecone supports creating and managing Pinecone proj
 - **Project Creation**: Create new projects with custom names
 - **CMEK Encryption**: Enable customer-managed encryption keys for enhanced security
 - **Pod Limits**: Configure maximum number of pods per project
-- **Project Import**: Import existing projects into Terraform state
 
 #### Project Configuration Options
 
