@@ -46,36 +46,51 @@ resource "pinecone_api_key" "test" {
 }
 ```
 
-**Note**: You can modify `main.tf` to test any resource type. Refer to the `../examples/` folder for examples of how to create different resources:
+**Note**: You can modify `main.tf` to test any resource type, including unreleased features. Refer to the `../examples/` folder for examples of how to create different resources:
 - `../examples/resources/pinecone_index/` - For index creation
 - `../examples/resources/pinecone_collection/` - For collection creation
+- `../examples/resources/pinecone_project/` - For project creation (requires admin credentials)
 - `../examples/data-sources/` - For data source usage
 
-### Step 3: Initialize with Published Provider
+### Step 3: Initialize Terraform (Optional)
+
+You can run `terraform init` to initialize the workspace, but this will use the registry provider which doesn't support all features:
 
 ```bash
 terraform init
 ```
 
-This downloads the published provider and creates the necessary directory structure.
+### Step 4: Test with Local Provider
 
-### Step 4: Replace with Local Binary
-
-```bash
-cp ../terraform-provider-pinecone .terraform/providers/registry.terraform.io/pinecone-io/pinecone/1.0.0/darwin_arm64/terraform-provider-pinecone
-```
-
-This replaces the published provider binary with your local development version.
-
-### Step 5: Test Your Changes
+To use your locally built provider with all features, simply run:
 
 ```bash
-terraform plan
+source setup-env.sh && terraform plan
 ```
 
-Now you can test your local provider changes!
+This command:
+1. Sources your credentials from `setup-env.sh`
+2. Automatically configures Terraform to use your local provider
+3. Runs `terraform plan` using your local provider
 
 ## Configuration
+
+### Dev Overrides Setup
+
+The `.terraformrc` file configures Terraform to use your locally built provider:
+
+```hcl
+provider_installation {
+  dev_overrides {
+    "pinecone-io/pinecone" = "../"
+  }
+  direct {
+    exclude = ["pinecone-io/pinecone"]
+  }
+}
+```
+
+### Provider Configuration
 
 The provider will automatically pick up credentials from environment variables:
 
@@ -90,20 +105,36 @@ provider "pinecone" {}
 
 ## Notes
 
-- The local provider will have access to new features not yet in the published version
-- If you get checksum errors, remove `.terraform.lock.hcl` and re-run `terraform init`
-- This setup allows you to test new resources like `pinecone_api_key` before they're published
-- Credentials are stored in `setup-env.sh` which is gitignored for security
-- You can test any resource type by updating `main.tf` - see the `../examples/` folder for reference
-- The warning about missing `.terraformrc` file is expected and harmless
-- The `setup-env.sh` script automatically cleans up previous setup
+- **Unreleased features**: The local provider includes features not yet in the published version
+- **Dev_overrides bypass the registry**: The local provider is used instead of downloading from the registry
+- **terraform init works**: You can run `terraform init` without dev_overrides to initialize the workspace
+- **Environment variables**: Credentials are loaded from `setup-env.sh` which is gitignored for security
+- **Warning messages**: The "Provider development overrides are in effect" warning is expected and normal
+- **Simplified workflow**: `setup-env.sh` automatically handles cleanup and provider configuration
 
 ## Troubleshooting
 
 If you encounter issues:
 
-1. **Checksum errors**: Remove `.terraform.lock.hcl` and re-run `terraform init`
-2. **Provider not found**: Ensure the binary path is correct for your OS/architecture
-3. **Authentication errors**: Verify your environment variables are set correctly
-4. **Environment variables not loaded**: Make sure to run `source setup-env.sh` before testing
-5. **Previous setup conflicts**: Run `source setup-env.sh` again to clean up
+1. **Provider not found**: Ensure the binary exists at `../terraform-provider-pinecone`
+2. **Authentication errors**: Verify your credentials in `setup-env.sh` are correct
+3. **Environment variables not loaded**: Make sure to run `source setup-env.sh` before testing
+4. **Previous setup conflicts**: Run `source setup-env.sh` again to clean up
+5. **"Resource not supported"**: You're using the registry provider instead of the local one. Make sure to run `source setup-env.sh` first.
+
+## Common Commands
+
+**Test your configuration (with unreleased features):**
+```bash
+source setup-env.sh && terraform plan
+```
+
+**Apply your changes:**
+```bash
+source setup-env.sh && terraform apply
+```
+
+**Clean up:**
+```bash
+source setup-env.sh && terraform destroy
+```
