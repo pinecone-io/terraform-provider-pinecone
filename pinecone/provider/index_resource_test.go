@@ -434,6 +434,7 @@ resource "pinecone_index" "%s" {
 	  text = "chunk_text"
 	}
   }
+  tags = {}
 }
 `, resourceName, name, dimension)
 }
@@ -457,6 +458,7 @@ resource "pinecone_index" "%s" {
 	  text = "chunk_text"
 	}
   }
+  tags = {}
 }
 `, resourceName, name)
 }
