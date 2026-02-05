@@ -77,8 +77,8 @@ func (model *IndexModel) Read(ctx context.Context, index *pinecone.Index) diag.D
 		return diags
 	}
 
-	if tags, ok := toMapStringString(index.Tags); ok {
-		model.Tags, diags = types.MapValueFrom(ctx, types.StringType, tags)
+	if index.Tags != nil {
+		model.Tags, diags = types.MapValueFrom(ctx, types.StringType, index.Tags)
 		if diags.HasError() {
 			return diags
 		}
@@ -164,8 +164,8 @@ func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index
 		model.Status = types.ObjectNull(IndexStatusModel{}.AttrTypes())
 	}
 
-	if tags, ok := toMapStringString(index.Tags); ok {
-		model.Tags, diags = types.MapValueFrom(ctx, types.StringType, tags)
+	if index.Tags != nil {
+		model.Tags, diags = types.MapValueFrom(ctx, types.StringType, index.Tags)
 		if diags.HasError() {
 			return diags
 		}
@@ -246,8 +246,8 @@ func (model *IndexDatasourceModel) Read(ctx context.Context, index *pinecone.Ind
 		model.Status = types.ObjectNull(IndexStatusModel{}.AttrTypes())
 	}
 
-	if tags, ok := toMapStringString(index.Tags); ok {
-		model.Tags, diags = types.MapValueFrom(ctx, types.StringType, tags)
+	if index.Tags != nil {
+		model.Tags, diags = types.MapValueFrom(ctx, types.StringType, index.Tags)
 		if diags.HasError() {
 			return diags
 		}
