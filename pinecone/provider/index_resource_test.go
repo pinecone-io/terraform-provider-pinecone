@@ -256,6 +256,71 @@ resource "pinecone_index" "test" {
 	})
 }
 
+func TestAccIndexResource_serverless_integratedWithExplicitDimension(t *testing.T) {
+	rName := acctest.RandomWithPrefix("tftest")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckIndexDestroy(),
+		Steps: []resource.TestStep{
+			// Create integrated index with explicit dimension
+			{
+				Config: testAccIndexResourceConfig_serverlessIntegratedWithDimension(rName, "1024"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckIndexExists(),
+					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
+					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
+					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1024"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "embed.model", "multilingual-e5-large"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "embed.dimension", "1024"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "embed.field_map.%", "1"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "embed.field_map.text", "chunk_text"),
+				),
+			},
+			// ImportState testing
+			{
+				ResourceName:      "pinecone_index.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func TestAccIndexResource_serverless_integratedWithoutDimension(t *testing.T) {
+	rName := acctest.RandomWithPrefix("tftest")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckIndexDestroy(),
+		Steps: []resource.TestStep{
+			// Create integrated index without explicit dimension (should use model default)
+			{
+				Config: testAccIndexResourceConfig_serverlessIntegratedWithoutDimension(rName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckIndexExists(),
+					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
+					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
+					// multilingual-e5-large has default dimension of 1024
+					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1024"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "embed.model", "multilingual-e5-large"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "embed.dimension", "1024"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "embed.field_map.%", "1"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "embed.field_map.text", "chunk_text"),
+				),
+			},
+			// ImportState testing
+			{
+				ResourceName:      "pinecone_index.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
 func testAccCheckIndexExists() resource.TestCheckFunc {
 	return func(state *terraform.State) error {
 		indexResource, found := state.RootModule().Resources[resourceAddress]
@@ -347,4 +412,51 @@ func convertTagsToString(in map[string]string) string {
 		mapStr += "  }\n"
 	}
 	return mapStr
+}
+
+func testAccIndexResourceConfig_serverlessIntegratedWithDimension(name string, dimension string) string {
+	return fmt.Sprintf(`
+provider "pinecone" {
+}
+
+resource "pinecone_index" "%s" {
+  name = %q
+  dimension = %s
+  spec = {
+	serverless = {
+		cloud = "aws"
+		region = "us-west-2"
+	}
+  }
+  embed = {
+	model = "multilingual-e5-large"
+	field_map = {
+	  text = "chunk_text"
+	}
+  }
+}
+`, resourceName, name, dimension)
+}
+
+func testAccIndexResourceConfig_serverlessIntegratedWithoutDimension(name string) string {
+	return fmt.Sprintf(`
+provider "pinecone" {
+}
+
+resource "pinecone_index" "%s" {
+  name = %q
+  spec = {
+	serverless = {
+		cloud = "aws"
+		region = "us-west-2"
+	}
+  }
+  embed = {
+	model = "multilingual-e5-large"
+	field_map = {
+	  text = "chunk_text"
+	}
+  }
+}
+`, resourceName, name)
 }

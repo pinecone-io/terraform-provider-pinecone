@@ -80,7 +80,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				},
 			},
 			"dimension": schema.Int32Attribute{
-				MarkdownDescription: "The dimensions of the vectors to be inserted in the index",
+				MarkdownDescription: "The dimensions of the vectors to be inserted in the index. Required for pod-based and non-integrated serverless indexes. For integrated indexes with an embed model, this is optional and will default to the model's dimension if not specified.",
 				Optional:            true,
 				Computed:            true,
 				Validators: []validator.Int32{
@@ -425,17 +425,26 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		if embed != nil {
 			fieldMap := mapAttrToInterfacePtr(embed.FieldMap)
 
+			embedConfig := pinecone.CreateIndexForModelEmbed{
+				Model:           embed.Model.ValueString(),
+				FieldMap:        *fieldMap,
+				Metric:          &metric,
+				ReadParameters:  mapAttrToInterfacePtr(embed.ReadParameters),
+				WriteParameters: mapAttrToInterfacePtr(embed.WriteParameters),
+			}
+
+			// If dimension is specified at the top level, pass it through to the embed config
+			// Otherwise, the API will use the model's default dimension
+			if !data.Dimension.IsUnknown() && !data.Dimension.IsNull() {
+				dimension := int(data.Dimension.ValueInt32())
+				embedConfig.Dimension = &dimension
+			}
+
 			indexForModelReq := pinecone.CreateIndexForModelRequest{
-				Name:   data.Name.ValueString(),
-				Cloud:  pinecone.Cloud(spec.Serverless.Cloud.ValueString()),
-				Region: spec.Serverless.Region.ValueString(),
-				Embed: pinecone.CreateIndexForModelEmbed{
-					Model:           embed.Model.ValueString(),
-					FieldMap:        *fieldMap,
-					Metric:          &metric,
-					ReadParameters:  mapAttrToInterfacePtr(embed.ReadParameters),
-					WriteParameters: mapAttrToInterfacePtr(embed.WriteParameters),
-				},
+				Name:               data.Name.ValueString(),
+				Cloud:              pinecone.Cloud(spec.Serverless.Cloud.ValueString()),
+				Region:             spec.Serverless.Region.ValueString(),
+				Embed:              embedConfig,
 				DeletionProtection: &deletionProtection,
 			}
 
