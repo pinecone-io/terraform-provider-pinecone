@@ -83,7 +83,9 @@ func (model *IndexModel) Read(ctx context.Context, index *pinecone.Index) diag.D
 			return diags
 		}
 	} else {
-		model.Tags = types.MapNull(types.StringType)
+		// API returned no tags - set to empty map with explicit type
+		// This handles the case where config has tags = {} and API returns nothing
+		model.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{})
 	}
 
 	return diags
@@ -174,7 +176,9 @@ func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index
 			return diags
 		}
 	} else {
-		model.Tags = types.MapNull(types.StringType)
+		// API returned no tags - set to empty map with explicit type
+		// This handles the case where config has tags = {} and API returns nothing
+		model.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{})
 	}
 
 	return diags
@@ -256,7 +260,9 @@ func (model *IndexDatasourceModel) Read(ctx context.Context, index *pinecone.Ind
 			return diags
 		}
 	} else {
-		model.Tags = types.MapNull(types.StringType)
+		// API returned no tags - set to empty map with explicit type
+		// This handles the case where config has tags = {} and API returns nothing
+		model.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{})
 	}
 
 	return diags

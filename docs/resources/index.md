@@ -45,7 +45,7 @@ resource "pinecone_index" "test" {
 ### Optional
 
 - `deletion_protection` (String) Whether deletion protection for the index is enabled. You can use 'enabled', or 'disabled'.
-- `dimension` (Number) The dimensions of the vectors to be inserted in the index
+- `dimension` (Number) The dimensions of the vectors to be inserted in the index. Required for pod-based and non-integrated serverless indexes. For integrated indexes with an embed model, this is optional and will default to the model's dimension if not specified.
 - `embed` (Attributes) Specify the integrated inference embedding configuration for the index. Once set, the model cannot be changed. However, you can later update the embedding configuration—including field map, read parameters, and write parameters.
 
 Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details. (see [below for nested schema](#nestedatt--embed))
