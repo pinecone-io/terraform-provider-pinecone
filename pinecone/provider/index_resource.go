@@ -129,6 +129,9 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				Optional:    true,
 				Computed:    true,
 				ElementType: types.StringType,
+				PlanModifiers: []planmodifier.Map{
+					mapplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"host": schema.StringAttribute{
 				MarkdownDescription: "The URL address where the index is hosted.",
