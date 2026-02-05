@@ -5,6 +5,7 @@ package models
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -106,6 +107,14 @@ type IndexResourceModel struct {
 
 func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index) diag.Diagnostics {
 	var diags diag.Diagnostics
+
+	if index == nil {
+		diags.AddError(
+			"Nil Index",
+			"Cannot read index state from a nil index pointer",
+		)
+		return diags
+	}
 
 	model.Id = types.StringValue(index.Name)
 	model.Name = types.StringValue(index.Name)
@@ -371,32 +380,32 @@ func NewIndexEmbedModel(ctx context.Context, model *pinecone.IndexEmbed) (*Index
 			newModel.VectorType = types.StringNull()
 		}
 
-		if model.FieldMap != nil {
-			fieldMap, diags := types.MapValueFrom(ctx, types.StringType, model.FieldMap)
+		if fieldMap, ok := toMapStringString(model.FieldMap); ok {
+			m, diags := types.MapValueFrom(ctx, types.StringType, fieldMap)
 			if diags.HasError() {
 				return nil, diags
 			}
-			newModel.FieldMap = fieldMap
+			newModel.FieldMap = m
 		} else {
 			newModel.FieldMap = types.MapNull(types.StringType)
 		}
 
-		if model.ReadParameters != nil {
-			readParameters, diags := types.MapValueFrom(ctx, types.StringType, model.ReadParameters)
+		if readParams, ok := toMapStringString(model.ReadParameters); ok {
+			m, diags := types.MapValueFrom(ctx, types.StringType, readParams)
 			if diags.HasError() {
 				return nil, diags
 			}
-			newModel.ReadParameters = readParameters
+			newModel.ReadParameters = m
 		} else {
 			newModel.ReadParameters = types.MapNull(types.StringType)
 		}
 
-		if model.WriteParameters != nil {
-			writeParameters, diags := types.MapValueFrom(ctx, types.StringType, model.WriteParameters)
+		if writeParams, ok := toMapStringString(model.WriteParameters); ok {
+			m, diags := types.MapValueFrom(ctx, types.StringType, writeParams)
 			if diags.HasError() {
 				return nil, diags
 			}
-			newModel.WriteParameters = writeParameters
+			newModel.WriteParameters = m
 		} else {
 			newModel.WriteParameters = types.MapNull(types.StringType)
 		}
@@ -526,4 +535,35 @@ func mapAttrToInterfacePtr(attr types.Map) *map[string]interface{} {
 		}
 	}
 	return &raw
+}
+
+// toMapStringString converts API map values to map[string]string so that
+// types.MapValueFrom(..., types.StringType, ...) never sees non-string values,
+// which would cause "can't unmarshal tftypes.Number into *string".
+//
+// The go-pinecone SDK uses *map[string]interface{} for FieldMap, ReadParameters,
+// and WriteParameters, so we must handle both map and *map.
+//
+// Returns a map[string]string and a boolean indicating if the conversion was successful.
+func toMapStringString(in interface{}) (map[string]string, bool) {
+	if in == nil {
+		return nil, false
+	}
+	switch m := in.(type) {
+	case map[string]string:
+		return m, true
+	case map[string]interface{}:
+		out := make(map[string]string, len(m))
+		for k, v := range m {
+			out[k] = fmt.Sprint(v)
+		}
+		return out, true
+	case *map[string]interface{}:
+		if m == nil {
+			return nil, false
+		}
+		return toMapStringString(*m)
+	default:
+		return nil, false
+	}
 }

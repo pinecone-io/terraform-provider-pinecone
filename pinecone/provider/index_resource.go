@@ -485,18 +485,32 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	err := retry.RetryContext(ctx, createTimeout, func() *retry.RetryError {
 		index, err := r.client.DescribeIndex(ctx, data.Name.ValueString())
-
-		resp.Diagnostics.Append(data.Read(ctx, index)...)
-
-		// Save current status to state
-		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
-
 		if err != nil {
+			errStr := err.Error()
+			// Retry if the index is not found, otherwise return a non-retryable error
+			if strings.Contains(errStr, "not found") ||
+				strings.Contains(errStr, "404") ||
+				strings.Contains(errStr, "NOT_FOUND") {
+				return retry.RetryableError(err)
+			}
 			return retry.NonRetryableError(err)
 		}
+
+		resp.Diagnostics.Append(data.Read(ctx, index)...)
+		if resp.Diagnostics.HasError() {
+			return retry.NonRetryableError(fmt.Errorf("reading index state: %v", resp.Diagnostics))
+		}
+
+		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+		if resp.Diagnostics.HasError() {
+			return retry.NonRetryableError(fmt.Errorf("setting state: %v", resp.Diagnostics))
+		}
+
+		// Retry if the index is not ready
 		if !index.Status.Ready && index.Status.State != "Ready" {
 			return retry.RetryableError(fmt.Errorf("index not ready. State: %s", index.Status.State))
 		}
+
 		return nil
 	})
 	if err != nil {
