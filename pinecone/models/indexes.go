@@ -109,6 +109,10 @@ func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index
 	var diags diag.Diagnostics
 
 	if index == nil {
+		diags.AddError(
+			"Nil Index",
+			"Cannot read index state from a nil index pointer",
+		)
 		return diags
 	}
 
