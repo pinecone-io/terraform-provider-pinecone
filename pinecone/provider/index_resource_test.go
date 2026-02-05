@@ -276,6 +276,7 @@ func TestAccIndexResource_serverless_integratedWithExplicitDimension(t *testing.
 					resource.TestCheckResourceAttr("pinecone_index.test", "embed.dimension", "1024"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "embed.field_map.%", "1"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "embed.field_map.text", "chunk_text"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "tags.%", "0"),
 				),
 			},
 			// ImportState testing
@@ -309,6 +310,7 @@ func TestAccIndexResource_serverless_integratedWithoutDimension(t *testing.T) {
 					resource.TestCheckResourceAttr("pinecone_index.test", "embed.dimension", "1024"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "embed.field_map.%", "1"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "embed.field_map.text", "chunk_text"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "tags.%", "0"),
 				),
 			},
 			// ImportState testing
@@ -434,6 +436,7 @@ resource "pinecone_index" "%s" {
 	  text = "chunk_text"
 	}
   }
+  tags = {}
 }
 `, resourceName, name, dimension)
 }
@@ -457,6 +460,7 @@ resource "pinecone_index" "%s" {
 	  text = "chunk_text"
 	}
   }
+  tags = {}
 }
 `, resourceName, name)
 }
