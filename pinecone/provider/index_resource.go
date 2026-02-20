@@ -536,6 +536,10 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 			byocReq.Tags = &tags
 		}
 
+		if vectorType := data.VectorType.ValueString(); vectorType != "" {
+			byocReq.VectorType = &vectorType
+		}
+
 		_, err := r.client.CreateBYOCIndex(ctx, &byocReq)
 		if err != nil {
 			resp.Diagnostics.AddError("Failed to create BYOC index", err.Error())
@@ -920,8 +924,8 @@ func readCapacitySchema() schema.Attribute {
 			},
 			"on_demand": schema.SingleNestedAttribute{
 				MarkdownDescription: "OnDemand read capacity mode (the default). Specify this block (even empty) to explicitly select OnDemand or to switch back from dedicated mode.",
-				Optional: true,
-				Computed: true,
+				Optional:            true,
+				Computed:            true,
 				PlanModifiers: []planmodifier.Object{
 					objectplanmodifier.UseStateForUnknown(),
 				},
