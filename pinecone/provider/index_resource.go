@@ -380,6 +380,26 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 	tags := pinecone.IndexTags(tagsMap)
 
+	// Validate that exactly one spec type is provided.
+	specCount := 0
+	if spec.Pod != nil {
+		specCount++
+	}
+	if spec.Serverless != nil {
+		specCount++
+	}
+	if spec.BYOC != nil {
+		specCount++
+	}
+	if specCount == 0 {
+		resp.Diagnostics.AddError("Invalid configuration", "Exactly one of spec.pod, spec.serverless, or spec.byoc must be specified.")
+		return
+	}
+	if specCount > 1 {
+		resp.Diagnostics.AddError("Invalid configuration", "Only one of spec.pod, spec.serverless, or spec.byoc may be specified.")
+		return
+	}
+
 	// Prepare the payload for the API request
 	if spec.Pod != nil {
 		// If trying to create a pod index with an embed configuration, reject
@@ -433,10 +453,8 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 			resp.Diagnostics.AddError("Failed to create pod index", err.Error())
 			return
 		}
-	}
-
-	if spec.Serverless != nil {
-		metric := pinecone.IndexMetric(*data.Metric.ValueStringPointer())
+	} else if spec.Serverless != nil {
+		metric := pinecone.IndexMetric(data.Metric.ValueString())
 		deletionProtection := pinecone.DeletionProtection(data.DeletionProtection.ValueString())
 
 		readCapacityParams, diags := models.ToReadCapacityParams(ctx, spec.Serverless.ReadCapacity)
@@ -506,9 +524,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 				return
 			}
 		}
-	}
-
-	if spec.BYOC != nil {
+	} else if spec.BYOC != nil {
 		metric := pinecone.IndexMetric(data.Metric.ValueString())
 		deletionProtection := pinecone.DeletionProtection(data.DeletionProtection.ValueString())
 
@@ -775,7 +791,7 @@ func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	// Wait for index to be deleted
 	// Create() is passed a default timeout to use if no value
 	// has been supplied in the Terraform configuration.
-	deleteTimeout, diags := data.Timeouts.Create(ctx, defaultIndexDeleteTimeout)
+	deleteTimeout, diags := data.Timeouts.Delete(ctx, defaultIndexDeleteTimeout)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
