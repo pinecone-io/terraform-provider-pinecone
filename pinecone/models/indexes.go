@@ -515,7 +515,6 @@ type IndexServerlessSpecModel struct {
 	ReadCapacity types.Object `tfsdk:"read_capacity"`
 }
 
-
 func NewIndexServerlessSpecModel(ctx context.Context, spec *pinecone.ServerlessSpec) (*IndexServerlessSpecModel, diag.Diagnostics) {
 	if spec == nil {
 		return nil, nil
