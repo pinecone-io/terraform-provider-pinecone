@@ -14,7 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
-	"github.com/pinecone-io/go-pinecone/v4/pinecone"
+	"github.com/pinecone-io/go-pinecone/v5/pinecone"
 	"github.com/pinecone-io/terraform-provider-pinecone/pinecone/models"
 )
 

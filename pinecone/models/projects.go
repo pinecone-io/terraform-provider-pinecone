@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/pinecone-io/go-pinecone/v4/pinecone"
+	"github.com/pinecone-io/go-pinecone/v5/pinecone"
 )
 
 // ProjectResourceModel defines the project model for the resource.

@@ -29,13 +29,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
-	"github.com/pinecone-io/go-pinecone/v4/pinecone"
+	"github.com/pinecone-io/go-pinecone/v5/pinecone"
 	"github.com/pinecone-io/terraform-provider-pinecone/pinecone/models"
 )
 
 const (
 	defaultIndexCreateTimeout time.Duration = 10 * time.Minute
-	defaultIndexUpdateTimeout time.Duration = 10 * time.Minute
 	defaultIndexDeleteTimeout time.Duration = 10 * time.Minute
 )
 
@@ -223,6 +222,21 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 									stringplanmodifier.RequiresReplace(),
 								},
 							},
+							"read_capacity": readCapacitySchema(),
+						},
+					},
+					"byoc": schema.SingleNestedAttribute{
+						Description: "Configuration needed to deploy a BYOC (Bring Your Own Cloud) index.",
+						Optional:    true,
+						Attributes: map[string]schema.Attribute{
+							"environment": schema.StringAttribute{
+								MarkdownDescription: "The environment identifier for the BYOC index.",
+								Required:            true,
+								PlanModifiers: []planmodifier.String{
+									stringplanmodifier.RequiresReplace(),
+								},
+							},
+							"read_capacity": readCapacitySchema(),
 						},
 					},
 				},
@@ -425,6 +439,12 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		metric := pinecone.IndexMetric(*data.Metric.ValueStringPointer())
 		deletionProtection := pinecone.DeletionProtection(data.DeletionProtection.ValueString())
 
+		readCapacityParams, diags := models.ToReadCapacityParams(ctx, spec.Serverless.ReadCapacity)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
 		if embed != nil {
 			fieldMap := mapAttrToInterfacePtr(embed.FieldMap)
 
@@ -449,6 +469,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 				Region:             spec.Serverless.Region.ValueString(),
 				Embed:              embedConfig,
 				DeletionProtection: &deletionProtection,
+				ReadCapacity:       readCapacityParams,
 			}
 
 			if tags != nil {
@@ -468,6 +489,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 				DeletionProtection: &deletionProtection,
 				Cloud:              pinecone.Cloud(spec.Serverless.Cloud.ValueString()),
 				Region:             spec.Serverless.Region.ValueString(),
+				ReadCapacity:       readCapacityParams,
 			}
 
 			if tags != nil {
@@ -483,6 +505,41 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 				resp.Diagnostics.AddError("Failed to create serverless index", err.Error())
 				return
 			}
+		}
+	}
+
+	if spec.BYOC != nil {
+		metric := pinecone.IndexMetric(data.Metric.ValueString())
+		deletionProtection := pinecone.DeletionProtection(data.DeletionProtection.ValueString())
+
+		if embed != nil {
+			resp.Diagnostics.AddError("Invalid configuration", "BYOC indexes cannot have an embed configuration.")
+			return
+		}
+
+		readCapacityParams, diags := models.ToReadCapacityParams(ctx, spec.BYOC.ReadCapacity)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		byocReq := pinecone.CreateBYOCIndexRequest{
+			Name:               data.Name.ValueString(),
+			Environment:        spec.BYOC.Environment.ValueString(),
+			Dimension:          data.Dimension.ValueInt32Pointer(),
+			Metric:             &metric,
+			DeletionProtection: &deletionProtection,
+			ReadCapacity:       readCapacityParams,
+		}
+
+		if tags != nil {
+			byocReq.Tags = &tags
+		}
+
+		_, err := r.client.CreateBYOCIndex(ctx, &byocReq)
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to create BYOC index", err.Error())
+			return
 		}
 	}
 
@@ -649,8 +706,33 @@ func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		configureRequest.Embed = &embedConfig
 	}
 
+	// Update ReadCapacity if it has changed (serverless and BYOC only)
+	oldReadCapacity, newReadCapacity := extractReadCapacityFromSpec(ctx, data.Spec, &resp.Diagnostics), extractReadCapacityFromSpec(ctx, newData.Spec, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !oldReadCapacity.Equal(newReadCapacity) {
+		// Guard: ReadCapacity is not supported for pod indexes
+		var currentSpec models.IndexSpecModel
+		resp.Diagnostics.Append(data.Spec.As(ctx, &currentSpec, basetypes.ObjectAsOptions{})...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if currentSpec.Pod != nil {
+			resp.Diagnostics.AddError("Invalid configuration", "ReadCapacity is not supported for pod-based indexes.")
+			return
+		}
+
+		readCapacityParams, diags := models.ToReadCapacityParams(ctx, newReadCapacity)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		configureRequest.ReadCapacity = readCapacityParams
+	}
+
 	// send configure index request if there are things that have been updated
-	if configureRequest.DeletionProtection != "" || configureRequest.Embed != nil || configureRequest.Tags != nil {
+	if configureRequest.DeletionProtection != "" || configureRequest.Embed != nil || configureRequest.Tags != nil || configureRequest.ReadCapacity != nil {
 		_, err := r.client.ConfigureIndex(ctx, data.Name.ValueString(), configureRequest)
 		if err != nil {
 			resp.Diagnostics.AddError("Failed to update index", err.Error())
@@ -731,6 +813,113 @@ func mergeTags(oldTags, newTags map[string]string) map[string]string {
 	}
 
 	return mergedTags
+}
+
+// extractReadCapacityFromSpec pulls the read_capacity object out of a spec object
+// (checking serverless and byoc sub-specs), returning types.ObjectNull if absent.
+func extractReadCapacityFromSpec(ctx context.Context, specObj types.Object, diagnostics *diag.Diagnostics) types.Object {
+	if specObj.IsNull() || specObj.IsUnknown() {
+		return types.ObjectNull(models.IndexReadCapacityModel{}.AttrTypes())
+	}
+	var spec models.IndexSpecModel
+	diagnostics.Append(specObj.As(ctx, &spec, basetypes.ObjectAsOptions{})...)
+	if diagnostics.HasError() {
+		return types.ObjectNull(models.IndexReadCapacityModel{}.AttrTypes())
+	}
+	if spec.Serverless != nil {
+		return spec.Serverless.ReadCapacity
+	}
+	if spec.BYOC != nil {
+		return spec.BYOC.ReadCapacity
+	}
+	return types.ObjectNull(models.IndexReadCapacityModel{}.AttrTypes())
+}
+
+// readCapacitySchema returns the schema for the read_capacity block,
+// shared between spec.serverless and spec.byoc.
+//
+// User-configurable fields (node_type, replicas, shards) are Optional+Computed so
+// the API echo-back is stored in state. Status-only fields (state, current_replicas,
+// current_shards, error_message) are Computed-only with UseStateForUnknown so that
+// plans show the last-known API value rather than "(known after apply)" when the
+// read_capacity config itself hasn't changed.
+func readCapacitySchema() schema.Attribute {
+	// statusAttrs are returned by the API and not configured by the user
+	statusAttrs := map[string]schema.Attribute{
+		"state": schema.StringAttribute{
+			MarkdownDescription: "The overall status of the read capacity configuration. One of: Ready, Scaling, Migrating, Error.",
+			Computed:            true,
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.UseStateForUnknown(),
+			},
+		},
+		"current_replicas": schema.Int32Attribute{
+			MarkdownDescription: "The current number of replicas.",
+			Computed:            true,
+			PlanModifiers: []planmodifier.Int32{
+				int32planmodifier.UseStateForUnknown(),
+			},
+		},
+		"current_shards": schema.Int32Attribute{
+			MarkdownDescription: "The current number of shards.",
+			Computed:            true,
+			PlanModifiers: []planmodifier.Int32{
+				int32planmodifier.UseStateForUnknown(),
+			},
+		},
+		"error_message": schema.StringAttribute{
+			MarkdownDescription: "An optional error message if there are issues with the read capacity configuration.",
+			Computed:            true,
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.UseStateForUnknown(),
+			},
+		},
+	}
+
+	// dedicatedAttrs adds the three user-configurable fields on top of the status fields.
+	dedicatedAttrs := map[string]schema.Attribute{
+		"node_type": schema.StringAttribute{
+			MarkdownDescription: "The type of machines to use. Available options: 'b1' and 't1'.",
+			Optional:            true,
+			Computed:            true,
+		},
+		"replicas": schema.Int32Attribute{
+			MarkdownDescription: "The desired number of replicas.",
+			Optional:            true,
+			Computed:            true,
+		},
+		"shards": schema.Int32Attribute{
+			MarkdownDescription: "The desired number of shards.",
+			Optional:            true,
+			Computed:            true,
+		},
+	}
+	for k, v := range statusAttrs {
+		dedicatedAttrs[k] = v
+	}
+
+	return schema.SingleNestedAttribute{
+		MarkdownDescription: "Read capacity configuration for the index. Set exactly one of `dedicated` or `on_demand` to select the mode. " +
+			"Omitting `read_capacity` entirely on create defaults to OnDemand. " +
+			"To switch modes after creation, explicitly set the desired sub-block — removing `read_capacity` from config will not change the mode already recorded in state.",
+		Optional: true,
+		Computed: true,
+		Attributes: map[string]schema.Attribute{
+			"dedicated": schema.SingleNestedAttribute{
+				MarkdownDescription: "Dedicated read capacity mode. Set `node_type`, `replicas`, and `shards` to provision fixed compute for this index. " +
+					"All three fields are required when first switching to dedicated mode.",
+				Optional:   true,
+				Computed:   true,
+				Attributes: dedicatedAttrs,
+			},
+			"on_demand": schema.SingleNestedAttribute{
+				MarkdownDescription: "OnDemand read capacity mode (the default). Specify this block (even empty) to explicitly select OnDemand or to switch back from dedicated mode.",
+				Optional:            true,
+				Computed:            true,
+				Attributes:          statusAttrs,
+			},
+		},
+	}
 }
 
 func toStringMap(ctx context.Context, value basetypes.MapValue) (map[string]string, diag.Diagnostics) {
