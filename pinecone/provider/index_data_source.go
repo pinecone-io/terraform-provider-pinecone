@@ -115,34 +115,34 @@ func (d *IndexDataSource) Schema(ctx context.Context, req datasource.SchemaReque
 							},
 						},
 					},
-				"serverless": schema.SingleNestedAttribute{
-					Description: "Configuration needed to deploy a serverless index.",
-					Optional:    true,
-					Computed:    true,
-					Attributes: map[string]schema.Attribute{
-						"cloud": schema.StringAttribute{
-							Description: "The public cloud where the index is hosted.",
-							Computed:    true,
+					"serverless": schema.SingleNestedAttribute{
+						Description: "Configuration needed to deploy a serverless index.",
+						Optional:    true,
+						Computed:    true,
+						Attributes: map[string]schema.Attribute{
+							"cloud": schema.StringAttribute{
+								Description: "The public cloud where the index is hosted.",
+								Computed:    true,
+							},
+							"region": schema.StringAttribute{
+								MarkdownDescription: "The region where the index is hosted.",
+								Computed:            true,
+							},
+							"read_capacity": readCapacityDSSchema(),
 						},
-						"region": schema.StringAttribute{
-							MarkdownDescription: "The region where the index is hosted.",
-							Computed:            true,
-						},
-						"read_capacity": readCapacityDSSchema(),
 					},
-				},
-				"byoc": schema.SingleNestedAttribute{
-					Description: "Configuration for a BYOC (Bring Your Own Cloud) index.",
-					Optional:    true,
-					Computed:    true,
-					Attributes: map[string]schema.Attribute{
-						"environment": schema.StringAttribute{
-							MarkdownDescription: "The environment identifier for the BYOC index.",
-							Computed:            true,
+					"byoc": schema.SingleNestedAttribute{
+						Description: "Configuration for a BYOC (Bring Your Own Cloud) index.",
+						Optional:    true,
+						Computed:    true,
+						Attributes: map[string]schema.Attribute{
+							"environment": schema.StringAttribute{
+								MarkdownDescription: "The environment identifier for the BYOC index.",
+								Computed:            true,
+							},
+							"read_capacity": readCapacityDSSchema(),
 						},
-						"read_capacity": readCapacityDSSchema(),
 					},
-				},
 				},
 			},
 			"embed": schema.SingleNestedAttribute{

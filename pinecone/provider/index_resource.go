@@ -904,19 +904,28 @@ func readCapacitySchema() schema.Attribute {
 			"To switch modes after creation, explicitly set the desired sub-block — removing `read_capacity` from config will not change the mode already recorded in state.",
 		Optional: true,
 		Computed: true,
+		PlanModifiers: []planmodifier.Object{
+			objectplanmodifier.UseStateForUnknown(),
+		},
 		Attributes: map[string]schema.Attribute{
 			"dedicated": schema.SingleNestedAttribute{
 				MarkdownDescription: "Dedicated read capacity mode. Set `node_type`, `replicas`, and `shards` to provision fixed compute for this index. " +
 					"All three fields are required when first switching to dedicated mode.",
-				Optional:   true,
-				Computed:   true,
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.Object{
+					objectplanmodifier.UseStateForUnknown(),
+				},
 				Attributes: dedicatedAttrs,
 			},
 			"on_demand": schema.SingleNestedAttribute{
 				MarkdownDescription: "OnDemand read capacity mode (the default). Specify this block (even empty) to explicitly select OnDemand or to switch back from dedicated mode.",
-				Optional:            true,
-				Computed:            true,
-				Attributes:          statusAttrs,
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.Object{
+					objectplanmodifier.UseStateForUnknown(),
+				},
+				Attributes: statusAttrs,
 			},
 		},
 	}
