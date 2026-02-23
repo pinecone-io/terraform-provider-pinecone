@@ -103,6 +103,56 @@ func TestAccIndexResource_serverless_basic(t *testing.T) {
 	})
 }
 
+func TestAccIndexResource_serverless_readCapacity(t *testing.T) {
+	rName := acctest.RandomWithPrefix("tftest")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckIndexDestroy(),
+		Steps: []resource.TestStep{
+			// Create serverless index without explicit read_capacity — defaults to on_demand
+			{
+				Config: testAccIndexResourceConfig_serverlessWithReadCapacity(rName, ""),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckIndexExists(),
+					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
+					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.cloud", "aws"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.region", "us-west-2"),
+					resource.TestCheckResourceAttrSet("pinecone_index.test", "spec.serverless.read_capacity.on_demand.state"),
+				),
+			},
+			// Convert to dedicated read capacity
+			{
+				Config: testAccIndexResourceConfig_serverlessWithReadCapacity(rName, `
+      read_capacity = {
+        dedicated = {
+          node_type = "b1"
+          replicas  = 1
+          shards    = 1
+        }
+      }`),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckIndexExists(),
+					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
+					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.read_capacity.dedicated.node_type", "b1"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.read_capacity.dedicated.replicas", "1"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.read_capacity.dedicated.shards", "1"),
+					resource.TestCheckResourceAttrSet("pinecone_index.test", "spec.serverless.read_capacity.dedicated.state"),
+				),
+			},
+			// ImportState testing
+			{
+				ResourceName:      "pinecone_index.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
 func TestAccIndexResource_pod_basic(t *testing.T) {
 	rName := acctest.RandomWithPrefix("tftest")
 	embed := `
@@ -412,6 +462,25 @@ func convertTagsToString(in map[string]string) string {
 		mapStr += "  }\n"
 	}
 	return mapStr
+}
+
+func testAccIndexResourceConfig_serverlessWithReadCapacity(name string, readCapacity string) string {
+	return fmt.Sprintf(`
+provider "pinecone" {
+}
+
+resource "pinecone_index" "%s" {
+  name      = %q
+  dimension = 1024
+  spec = {
+    serverless = {
+      cloud   = "aws"
+      region  = "us-west-2"%s
+    }
+  }
+  deletion_protection = "disabled"
+}
+`, resourceName, name, readCapacity)
 }
 
 func testAccIndexResourceConfig_serverlessIntegratedWithDimension(name string, dimension string) string {

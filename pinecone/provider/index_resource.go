@@ -935,21 +935,13 @@ func readCapacitySchema() schema.Attribute {
 			"dedicated": schema.SingleNestedAttribute{
 				MarkdownDescription: "Dedicated read capacity mode. Set `node_type`, `replicas`, and `shards` to provision fixed compute for this index. " +
 					"All three fields are required when first switching to dedicated mode.",
-				Optional: true,
-				Computed: true,
-				PlanModifiers: []planmodifier.Object{
-					objectplanmodifier.UseStateForUnknown(),
-				},
+				Optional:   true,
 				Attributes: dedicatedAttrs,
 			},
 			"on_demand": schema.SingleNestedAttribute{
 				MarkdownDescription: "OnDemand read capacity mode (the default). Specify this block (even empty) to explicitly select OnDemand or to switch back from dedicated mode.",
 				Optional:            true,
-				Computed:            true,
-				PlanModifiers: []planmodifier.Object{
-					objectplanmodifier.UseStateForUnknown(),
-				},
-				Attributes: statusAttrs,
+				Attributes:          statusAttrs,
 			},
 		},
 	}
