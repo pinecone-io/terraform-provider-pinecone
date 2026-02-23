@@ -714,8 +714,12 @@ func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 			embedConfig.WriteParameters = mapAttrToInterfacePtr(embedModel.WriteParameters)
 		} else {
 			// if existing Embed is not present upgrade to an integrated model (serverless only)
-			if spec.Serverless == nil {
+			if spec.Pod != nil {
 				resp.Diagnostics.AddError("Invalid configuration", "Pod-based indexes cannot have an embed configuration.")
+				return
+			}
+			if spec.BYOC != nil {
+				resp.Diagnostics.AddError("Invalid configuration", "BYOC indexes cannot have an embed configuration.")
 				return
 			}
 			embedConfig.Model = embedModel.Model.ValueStringPointer()
