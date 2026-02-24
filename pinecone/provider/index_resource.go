@@ -764,14 +764,47 @@ func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		}
 	}
 
-	index, err := r.client.DescribeIndex(ctx, newData.Name.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to describe index", err.Error())
-		return
-	}
+	// A read_capacity mode switch is an asynchronous scaling operation: current_replicas,
+	// current_shards, and error_message remain null until the transition completes.
+	// Poll until the active sub-block reaches a terminal state so that nulls are never
+	// written to state, which would otherwise cause a perpetual non-empty plan (because
+	// UseStateForUnknown only preserves non-null prior values).
+	if configureRequest.ReadCapacity != nil {
+		err := retry.RetryContext(ctx, defaultIndexCreateTimeout, func() *retry.RetryError {
+			index, err := r.client.DescribeIndex(ctx, newData.Name.ValueString())
+			if err != nil {
+				return retry.NonRetryableError(err)
+			}
 
-	newData.Read(ctx, index)
-	resp.Diagnostics.Append(resp.State.Set(ctx, &newData)...)
+			diags := newData.Read(ctx, index)
+			resp.Diagnostics.Append(diags...)
+			if resp.Diagnostics.HasError() {
+				return retry.NonRetryableError(fmt.Errorf("reading index after read_capacity update"))
+			}
+			resp.Diagnostics.Append(resp.State.Set(ctx, &newData)...)
+			if resp.Diagnostics.HasError() {
+				return retry.NonRetryableError(fmt.Errorf("setting state after read_capacity update"))
+			}
+
+			if ready, state := indexReadCapacityIsReady(index); !ready {
+				return retry.RetryableError(fmt.Errorf("read_capacity transitioning, state: %s", state))
+			}
+			return nil
+		})
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to wait for read_capacity update to complete.", err.Error())
+			return
+		}
+	} else {
+		index, err := r.client.DescribeIndex(ctx, newData.Name.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to describe index", err.Error())
+			return
+		}
+
+		resp.Diagnostics.Append(newData.Read(ctx, index)...)
+		resp.Diagnostics.Append(resp.State.Set(ctx, &newData)...)
+	}
 }
 
 func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -839,6 +872,30 @@ func mergeTags(oldTags, newTags map[string]string) map[string]string {
 	return mergedTags
 }
 
+// indexReadCapacityIsReady reports whether the active read_capacity sub-block has
+// reached a terminal state. It returns (true, "") when no read_capacity is present,
+// (true, state) for "Ready" or "Error", and (false, state) while still transitioning.
+func indexReadCapacityIsReady(index *pinecone.Index) (ready bool, state string) {
+	var rc *pinecone.ReadCapacity
+	if index.Spec.Serverless != nil {
+		rc = index.Spec.Serverless.ReadCapacity
+	} else if index.Spec.BYOC != nil {
+		rc = index.Spec.BYOC.ReadCapacity
+	}
+	if rc == nil {
+		return true, ""
+	}
+	if rc.Dedicated != nil {
+		s := rc.Dedicated.Status.State
+		return s == "Ready" || s == "Error", s
+	}
+	if rc.OnDemand != nil {
+		s := rc.OnDemand.Status.State
+		return s == "Ready" || s == "Error", s
+	}
+	return true, ""
+}
+
 // extractReadCapacityFromSpec pulls the read_capacity object out of a spec object
 // (checking serverless and byoc sub-specs), returning types.ObjectNull if absent.
 func extractReadCapacityFromSpec(ctx context.Context, specObj types.Object, diagnostics *diag.Diagnostics) types.Object {
@@ -868,7 +925,11 @@ func extractReadCapacityFromSpec(ctx context.Context, specObj types.Object, diag
 // plans show the last-known API value rather than "(known after apply)" when the
 // read_capacity config itself hasn't changed.
 func readCapacitySchema() schema.Attribute {
-	// statusAttrs are returned by the API and not configured by the user
+	// statusAttrs are returned by the API and not configured by the user.
+	// UseStateForUnknown preserves the last-known value in the plan when the config
+	// hasn't changed, preventing perpetual "(known after apply)" diffs. Polling in
+	// Create/Update ensures these are only written to state once the API has settled
+	// on non-null values, which is required for UseStateForUnknown to be effective.
 	statusAttrs := map[string]schema.Attribute{
 		"state": schema.StringAttribute{
 			MarkdownDescription: "The overall status of the read capacity configuration. One of: Ready, Scaling, Migrating, Error.",
@@ -900,7 +961,6 @@ func readCapacitySchema() schema.Attribute {
 		},
 	}
 
-	// dedicatedAttrs adds the three user-configurable fields on top of the status fields.
 	dedicatedAttrs := map[string]schema.Attribute{
 		"node_type": schema.StringAttribute{
 			MarkdownDescription: "The type of machines to use. Available options: 'b1' and 't1'.",
