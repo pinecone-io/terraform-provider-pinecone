@@ -223,6 +223,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 								},
 							},
 							"read_capacity": readCapacitySchema(),
+							"schema":        metadataSchemaResourceSchema(),
 						},
 					},
 					"byoc": schema.SingleNestedAttribute{
@@ -237,6 +238,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 								},
 							},
 							"read_capacity": readCapacitySchema(),
+							"schema":        metadataSchemaResourceSchema(),
 						},
 					},
 				},
@@ -500,6 +502,12 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 				return
 			}
 		} else {
+			schemaParams, diags := models.ToMetadataSchema(ctx, spec.Serverless.Schema)
+			resp.Diagnostics.Append(diags...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+
 			serverlessReq := pinecone.CreateServerlessIndexRequest{
 				Name:               data.Name.ValueString(),
 				Dimension:          data.Dimension.ValueInt32Pointer(),
@@ -508,6 +516,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 				Cloud:              pinecone.Cloud(spec.Serverless.Cloud.ValueString()),
 				Region:             spec.Serverless.Region.ValueString(),
 				ReadCapacity:       readCapacityParams,
+				Schema:             schemaParams,
 			}
 
 			if tags != nil {
@@ -539,6 +548,12 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 			return
 		}
 
+		byocSchemaParams, diags := models.ToMetadataSchema(ctx, spec.BYOC.Schema)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
 		byocReq := pinecone.CreateBYOCIndexRequest{
 			Name:               data.Name.ValueString(),
 			Environment:        spec.BYOC.Environment.ValueString(),
@@ -546,6 +561,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 			Metric:             &metric,
 			DeletionProtection: &deletionProtection,
 			ReadCapacity:       readCapacityParams,
+			Schema:             byocSchemaParams,
 		}
 
 		if tags != nil {
@@ -903,6 +919,36 @@ func readCapacitySchema() schema.Attribute {
 				MarkdownDescription: "OnDemand read capacity mode (the default). Specify this block (even empty) to explicitly select OnDemand or to switch back from dedicated mode.",
 				Optional:            true,
 				Attributes:          map[string]schema.Attribute{},
+			},
+		},
+	}
+}
+
+func metadataSchemaResourceSchema() schema.Attribute {
+	return schema.SingleNestedAttribute{
+		MarkdownDescription: "Schema for the behavior of Pinecone's internal metadata index. " +
+			"By default, all metadata is indexed; when `schema` is present, only fields listed in `fields` " +
+			"with `filterable: true` are indexed. This field can only be set at index creation time — " +
+			"changing it requires replacing the index.",
+		Optional: true,
+		Computed: true,
+		PlanModifiers: []planmodifier.Object{
+			objectplanmodifier.RequiresReplace(),
+			objectplanmodifier.UseStateForUnknown(),
+		},
+		Attributes: map[string]schema.Attribute{
+			"fields": schema.MapNestedAttribute{
+				MarkdownDescription: "Map of metadata field names to their schema configuration. " +
+					"Only fields with `filterable: true` are indexed.",
+				Optional: true,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"filterable": schema.BoolAttribute{
+							Description: "Whether the field is filterable. Only true is currently supported.",
+							Required:    true,
+						},
+					},
+				},
 			},
 		},
 	}

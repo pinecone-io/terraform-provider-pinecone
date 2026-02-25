@@ -507,12 +507,88 @@ func (metadataConfig IndexMetadataConfigModel) AttrTypes() map[string]attr.Type 
 	}
 }
 
+// ── MetadataSchema ────────────────────────────────────────────────────────────
+
+type IndexMetadataSchemaFieldModel struct {
+	Filterable types.Bool `tfsdk:"filterable"`
+}
+
+func (m IndexMetadataSchemaFieldModel) AttrTypes() map[string]attr.Type {
+	return map[string]attr.Type{
+		"filterable": types.BoolType,
+	}
+}
+
+type IndexMetadataSchemaModel struct {
+	Fields types.Map `tfsdk:"fields"` // map[string]IndexMetadataSchemaFieldModel
+}
+
+func (m IndexMetadataSchemaModel) AttrTypes() map[string]attr.Type {
+	return map[string]attr.Type{
+		"fields": types.MapType{ElemType: types.ObjectType{AttrTypes: IndexMetadataSchemaFieldModel{}.AttrTypes()}},
+	}
+}
+
+// NewIndexMetadataSchemaModel converts a *pinecone.MetadataSchema (API response) to the Terraform model.
+// Returns nil when schema is nil.
+func NewIndexMetadataSchemaModel(ctx context.Context, schema *pinecone.MetadataSchema) (*IndexMetadataSchemaModel, diag.Diagnostics) {
+	if schema == nil {
+		return nil, nil
+	}
+
+	fieldModels := make(map[string]IndexMetadataSchemaFieldModel, len(schema.Fields))
+	for name, field := range schema.Fields {
+		fieldModels[name] = IndexMetadataSchemaFieldModel{
+			Filterable: types.BoolValue(field.Filterable),
+		}
+	}
+
+	fieldsMap, diags := types.MapValueFrom(ctx, types.ObjectType{AttrTypes: IndexMetadataSchemaFieldModel{}.AttrTypes()}, fieldModels)
+	if diags.HasError() {
+		return nil, diags
+	}
+
+	return &IndexMetadataSchemaModel{Fields: fieldsMap}, nil
+}
+
+// ToMetadataSchema converts a Terraform config object to *pinecone.MetadataSchema for create requests.
+// Returns nil when the object is null or unknown.
+func ToMetadataSchema(ctx context.Context, schemaObj types.Object) (*pinecone.MetadataSchema, diag.Diagnostics) {
+	if schemaObj.IsNull() || schemaObj.IsUnknown() {
+		return nil, nil
+	}
+
+	var model IndexMetadataSchemaModel
+	if diags := schemaObj.As(ctx, &model, basetypes.ObjectAsOptions{}); diags.HasError() {
+		return nil, diags
+	}
+
+	if model.Fields.IsNull() || model.Fields.IsUnknown() {
+		return &pinecone.MetadataSchema{}, nil
+	}
+
+	var fieldModels map[string]IndexMetadataSchemaFieldModel
+	if diags := model.Fields.ElementsAs(ctx, &fieldModels, false); diags.HasError() {
+		return nil, diags
+	}
+
+	fields := make(map[string]pinecone.MetadataSchemaField, len(fieldModels))
+	for name, field := range fieldModels {
+		fields[name] = pinecone.MetadataSchemaField{
+			Filterable: field.Filterable.ValueBool(),
+		}
+	}
+
+	return &pinecone.MetadataSchema{Fields: fields}, nil
+}
+
 // ── Serverless spec ──────────────────────────────────────────────────────────
 
 type IndexServerlessSpecModel struct {
 	Cloud        types.String `tfsdk:"cloud"`
 	Region       types.String `tfsdk:"region"`
 	ReadCapacity types.Object `tfsdk:"read_capacity"`
+	Schema       types.Object `tfsdk:"schema"`
 }
 
 func NewIndexServerlessSpecModel(ctx context.Context, spec *pinecone.ServerlessSpec) (*IndexServerlessSpecModel, diag.Diagnostics) {
@@ -532,10 +608,26 @@ func NewIndexServerlessSpecModel(ctx context.Context, spec *pinecone.ServerlessS
 	} else {
 		rcObj = types.ObjectNull(IndexReadCapacityModel{}.AttrTypes())
 	}
+
+	schemaModel, diags := NewIndexMetadataSchemaModel(ctx, spec.Schema)
+	if diags.HasError() {
+		return nil, diags
+	}
+	var schemaObj types.Object
+	if schemaModel != nil {
+		schemaObj, diags = types.ObjectValueFrom(ctx, IndexMetadataSchemaModel{}.AttrTypes(), schemaModel)
+		if diags.HasError() {
+			return nil, diags
+		}
+	} else {
+		schemaObj = types.ObjectNull(IndexMetadataSchemaModel{}.AttrTypes())
+	}
+
 	return &IndexServerlessSpecModel{
 		Cloud:        types.StringValue(string(spec.Cloud)),
 		Region:       types.StringValue(spec.Region),
 		ReadCapacity: rcObj,
+		Schema:       schemaObj,
 	}, nil
 }
 
@@ -544,6 +636,7 @@ func (model IndexServerlessSpecModel) AttrTypes() map[string]attr.Type {
 		"cloud":         types.StringType,
 		"region":        types.StringType,
 		"read_capacity": types.ObjectType{AttrTypes: IndexReadCapacityModel{}.AttrTypes()},
+		"schema":        types.ObjectType{AttrTypes: IndexMetadataSchemaModel{}.AttrTypes()},
 	}
 }
 
@@ -552,6 +645,7 @@ func (model IndexServerlessSpecModel) AttrTypes() map[string]attr.Type {
 type IndexBYOCSpecModel struct {
 	Environment  types.String `tfsdk:"environment"`
 	ReadCapacity types.Object `tfsdk:"read_capacity"`
+	Schema       types.Object `tfsdk:"schema"`
 }
 
 func NewIndexBYOCSpecModel(ctx context.Context, spec *pinecone.BYOCSpec) (*IndexBYOCSpecModel, diag.Diagnostics) {
@@ -571,9 +665,25 @@ func NewIndexBYOCSpecModel(ctx context.Context, spec *pinecone.BYOCSpec) (*Index
 	} else {
 		rcObj = types.ObjectNull(IndexReadCapacityModel{}.AttrTypes())
 	}
+
+	schemaModel, diags := NewIndexMetadataSchemaModel(ctx, spec.Schema)
+	if diags.HasError() {
+		return nil, diags
+	}
+	var schemaObj types.Object
+	if schemaModel != nil {
+		schemaObj, diags = types.ObjectValueFrom(ctx, IndexMetadataSchemaModel{}.AttrTypes(), schemaModel)
+		if diags.HasError() {
+			return nil, diags
+		}
+	} else {
+		schemaObj = types.ObjectNull(IndexMetadataSchemaModel{}.AttrTypes())
+	}
+
 	return &IndexBYOCSpecModel{
 		Environment:  types.StringValue(spec.Environment),
 		ReadCapacity: rcObj,
+		Schema:       schemaObj,
 	}, nil
 }
 
@@ -581,6 +691,7 @@ func (model IndexBYOCSpecModel) AttrTypes() map[string]attr.Type {
 	return map[string]attr.Type{
 		"environment":   types.StringType,
 		"read_capacity": types.ObjectType{AttrTypes: IndexReadCapacityModel{}.AttrTypes()},
+		"schema":        types.ObjectType{AttrTypes: IndexMetadataSchemaModel{}.AttrTypes()},
 	}
 }
 
@@ -735,6 +846,7 @@ func indexServerlessSpecResourceAttrTypes() map[string]attr.Type {
 		"cloud":         types.StringType,
 		"region":        types.StringType,
 		"read_capacity": types.ObjectType{AttrTypes: IndexReadCapacityResourceModel{}.AttrTypes()},
+		"schema":        types.ObjectType{AttrTypes: IndexMetadataSchemaModel{}.AttrTypes()},
 	}
 }
 
@@ -757,10 +869,26 @@ func NewIndexServerlessSpecResourceModel(ctx context.Context, spec *pinecone.Ser
 	} else {
 		rcObj = types.ObjectNull(IndexReadCapacityResourceModel{}.AttrTypes())
 	}
+
+	schemaModel, diags := NewIndexMetadataSchemaModel(ctx, spec.Schema)
+	if diags.HasError() {
+		return nil, diags
+	}
+	var schemaObj types.Object
+	if schemaModel != nil {
+		schemaObj, diags = types.ObjectValueFrom(ctx, IndexMetadataSchemaModel{}.AttrTypes(), schemaModel)
+		if diags.HasError() {
+			return nil, diags
+		}
+	} else {
+		schemaObj = types.ObjectNull(IndexMetadataSchemaModel{}.AttrTypes())
+	}
+
 	return &IndexServerlessSpecModel{
 		Cloud:        types.StringValue(string(spec.Cloud)),
 		Region:       types.StringValue(spec.Region),
 		ReadCapacity: rcObj,
+		Schema:       schemaObj,
 	}, nil
 }
 
@@ -770,6 +898,7 @@ func indexBYOCSpecResourceAttrTypes() map[string]attr.Type {
 	return map[string]attr.Type{
 		"environment":   types.StringType,
 		"read_capacity": types.ObjectType{AttrTypes: IndexReadCapacityResourceModel{}.AttrTypes()},
+		"schema":        types.ObjectType{AttrTypes: IndexMetadataSchemaModel{}.AttrTypes()},
 	}
 }
 
@@ -792,9 +921,25 @@ func NewIndexBYOCSpecResourceModel(ctx context.Context, spec *pinecone.BYOCSpec)
 	} else {
 		rcObj = types.ObjectNull(IndexReadCapacityResourceModel{}.AttrTypes())
 	}
+
+	schemaModel, diags := NewIndexMetadataSchemaModel(ctx, spec.Schema)
+	if diags.HasError() {
+		return nil, diags
+	}
+	var schemaObj types.Object
+	if schemaModel != nil {
+		schemaObj, diags = types.ObjectValueFrom(ctx, IndexMetadataSchemaModel{}.AttrTypes(), schemaModel)
+		if diags.HasError() {
+			return nil, diags
+		}
+	} else {
+		schemaObj = types.ObjectNull(IndexMetadataSchemaModel{}.AttrTypes())
+	}
+
 	return &IndexBYOCSpecModel{
 		Environment:  types.StringValue(spec.Environment),
 		ReadCapacity: rcObj,
+		Schema:       schemaObj,
 	}, nil
 }
 
