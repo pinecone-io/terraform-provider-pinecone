@@ -118,8 +118,8 @@ func TestAccIndexResource_serverless_readCapacity(t *testing.T) {
 					testAccCheckIndexExists(),
 					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
 					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
-				resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.cloud", "aws"),
-				resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.region", "us-west-2"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.cloud", "aws"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.region", "us-west-2"),
 				),
 			},
 			// Convert to dedicated read capacity
@@ -136,9 +136,9 @@ func TestAccIndexResource_serverless_readCapacity(t *testing.T) {
 					testAccCheckIndexExists(),
 					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
 					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
-				resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.read_capacity.dedicated.node_type", "b1"),
-				resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.read_capacity.dedicated.replicas", "1"),
-				resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.read_capacity.dedicated.shards", "1"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.read_capacity.dedicated.node_type", "b1"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.read_capacity.dedicated.replicas", "1"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.read_capacity.dedicated.shards", "1"),
 				),
 			},
 			// ImportState testing

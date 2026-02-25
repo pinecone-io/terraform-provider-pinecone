@@ -839,7 +839,6 @@ func mergeTags(oldTags, newTags map[string]string) map[string]string {
 	return mergedTags
 }
 
-
 // extractReadCapacityFromSpec pulls the read_capacity object out of a spec object
 // (checking serverless and byoc sub-specs), returning types.ObjectNull if absent.
 func extractReadCapacityFromSpec(ctx context.Context, specObj types.Object, diagnostics *diag.Diagnostics) types.Object {
