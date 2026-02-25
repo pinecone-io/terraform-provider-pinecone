@@ -115,23 +115,9 @@ Optional:
 - `replicas` (Number) The desired number of replicas.
 - `shards` (Number) The desired number of shards.
 
-Read-Only:
-
-- `current_replicas` (Number) The current number of replicas.
-- `current_shards` (Number) The current number of shards.
-- `error_message` (String) An optional error message if there are issues with the read capacity configuration.
-- `state` (String) The overall status of the read capacity configuration. One of: Ready, Scaling, Migrating, Error.
-
 
 <a id="nestedatt--spec--byoc--read_capacity--on_demand"></a>
 ### Nested Schema for `spec.byoc.read_capacity.on_demand`
-
-Read-Only:
-
-- `current_replicas` (Number) The current number of replicas.
-- `current_shards` (Number) The current number of shards.
-- `error_message` (String) An optional error message if there are issues with the read capacity configuration.
-- `state` (String) The overall status of the read capacity configuration. One of: Ready, Scaling, Migrating, Error.
 
 
 
@@ -193,23 +179,9 @@ Optional:
 - `replicas` (Number) The desired number of replicas.
 - `shards` (Number) The desired number of shards.
 
-Read-Only:
-
-- `current_replicas` (Number) The current number of replicas.
-- `current_shards` (Number) The current number of shards.
-- `error_message` (String) An optional error message if there are issues with the read capacity configuration.
-- `state` (String) The overall status of the read capacity configuration. One of: Ready, Scaling, Migrating, Error.
-
 
 <a id="nestedatt--spec--serverless--read_capacity--on_demand"></a>
 ### Nested Schema for `spec.serverless.read_capacity.on_demand`
-
-Read-Only:
-
-- `current_replicas` (Number) The current number of replicas.
-- `current_shards` (Number) The current number of shards.
-- `error_message` (String) An optional error message if there are issues with the read capacity configuration.
-- `state` (String) The overall status of the read capacity configuration. One of: Ready, Scaling, Migrating, Error.
 
 
 
