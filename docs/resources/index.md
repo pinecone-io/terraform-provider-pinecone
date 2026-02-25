@@ -97,6 +97,7 @@ Required:
 Optional:
 
 - `read_capacity` (Attributes) Read capacity configuration for the index. Set exactly one of `dedicated` or `on_demand` to select the mode. Omitting `read_capacity` entirely on create defaults to OnDemand. To switch modes after creation, explicitly set the desired sub-block — removing `read_capacity` from config will not change the mode already recorded in state. (see [below for nested schema](#nestedatt--spec--byoc--read_capacity))
+- `schema` (Attributes) Schema for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when `schema` is present, only fields listed in `fields` with `filterable: true` are indexed. This field can only be set at index creation time — changing it requires replacing the index. (see [below for nested schema](#nestedatt--spec--byoc--schema))
 
 <a id="nestedatt--spec--byoc--read_capacity"></a>
 ### Nested Schema for `spec.byoc.read_capacity`
@@ -118,6 +119,22 @@ Optional:
 
 <a id="nestedatt--spec--byoc--read_capacity--on_demand"></a>
 ### Nested Schema for `spec.byoc.read_capacity.on_demand`
+
+
+
+<a id="nestedatt--spec--byoc--schema"></a>
+### Nested Schema for `spec.byoc.schema`
+
+Optional:
+
+- `fields` (Attributes Map) Map of metadata field names to their schema configuration. Only fields with `filterable: true` are indexed. (see [below for nested schema](#nestedatt--spec--byoc--schema--fields))
+
+<a id="nestedatt--spec--byoc--schema--fields"></a>
+### Nested Schema for `spec.byoc.schema.fields`
+
+Required:
+
+- `filterable` (Boolean) Whether the field is filterable. Only true is currently supported.
 
 
 
@@ -161,6 +178,7 @@ Required:
 Optional:
 
 - `read_capacity` (Attributes) Read capacity configuration for the index. Set exactly one of `dedicated` or `on_demand` to select the mode. Omitting `read_capacity` entirely on create defaults to OnDemand. To switch modes after creation, explicitly set the desired sub-block — removing `read_capacity` from config will not change the mode already recorded in state. (see [below for nested schema](#nestedatt--spec--serverless--read_capacity))
+- `schema` (Attributes) Schema for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when `schema` is present, only fields listed in `fields` with `filterable: true` are indexed. This field can only be set at index creation time — changing it requires replacing the index. (see [below for nested schema](#nestedatt--spec--serverless--schema))
 
 <a id="nestedatt--spec--serverless--read_capacity"></a>
 ### Nested Schema for `spec.serverless.read_capacity`
@@ -182,6 +200,22 @@ Optional:
 
 <a id="nestedatt--spec--serverless--read_capacity--on_demand"></a>
 ### Nested Schema for `spec.serverless.read_capacity.on_demand`
+
+
+
+<a id="nestedatt--spec--serverless--schema"></a>
+### Nested Schema for `spec.serverless.schema`
+
+Optional:
+
+- `fields` (Attributes Map) Map of metadata field names to their schema configuration. Only fields with `filterable: true` are indexed. (see [below for nested schema](#nestedatt--spec--serverless--schema--fields))
+
+<a id="nestedatt--spec--serverless--schema--fields"></a>
+### Nested Schema for `spec.serverless.schema.fields`
+
+Required:
+
+- `filterable` (Boolean) Whether the field is filterable. Only true is currently supported.
 
 
 
