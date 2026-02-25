@@ -126,13 +126,26 @@ func (d *IndexesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 									Computed:    true,
 									Attributes: map[string]schema.Attribute{
 										"cloud": schema.StringAttribute{
-											Description: "Ready.",
+											Description: "The public cloud where the index is hosted.",
 											Computed:    true,
 										},
 										"region": schema.StringAttribute{
-											MarkdownDescription: "Initializing InitializationFailed ScalingUp ScalingDown ScalingUpPodSize ScalingDownPodSize Upgrading Terminating Ready",
+											MarkdownDescription: "The region where the index is hosted.",
 											Computed:            true,
 										},
+										"read_capacity": readCapacityDSSchema(),
+									},
+								},
+								"byoc": schema.SingleNestedAttribute{
+									Description: "Configuration for a BYOC (Bring Your Own Cloud) index.",
+									Optional:    true,
+									Computed:    true,
+									Attributes: map[string]schema.Attribute{
+										"environment": schema.StringAttribute{
+											MarkdownDescription: "The environment identifier for the BYOC index.",
+											Computed:            true,
+										},
+										"read_capacity": readCapacityDSSchema(),
 									},
 								},
 							},

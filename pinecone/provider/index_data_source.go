@@ -121,13 +121,26 @@ func (d *IndexDataSource) Schema(ctx context.Context, req datasource.SchemaReque
 						Computed:    true,
 						Attributes: map[string]schema.Attribute{
 							"cloud": schema.StringAttribute{
-								Description: "Ready.",
+								Description: "The public cloud where the index is hosted.",
 								Computed:    true,
 							},
 							"region": schema.StringAttribute{
-								MarkdownDescription: "Initializing InitializationFailed ScalingUp ScalingDown ScalingUpPodSize ScalingDownPodSize Upgrading Terminating Ready",
+								MarkdownDescription: "The region where the index is hosted.",
 								Computed:            true,
 							},
+							"read_capacity": readCapacityDSSchema(),
+						},
+					},
+					"byoc": schema.SingleNestedAttribute{
+						Description: "Configuration for a BYOC (Bring Your Own Cloud) index.",
+						Optional:    true,
+						Computed:    true,
+						Attributes: map[string]schema.Attribute{
+							"environment": schema.StringAttribute{
+								MarkdownDescription: "The environment identifier for the BYOC index.",
+								Computed:            true,
+							},
+							"read_capacity": readCapacityDSSchema(),
 						},
 					},
 				},
@@ -186,6 +199,63 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 						Computed:            true,
 					},
 				},
+			},
+		},
+	}
+}
+
+// readCapacityDSSchema returns the computed-only read_capacity schema for data sources.
+func readCapacityDSSchema() schema.Attribute {
+	statusAttrs := map[string]schema.Attribute{
+		"state": schema.StringAttribute{
+			MarkdownDescription: "The overall status of the read capacity configuration.",
+			Computed:            true,
+		},
+		"current_replicas": schema.Int32Attribute{
+			MarkdownDescription: "The current number of replicas.",
+			Computed:            true,
+		},
+		"current_shards": schema.Int32Attribute{
+			MarkdownDescription: "The current number of shards.",
+			Computed:            true,
+		},
+		"error_message": schema.StringAttribute{
+			MarkdownDescription: "An optional error message if there are issues with the read capacity configuration.",
+			Computed:            true,
+		},
+	}
+
+	dedicatedAttrs := map[string]schema.Attribute{
+		"node_type": schema.StringAttribute{
+			MarkdownDescription: "The type of machines in use.",
+			Computed:            true,
+		},
+		"replicas": schema.Int32Attribute{
+			MarkdownDescription: "The desired number of replicas.",
+			Computed:            true,
+		},
+		"shards": schema.Int32Attribute{
+			MarkdownDescription: "The desired number of shards.",
+			Computed:            true,
+		},
+	}
+	for k, v := range statusAttrs {
+		dedicatedAttrs[k] = v
+	}
+
+	return schema.SingleNestedAttribute{
+		MarkdownDescription: "Read capacity configuration for the index.",
+		Computed:            true,
+		Attributes: map[string]schema.Attribute{
+			"dedicated": schema.SingleNestedAttribute{
+				MarkdownDescription: "Dedicated read capacity configuration.",
+				Computed:            true,
+				Attributes:          dedicatedAttrs,
+			},
+			"on_demand": schema.SingleNestedAttribute{
+				MarkdownDescription: "OnDemand read capacity configuration.",
+				Computed:            true,
+				Attributes:          statusAttrs,
 			},
 		},
 	}

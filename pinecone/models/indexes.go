@@ -12,7 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
-	"github.com/pinecone-io/go-pinecone/v4/pinecone"
+	"github.com/pinecone-io/go-pinecone/v5/pinecone"
 )
 
 type IndexModel struct {
@@ -46,9 +46,18 @@ func (model *IndexModel) Read(ctx context.Context, index *pinecone.Index) diag.D
 	if diags.HasError() {
 		return diags
 	}
+	serverless, diags := NewIndexServerlessSpecModel(ctx, index.Spec.Serverless)
+	if diags.HasError() {
+		return diags
+	}
+	byoc, diags := NewIndexBYOCSpecModel(ctx, index.Spec.BYOC)
+	if diags.HasError() {
+		return diags
+	}
 	spec := IndexSpecModel{
 		Pod:        pod,
-		Serverless: NewIndexServerlessSpecModel(index.Spec.Serverless),
+		Serverless: serverless,
+		BYOC:       byoc,
 	}
 
 	embed, diags := NewIndexEmbedModel(ctx, index.Embed)
@@ -135,9 +144,18 @@ func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index
 	if diags.HasError() {
 		return diags
 	}
+	serverless, diags := NewIndexServerlessSpecResourceModel(ctx, index.Spec.Serverless)
+	if diags.HasError() {
+		return diags
+	}
+	byoc, diags := NewIndexBYOCSpecResourceModel(ctx, index.Spec.BYOC)
+	if diags.HasError() {
+		return diags
+	}
 	spec := IndexSpecModel{
 		Pod:        pod,
-		Serverless: NewIndexServerlessSpecModel(index.Spec.Serverless),
+		Serverless: serverless,
+		BYOC:       byoc,
 	}
 
 	embed, diags := NewIndexEmbedModel(ctx, index.Embed)
@@ -153,7 +171,7 @@ func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index
 		model.Embed = types.ObjectNull(IndexEmbedModel{}.AttrTypes())
 	}
 
-	model.Spec, diags = types.ObjectValueFrom(ctx, IndexSpecModel{}.AttrTypes(), spec)
+	model.Spec, diags = types.ObjectValueFrom(ctx, indexSpecResourceAttrTypes(), spec)
 	if diags.HasError() {
 		return diags
 	}
@@ -219,9 +237,18 @@ func (model *IndexDatasourceModel) Read(ctx context.Context, index *pinecone.Ind
 	if diags.HasError() {
 		return diags
 	}
+	serverless, diags := NewIndexServerlessSpecModel(ctx, index.Spec.Serverless)
+	if diags.HasError() {
+		return diags
+	}
+	byoc, diags := NewIndexBYOCSpecModel(ctx, index.Spec.BYOC)
+	if diags.HasError() {
+		return diags
+	}
 	spec := IndexSpecModel{
 		Pod:        pod,
-		Serverless: NewIndexServerlessSpecModel(index.Spec.Serverless),
+		Serverless: serverless,
+		BYOC:       byoc,
 	}
 
 	embed, diags := NewIndexEmbedModel(ctx, index.Embed)
@@ -271,12 +298,14 @@ func (model *IndexDatasourceModel) Read(ctx context.Context, index *pinecone.Ind
 type IndexSpecModel struct {
 	Pod        *IndexPodSpecModel        `tfsdk:"pod"`
 	Serverless *IndexServerlessSpecModel `tfsdk:"serverless"`
+	BYOC       *IndexBYOCSpecModel       `tfsdk:"byoc"`
 }
 
 func (model IndexSpecModel) AttrTypes() map[string]attr.Type {
 	return map[string]attr.Type{
 		"pod":        types.ObjectType{AttrTypes: IndexPodSpecModel{}.AttrTypes()},
 		"serverless": types.ObjectType{AttrTypes: IndexServerlessSpecModel{}.AttrTypes()},
+		"byoc":       types.ObjectType{AttrTypes: IndexBYOCSpecModel{}.AttrTypes()},
 	}
 }
 
@@ -478,35 +507,418 @@ func (metadataConfig IndexMetadataConfigModel) AttrTypes() map[string]attr.Type 
 	}
 }
 
+// ── Serverless spec ──────────────────────────────────────────────────────────
+
 type IndexServerlessSpecModel struct {
-	Cloud  types.String `tfsdk:"cloud"`
-	Region types.String `tfsdk:"region"`
+	Cloud        types.String `tfsdk:"cloud"`
+	Region       types.String `tfsdk:"region"`
+	ReadCapacity types.Object `tfsdk:"read_capacity"`
 }
 
-func NewIndexServerlessSpec(spec *IndexServerlessSpecModel) *pinecone.ServerlessSpec {
-	if spec != nil {
-		return &pinecone.ServerlessSpec{
-			Cloud:  pinecone.Cloud(spec.Cloud.String()),
-			Region: spec.Region.ValueString(),
-		}
+func NewIndexServerlessSpecModel(ctx context.Context, spec *pinecone.ServerlessSpec) (*IndexServerlessSpecModel, diag.Diagnostics) {
+	if spec == nil {
+		return nil, nil
 	}
-	return nil
-}
-
-func NewIndexServerlessSpecModel(spec *pinecone.ServerlessSpec) *IndexServerlessSpecModel {
-	if spec != nil {
-		return &IndexServerlessSpecModel{
-			Cloud:  types.StringValue(string(spec.Cloud)),
-			Region: types.StringValue(spec.Region),
-		}
+	rc, diags := NewIndexReadCapacityModel(ctx, spec.ReadCapacity)
+	if diags.HasError() {
+		return nil, diags
 	}
-	return nil
+	var rcObj types.Object
+	if rc != nil {
+		rcObj, diags = types.ObjectValueFrom(ctx, IndexReadCapacityModel{}.AttrTypes(), rc)
+		if diags.HasError() {
+			return nil, diags
+		}
+	} else {
+		rcObj = types.ObjectNull(IndexReadCapacityModel{}.AttrTypes())
+	}
+	return &IndexServerlessSpecModel{
+		Cloud:        types.StringValue(string(spec.Cloud)),
+		Region:       types.StringValue(spec.Region),
+		ReadCapacity: rcObj,
+	}, nil
 }
 
 func (model IndexServerlessSpecModel) AttrTypes() map[string]attr.Type {
 	return map[string]attr.Type{
-		"cloud":  types.StringType,
-		"region": types.StringType,
+		"cloud":         types.StringType,
+		"region":        types.StringType,
+		"read_capacity": types.ObjectType{AttrTypes: IndexReadCapacityModel{}.AttrTypes()},
+	}
+}
+
+// ── BYOC spec ─────────────────────────────────────────────────────────────────
+
+type IndexBYOCSpecModel struct {
+	Environment  types.String `tfsdk:"environment"`
+	ReadCapacity types.Object `tfsdk:"read_capacity"`
+}
+
+func NewIndexBYOCSpecModel(ctx context.Context, spec *pinecone.BYOCSpec) (*IndexBYOCSpecModel, diag.Diagnostics) {
+	if spec == nil {
+		return nil, nil
+	}
+	rc, diags := NewIndexReadCapacityModel(ctx, spec.ReadCapacity)
+	if diags.HasError() {
+		return nil, diags
+	}
+	var rcObj types.Object
+	if rc != nil {
+		rcObj, diags = types.ObjectValueFrom(ctx, IndexReadCapacityModel{}.AttrTypes(), rc)
+		if diags.HasError() {
+			return nil, diags
+		}
+	} else {
+		rcObj = types.ObjectNull(IndexReadCapacityModel{}.AttrTypes())
+	}
+	return &IndexBYOCSpecModel{
+		Environment:  types.StringValue(spec.Environment),
+		ReadCapacity: rcObj,
+	}, nil
+}
+
+func (model IndexBYOCSpecModel) AttrTypes() map[string]attr.Type {
+	return map[string]attr.Type{
+		"environment":   types.StringType,
+		"read_capacity": types.ObjectType{AttrTypes: IndexReadCapacityModel{}.AttrTypes()},
+	}
+}
+
+// ── ReadCapacity models ───────────────────────────────────────────────────────
+
+// IndexReadCapacityModel mirrors pinecone.ReadCapacity — the full read-back from API.
+type IndexReadCapacityModel struct {
+	Dedicated types.Object `tfsdk:"dedicated"`
+	OnDemand  types.Object `tfsdk:"on_demand"`
+}
+
+func (model IndexReadCapacityModel) AttrTypes() map[string]attr.Type {
+	return map[string]attr.Type{
+		"dedicated": types.ObjectType{AttrTypes: IndexReadCapacityDedicatedModel{}.AttrTypes()},
+		"on_demand": types.ObjectType{AttrTypes: IndexReadCapacityOnDemandModel{}.AttrTypes()},
+	}
+}
+
+type IndexReadCapacityDedicatedModel struct {
+	NodeType        types.String `tfsdk:"node_type"`
+	Replicas        types.Int32  `tfsdk:"replicas"`
+	Shards          types.Int32  `tfsdk:"shards"`
+	State           types.String `tfsdk:"state"`
+	CurrentReplicas types.Int32  `tfsdk:"current_replicas"`
+	CurrentShards   types.Int32  `tfsdk:"current_shards"`
+	ErrorMessage    types.String `tfsdk:"error_message"`
+}
+
+func (model IndexReadCapacityDedicatedModel) AttrTypes() map[string]attr.Type {
+	return map[string]attr.Type{
+		"node_type":        types.StringType,
+		"replicas":         types.Int32Type,
+		"shards":           types.Int32Type,
+		"state":            types.StringType,
+		"current_replicas": types.Int32Type,
+		"current_shards":   types.Int32Type,
+		"error_message":    types.StringType,
+	}
+}
+
+type IndexReadCapacityOnDemandModel struct {
+	State           types.String `tfsdk:"state"`
+	CurrentReplicas types.Int32  `tfsdk:"current_replicas"`
+	CurrentShards   types.Int32  `tfsdk:"current_shards"`
+	ErrorMessage    types.String `tfsdk:"error_message"`
+}
+
+func (model IndexReadCapacityOnDemandModel) AttrTypes() map[string]attr.Type {
+	return map[string]attr.Type{
+		"state":            types.StringType,
+		"current_replicas": types.Int32Type,
+		"current_shards":   types.Int32Type,
+		"error_message":    types.StringType,
+	}
+}
+
+// ── ReadCapacity resource-only models (desired-state fields only) ─────────────
+//
+// The resource schema deliberately omits status-only fields (state, current_replicas,
+// current_shards, error_message) because they are observational and cannot be
+// configured. They are available in the data source schema. Using separate model
+// types keeps the resource and data source object AttrTypes consistent with their
+// respective schemas, avoiding framework validation errors.
+
+// IndexReadCapacityDedicatedResourceModel holds only the user-configurable fields for
+// dedicated read capacity. Status fields are tracked by the API but not by the resource.
+type IndexReadCapacityDedicatedResourceModel struct {
+	NodeType types.String `tfsdk:"node_type"`
+	Replicas types.Int32  `tfsdk:"replicas"`
+	Shards   types.Int32  `tfsdk:"shards"`
+}
+
+func (m IndexReadCapacityDedicatedResourceModel) AttrTypes() map[string]attr.Type {
+	return map[string]attr.Type{
+		"node_type": types.StringType,
+		"replicas":  types.Int32Type,
+		"shards":    types.Int32Type,
+	}
+}
+
+// IndexReadCapacityOnDemandResourceModel is intentionally empty — its presence in the
+// config signals that the index should use OnDemand read capacity mode.
+type IndexReadCapacityOnDemandResourceModel struct{}
+
+func (m IndexReadCapacityOnDemandResourceModel) AttrTypes() map[string]attr.Type {
+	return map[string]attr.Type{}
+}
+
+// IndexReadCapacityResourceModel is the resource-specific read capacity model.
+// It uses the resource-only sub-models that omit status-only fields.
+type IndexReadCapacityResourceModel struct {
+	Dedicated types.Object `tfsdk:"dedicated"`
+	OnDemand  types.Object `tfsdk:"on_demand"`
+}
+
+func (m IndexReadCapacityResourceModel) AttrTypes() map[string]attr.Type {
+	return map[string]attr.Type{
+		"dedicated": types.ObjectType{AttrTypes: IndexReadCapacityDedicatedResourceModel{}.AttrTypes()},
+		"on_demand": types.ObjectType{AttrTypes: IndexReadCapacityOnDemandResourceModel{}.AttrTypes()},
+	}
+}
+
+// NewIndexReadCapacityResourceModel converts a *pinecone.ReadCapacity to the resource-specific model,
+// omitting status-only fields.
+func NewIndexReadCapacityResourceModel(ctx context.Context, rc *pinecone.ReadCapacity) (*IndexReadCapacityResourceModel, diag.Diagnostics) {
+	if rc == nil {
+		return nil, nil
+	}
+
+	model := &IndexReadCapacityResourceModel{
+		Dedicated: types.ObjectNull(IndexReadCapacityDedicatedResourceModel{}.AttrTypes()),
+		OnDemand:  types.ObjectNull(IndexReadCapacityOnDemandResourceModel{}.AttrTypes()),
+	}
+
+	switch {
+	case rc.Dedicated != nil:
+		d := rc.Dedicated
+		var replicas, shards types.Int32
+		if d.Scaling != nil && d.Scaling.Manual != nil {
+			replicas = types.Int32PointerValue(d.Scaling.Manual.Replicas)
+			shards = types.Int32PointerValue(d.Scaling.Manual.Shards)
+		} else {
+			replicas, shards = types.Int32Null(), types.Int32Null()
+		}
+
+		dedicated := IndexReadCapacityDedicatedResourceModel{
+			NodeType: types.StringPointerValue(d.NodeType),
+			Replicas: replicas,
+			Shards:   shards,
+		}
+		var diags diag.Diagnostics
+		model.Dedicated, diags = types.ObjectValueFrom(ctx, IndexReadCapacityDedicatedResourceModel{}.AttrTypes(), dedicated)
+		if diags.HasError() {
+			return nil, diags
+		}
+
+	case rc.OnDemand != nil:
+		var diags diag.Diagnostics
+		model.OnDemand, diags = types.ObjectValueFrom(ctx, IndexReadCapacityOnDemandResourceModel{}.AttrTypes(), IndexReadCapacityOnDemandResourceModel{})
+		if diags.HasError() {
+			return nil, diags
+		}
+	}
+
+	return model, nil
+}
+
+// indexServerlessSpecResourceAttrTypes returns the attr.Type map for IndexServerlessSpecModel
+// in the resource context (using resource-specific read capacity types).
+func indexServerlessSpecResourceAttrTypes() map[string]attr.Type {
+	return map[string]attr.Type{
+		"cloud":         types.StringType,
+		"region":        types.StringType,
+		"read_capacity": types.ObjectType{AttrTypes: IndexReadCapacityResourceModel{}.AttrTypes()},
+	}
+}
+
+// NewIndexServerlessSpecResourceModel is like NewIndexServerlessSpecModel but uses the
+// resource-specific read capacity model (without status fields).
+func NewIndexServerlessSpecResourceModel(ctx context.Context, spec *pinecone.ServerlessSpec) (*IndexServerlessSpecModel, diag.Diagnostics) {
+	if spec == nil {
+		return nil, nil
+	}
+	rc, diags := NewIndexReadCapacityResourceModel(ctx, spec.ReadCapacity)
+	if diags.HasError() {
+		return nil, diags
+	}
+	var rcObj types.Object
+	if rc != nil {
+		rcObj, diags = types.ObjectValueFrom(ctx, IndexReadCapacityResourceModel{}.AttrTypes(), rc)
+		if diags.HasError() {
+			return nil, diags
+		}
+	} else {
+		rcObj = types.ObjectNull(IndexReadCapacityResourceModel{}.AttrTypes())
+	}
+	return &IndexServerlessSpecModel{
+		Cloud:        types.StringValue(string(spec.Cloud)),
+		Region:       types.StringValue(spec.Region),
+		ReadCapacity: rcObj,
+	}, nil
+}
+
+// indexBYOCSpecResourceAttrTypes returns the attr.Type map for IndexBYOCSpecModel
+// in the resource context (using resource-specific read capacity types).
+func indexBYOCSpecResourceAttrTypes() map[string]attr.Type {
+	return map[string]attr.Type{
+		"environment":   types.StringType,
+		"read_capacity": types.ObjectType{AttrTypes: IndexReadCapacityResourceModel{}.AttrTypes()},
+	}
+}
+
+// NewIndexBYOCSpecResourceModel is like NewIndexBYOCSpecModel but uses the
+// resource-specific read capacity model (without status fields).
+func NewIndexBYOCSpecResourceModel(ctx context.Context, spec *pinecone.BYOCSpec) (*IndexBYOCSpecModel, diag.Diagnostics) {
+	if spec == nil {
+		return nil, nil
+	}
+	rc, diags := NewIndexReadCapacityResourceModel(ctx, spec.ReadCapacity)
+	if diags.HasError() {
+		return nil, diags
+	}
+	var rcObj types.Object
+	if rc != nil {
+		rcObj, diags = types.ObjectValueFrom(ctx, IndexReadCapacityResourceModel{}.AttrTypes(), rc)
+		if diags.HasError() {
+			return nil, diags
+		}
+	} else {
+		rcObj = types.ObjectNull(IndexReadCapacityResourceModel{}.AttrTypes())
+	}
+	return &IndexBYOCSpecModel{
+		Environment:  types.StringValue(spec.Environment),
+		ReadCapacity: rcObj,
+	}, nil
+}
+
+// indexSpecResourceAttrTypes returns the attr.Type map for IndexSpecModel in the resource context.
+func indexSpecResourceAttrTypes() map[string]attr.Type {
+	return map[string]attr.Type{
+		"pod":        types.ObjectType{AttrTypes: IndexPodSpecModel{}.AttrTypes()},
+		"serverless": types.ObjectType{AttrTypes: indexServerlessSpecResourceAttrTypes()},
+		"byoc":       types.ObjectType{AttrTypes: indexBYOCSpecResourceAttrTypes()},
+	}
+}
+
+// readCapacityStatusFromSDK maps pinecone.ReadCapacityStatus fields to the four common Terraform status fields.
+// types.*PointerValue handles nil by returning the appropriate null value.
+func readCapacityStatusFromSDK(s pinecone.ReadCapacityStatus) (state types.String, currentReplicas, currentShards types.Int32, errorMessage types.String) {
+	return types.StringValue(s.State),
+		types.Int32PointerValue(s.CurrentReplicas),
+		types.Int32PointerValue(s.CurrentShards),
+		types.StringPointerValue(s.ErrorMessage)
+}
+
+// NewIndexReadCapacityModel converts a *pinecone.ReadCapacity (API response) to the Terraform model.
+func NewIndexReadCapacityModel(ctx context.Context, rc *pinecone.ReadCapacity) (*IndexReadCapacityModel, diag.Diagnostics) {
+	if rc == nil {
+		return nil, nil
+	}
+
+	model := &IndexReadCapacityModel{
+		Dedicated: types.ObjectNull(IndexReadCapacityDedicatedModel{}.AttrTypes()),
+		OnDemand:  types.ObjectNull(IndexReadCapacityOnDemandModel{}.AttrTypes()),
+	}
+
+	switch {
+	case rc.Dedicated != nil:
+		d := rc.Dedicated
+
+		var replicas, shards types.Int32
+		if d.Scaling != nil && d.Scaling.Manual != nil {
+			replicas = types.Int32PointerValue(d.Scaling.Manual.Replicas)
+			shards = types.Int32PointerValue(d.Scaling.Manual.Shards)
+		} else {
+			replicas, shards = types.Int32Null(), types.Int32Null()
+		}
+
+		state, currentReplicas, currentShards, errorMessage := readCapacityStatusFromSDK(d.Status)
+		dedicated := IndexReadCapacityDedicatedModel{
+			NodeType:        types.StringPointerValue(d.NodeType),
+			Replicas:        replicas,
+			Shards:          shards,
+			State:           state,
+			CurrentReplicas: currentReplicas,
+			CurrentShards:   currentShards,
+			ErrorMessage:    errorMessage,
+		}
+
+		var diags diag.Diagnostics
+		model.Dedicated, diags = types.ObjectValueFrom(ctx, IndexReadCapacityDedicatedModel{}.AttrTypes(), dedicated)
+		if diags.HasError() {
+			return nil, diags
+		}
+
+	case rc.OnDemand != nil:
+		state, currentReplicas, currentShards, errorMessage := readCapacityStatusFromSDK(rc.OnDemand.Status)
+		onDemand := IndexReadCapacityOnDemandModel{
+			State:           state,
+			CurrentReplicas: currentReplicas,
+			CurrentShards:   currentShards,
+			ErrorMessage:    errorMessage,
+		}
+
+		var diags diag.Diagnostics
+		model.OnDemand, diags = types.ObjectValueFrom(ctx, IndexReadCapacityOnDemandModel{}.AttrTypes(), onDemand)
+		if diags.HasError() {
+			return nil, diags
+		}
+	}
+
+	return model, nil
+}
+
+// ToReadCapacityParams converts the Terraform model to SDK params for create/update requests.
+//
+// The presence of the dedicated or on_demand sub-block is what signals the desired mode:
+//   - dedicated { ... }  → ReadCapacityParams{Dedicated: ...}
+//   - on_demand {}       → ReadCapacityParams{OnDemand: &ReadCapacityOnDemandConfig{}}
+//   - neither sub-block  → nil (treat as unset; API will preserve existing or default to OnDemand)
+func ToReadCapacityParams(ctx context.Context, rcObj types.Object) (*pinecone.ReadCapacityParams, diag.Diagnostics) {
+	if rcObj.IsNull() || rcObj.IsUnknown() {
+		return nil, nil
+	}
+
+	var model IndexReadCapacityResourceModel
+	if diags := rcObj.As(ctx, &model, basetypes.ObjectAsOptions{}); diags.HasError() {
+		return nil, diags
+	}
+
+	switch {
+	case !model.Dedicated.IsNull() && !model.Dedicated.IsUnknown():
+		var dedicated IndexReadCapacityDedicatedResourceModel
+		if diags := model.Dedicated.As(ctx, &dedicated, basetypes.ObjectAsOptions{}); diags.HasError() {
+			return nil, diags
+		}
+
+		cfg := &pinecone.ReadCapacityDedicatedConfig{
+			NodeType: dedicated.NodeType.ValueStringPointer(),
+		}
+
+		if !dedicated.Replicas.IsNull() || !dedicated.Shards.IsNull() {
+			cfg.Scaling = &pinecone.ReadCapacityScaling{
+				Manual: &pinecone.ReadCapacityManualScaling{
+					Replicas: dedicated.Replicas.ValueInt32Pointer(),
+					Shards:   dedicated.Shards.ValueInt32Pointer(),
+				},
+			}
+		}
+
+		return &pinecone.ReadCapacityParams{Dedicated: cfg}, nil
+
+	case !model.OnDemand.IsNull() && !model.OnDemand.IsUnknown():
+		return &pinecone.ReadCapacityParams{OnDemand: &pinecone.ReadCapacityOnDemandConfig{}}, nil
+
+	default:
+		// read_capacity block is present but neither sub-block is set — treat as unset.
+		return nil, nil
 	}
 }
 

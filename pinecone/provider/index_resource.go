@@ -29,13 +29,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
-	"github.com/pinecone-io/go-pinecone/v4/pinecone"
+	"github.com/pinecone-io/go-pinecone/v5/pinecone"
 	"github.com/pinecone-io/terraform-provider-pinecone/pinecone/models"
 )
 
 const (
 	defaultIndexCreateTimeout time.Duration = 10 * time.Minute
-	defaultIndexUpdateTimeout time.Duration = 10 * time.Minute
 	defaultIndexDeleteTimeout time.Duration = 10 * time.Minute
 )
 
@@ -223,6 +222,21 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 									stringplanmodifier.RequiresReplace(),
 								},
 							},
+							"read_capacity": readCapacitySchema(),
+						},
+					},
+					"byoc": schema.SingleNestedAttribute{
+						Description: "Configuration needed to deploy a BYOC (Bring Your Own Cloud) index.",
+						Optional:    true,
+						Attributes: map[string]schema.Attribute{
+							"environment": schema.StringAttribute{
+								MarkdownDescription: "The environment identifier for the BYOC index.",
+								Required:            true,
+								PlanModifiers: []planmodifier.String{
+									stringplanmodifier.RequiresReplace(),
+								},
+							},
+							"read_capacity": readCapacitySchema(),
 						},
 					},
 				},
@@ -366,6 +380,26 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 	tags := pinecone.IndexTags(tagsMap)
 
+	// Validate that exactly one spec type is provided.
+	specCount := 0
+	if spec.Pod != nil {
+		specCount++
+	}
+	if spec.Serverless != nil {
+		specCount++
+	}
+	if spec.BYOC != nil {
+		specCount++
+	}
+	if specCount == 0 {
+		resp.Diagnostics.AddError("Invalid configuration", "Exactly one of spec.pod, spec.serverless, or spec.byoc must be specified.")
+		return
+	}
+	if specCount > 1 {
+		resp.Diagnostics.AddError("Invalid configuration", "Only one of spec.pod, spec.serverless, or spec.byoc may be specified.")
+		return
+	}
+
 	// Prepare the payload for the API request
 	if spec.Pod != nil {
 		// If trying to create a pod index with an embed configuration, reject
@@ -419,11 +453,15 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 			resp.Diagnostics.AddError("Failed to create pod index", err.Error())
 			return
 		}
-	}
-
-	if spec.Serverless != nil {
-		metric := pinecone.IndexMetric(*data.Metric.ValueStringPointer())
+	} else if spec.Serverless != nil {
+		metric := pinecone.IndexMetric(data.Metric.ValueString())
 		deletionProtection := pinecone.DeletionProtection(data.DeletionProtection.ValueString())
+
+		readCapacityParams, diags := models.ToReadCapacityParams(ctx, spec.Serverless.ReadCapacity)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
 
 		if embed != nil {
 			fieldMap := mapAttrToInterfacePtr(embed.FieldMap)
@@ -449,6 +487,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 				Region:             spec.Serverless.Region.ValueString(),
 				Embed:              embedConfig,
 				DeletionProtection: &deletionProtection,
+				ReadCapacity:       readCapacityParams,
 			}
 
 			if tags != nil {
@@ -468,6 +507,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 				DeletionProtection: &deletionProtection,
 				Cloud:              pinecone.Cloud(spec.Serverless.Cloud.ValueString()),
 				Region:             spec.Serverless.Region.ValueString(),
+				ReadCapacity:       readCapacityParams,
 			}
 
 			if tags != nil {
@@ -483,6 +523,43 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 				resp.Diagnostics.AddError("Failed to create serverless index", err.Error())
 				return
 			}
+		}
+	} else if spec.BYOC != nil {
+		metric := pinecone.IndexMetric(data.Metric.ValueString())
+		deletionProtection := pinecone.DeletionProtection(data.DeletionProtection.ValueString())
+
+		if embed != nil {
+			resp.Diagnostics.AddError("Invalid configuration", "BYOC indexes cannot have an embed configuration.")
+			return
+		}
+
+		readCapacityParams, diags := models.ToReadCapacityParams(ctx, spec.BYOC.ReadCapacity)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		byocReq := pinecone.CreateBYOCIndexRequest{
+			Name:               data.Name.ValueString(),
+			Environment:        spec.BYOC.Environment.ValueString(),
+			Dimension:          data.Dimension.ValueInt32Pointer(),
+			Metric:             &metric,
+			DeletionProtection: &deletionProtection,
+			ReadCapacity:       readCapacityParams,
+		}
+
+		if tags != nil {
+			byocReq.Tags = &tags
+		}
+
+		if vectorType := data.VectorType.ValueString(); vectorType != "" {
+			byocReq.VectorType = &vectorType
+		}
+
+		_, err := r.client.CreateBYOCIndex(ctx, &byocReq)
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to create BYOC index", err.Error())
+			return
 		}
 	}
 
@@ -637,8 +714,12 @@ func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 			embedConfig.WriteParameters = mapAttrToInterfacePtr(embedModel.WriteParameters)
 		} else {
 			// if existing Embed is not present upgrade to an integrated model (serverless only)
-			if spec.Serverless == nil {
+			if spec.Pod != nil {
 				resp.Diagnostics.AddError("Invalid configuration", "Pod-based indexes cannot have an embed configuration.")
+				return
+			}
+			if spec.BYOC != nil {
+				resp.Diagnostics.AddError("Invalid configuration", "BYOC indexes cannot have an embed configuration.")
 				return
 			}
 			embedConfig.Model = embedModel.Model.ValueStringPointer()
@@ -649,8 +730,33 @@ func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		configureRequest.Embed = &embedConfig
 	}
 
+	// Update ReadCapacity if it has changed (serverless and BYOC only)
+	oldReadCapacity, newReadCapacity := extractReadCapacityFromSpec(ctx, data.Spec, &resp.Diagnostics), extractReadCapacityFromSpec(ctx, newData.Spec, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !oldReadCapacity.Equal(newReadCapacity) {
+		// Guard: ReadCapacity is not supported for pod indexes
+		var currentSpec models.IndexSpecModel
+		resp.Diagnostics.Append(data.Spec.As(ctx, &currentSpec, basetypes.ObjectAsOptions{})...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if currentSpec.Pod != nil {
+			resp.Diagnostics.AddError("Invalid configuration", "ReadCapacity is not supported for pod-based indexes.")
+			return
+		}
+
+		readCapacityParams, diags := models.ToReadCapacityParams(ctx, newReadCapacity)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		configureRequest.ReadCapacity = readCapacityParams
+	}
+
 	// send configure index request if there are things that have been updated
-	if configureRequest.DeletionProtection != "" || configureRequest.Embed != nil || configureRequest.Tags != nil {
+	if configureRequest.DeletionProtection != "" || configureRequest.Embed != nil || configureRequest.Tags != nil || configureRequest.ReadCapacity != nil {
 		_, err := r.client.ConfigureIndex(ctx, data.Name.ValueString(), configureRequest)
 		if err != nil {
 			resp.Diagnostics.AddError("Failed to update index", err.Error())
@@ -664,7 +770,7 @@ func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
-	newData.Read(ctx, index)
+	resp.Diagnostics.Append(newData.Read(ctx, index)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newData)...)
 }
 
@@ -689,7 +795,7 @@ func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	// Wait for index to be deleted
 	// Create() is passed a default timeout to use if no value
 	// has been supplied in the Terraform configuration.
-	deleteTimeout, diags := data.Timeouts.Create(ctx, defaultIndexDeleteTimeout)
+	deleteTimeout, diags := data.Timeouts.Delete(ctx, defaultIndexDeleteTimeout)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -731,6 +837,75 @@ func mergeTags(oldTags, newTags map[string]string) map[string]string {
 	}
 
 	return mergedTags
+}
+
+// extractReadCapacityFromSpec pulls the read_capacity object out of a spec object
+// (checking serverless and byoc sub-specs), returning types.ObjectNull if absent.
+func extractReadCapacityFromSpec(ctx context.Context, specObj types.Object, diagnostics *diag.Diagnostics) types.Object {
+	if specObj.IsNull() || specObj.IsUnknown() {
+		return types.ObjectNull(models.IndexReadCapacityResourceModel{}.AttrTypes())
+	}
+	var spec models.IndexSpecModel
+	diagnostics.Append(specObj.As(ctx, &spec, basetypes.ObjectAsOptions{})...)
+	if diagnostics.HasError() {
+		return types.ObjectNull(models.IndexReadCapacityResourceModel{}.AttrTypes())
+	}
+	if spec.Serverless != nil {
+		return spec.Serverless.ReadCapacity
+	}
+	if spec.BYOC != nil {
+		return spec.BYOC.ReadCapacity
+	}
+	return types.ObjectNull(models.IndexReadCapacityResourceModel{}.AttrTypes())
+}
+
+// readCapacitySchema returns the schema for the read_capacity block,
+// shared between spec.serverless and spec.byoc.
+//
+// Only user-configurable fields are exposed. Status-only fields (state, current_replicas,
+// current_shards, error_message) are intentionally omitted: they cannot be configured,
+// and their asynchronous, nullable nature makes them difficult to represent in the desired-state
+// model without custom plan modifiers. Use the index data source to observe them.
+func readCapacitySchema() schema.Attribute {
+	return schema.SingleNestedAttribute{
+		MarkdownDescription: "Read capacity configuration for the index. Set exactly one of `dedicated` or `on_demand` to select the mode. " +
+			"Omitting `read_capacity` entirely on create defaults to OnDemand. " +
+			"To switch modes after creation, explicitly set the desired sub-block — removing `read_capacity` from config will not change the mode already recorded in state.",
+		Optional: true,
+		Computed: true,
+		PlanModifiers: []planmodifier.Object{
+			objectplanmodifier.UseStateForUnknown(),
+		},
+		Attributes: map[string]schema.Attribute{
+			"dedicated": schema.SingleNestedAttribute{
+				MarkdownDescription: "Dedicated read capacity mode. Set `node_type`, `replicas`, and `shards` to provision fixed compute for this index. " +
+					"All three fields are required when first switching to dedicated mode.",
+				Optional: true,
+				Attributes: map[string]schema.Attribute{
+					"node_type": schema.StringAttribute{
+						MarkdownDescription: "The type of machines to use. Available options: 'b1' and 't1'.",
+						Optional:            true,
+						Computed:            true,
+					},
+					"replicas": schema.Int32Attribute{
+						MarkdownDescription: "The desired number of replicas.",
+						Optional:            true,
+						Computed:            true,
+					},
+					"shards": schema.Int32Attribute{
+						MarkdownDescription: "The desired number of shards.",
+						Optional:            true,
+						Computed:            true,
+					},
+				},
+			},
+			"on_demand": schema.SingleNestedAttribute{
+				MarkdownDescription: "OnDemand read capacity mode (the default). Specify this block (even empty) to explicitly select OnDemand or to switch back from dedicated mode.",
+				Optional:            true,
+				Attributes:          map[string]schema.Attribute{},
+			},
+		},
+	}
 }
 
 func toStringMap(ctx context.Context, value basetypes.MapValue) (map[string]string, diag.Diagnostics) {

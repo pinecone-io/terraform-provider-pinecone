@@ -83,8 +83,44 @@ Read-Only:
 
 Optional:
 
+- `byoc` (Attributes) Configuration needed to deploy a BYOC (Bring Your Own Cloud) index. (see [below for nested schema](#nestedatt--spec--byoc))
 - `pod` (Attributes) Configuration needed to deploy a pod-based index. (see [below for nested schema](#nestedatt--spec--pod))
 - `serverless` (Attributes) Configuration needed to deploy a serverless index. (see [below for nested schema](#nestedatt--spec--serverless))
+
+<a id="nestedatt--spec--byoc"></a>
+### Nested Schema for `spec.byoc`
+
+Required:
+
+- `environment` (String) The environment identifier for the BYOC index.
+
+Optional:
+
+- `read_capacity` (Attributes) Read capacity configuration for the index. Set exactly one of `dedicated` or `on_demand` to select the mode. Omitting `read_capacity` entirely on create defaults to OnDemand. To switch modes after creation, explicitly set the desired sub-block — removing `read_capacity` from config will not change the mode already recorded in state. (see [below for nested schema](#nestedatt--spec--byoc--read_capacity))
+
+<a id="nestedatt--spec--byoc--read_capacity"></a>
+### Nested Schema for `spec.byoc.read_capacity`
+
+Optional:
+
+- `dedicated` (Attributes) Dedicated read capacity mode. Set `node_type`, `replicas`, and `shards` to provision fixed compute for this index. All three fields are required when first switching to dedicated mode. (see [below for nested schema](#nestedatt--spec--byoc--read_capacity--dedicated))
+- `on_demand` (Attributes) OnDemand read capacity mode (the default). Specify this block (even empty) to explicitly select OnDemand or to switch back from dedicated mode. (see [below for nested schema](#nestedatt--spec--byoc--read_capacity--on_demand))
+
+<a id="nestedatt--spec--byoc--read_capacity--dedicated"></a>
+### Nested Schema for `spec.byoc.read_capacity.on_demand`
+
+Optional:
+
+- `node_type` (String) The type of machines to use. Available options: 'b1' and 't1'.
+- `replicas` (Number) The desired number of replicas.
+- `shards` (Number) The desired number of shards.
+
+
+<a id="nestedatt--spec--byoc--read_capacity--on_demand"></a>
+### Nested Schema for `spec.byoc.read_capacity.on_demand`
+
+
+
 
 <a id="nestedatt--spec--pod"></a>
 ### Nested Schema for `spec.pod`
@@ -121,6 +157,33 @@ Required:
 
 - `cloud` (String) The public cloud where you would like your index hosted. [gcp|aws|azure]
 - `region` (String) The region where you would like your index to be created.
+
+Optional:
+
+- `read_capacity` (Attributes) Read capacity configuration for the index. Set exactly one of `dedicated` or `on_demand` to select the mode. Omitting `read_capacity` entirely on create defaults to OnDemand. To switch modes after creation, explicitly set the desired sub-block — removing `read_capacity` from config will not change the mode already recorded in state. (see [below for nested schema](#nestedatt--spec--serverless--read_capacity))
+
+<a id="nestedatt--spec--serverless--read_capacity"></a>
+### Nested Schema for `spec.serverless.read_capacity`
+
+Optional:
+
+- `dedicated` (Attributes) Dedicated read capacity mode. Set `node_type`, `replicas`, and `shards` to provision fixed compute for this index. All three fields are required when first switching to dedicated mode. (see [below for nested schema](#nestedatt--spec--serverless--read_capacity--dedicated))
+- `on_demand` (Attributes) OnDemand read capacity mode (the default). Specify this block (even empty) to explicitly select OnDemand or to switch back from dedicated mode. (see [below for nested schema](#nestedatt--spec--serverless--read_capacity--on_demand))
+
+<a id="nestedatt--spec--serverless--read_capacity--dedicated"></a>
+### Nested Schema for `spec.serverless.read_capacity.on_demand`
+
+Optional:
+
+- `node_type` (String) The type of machines to use. Available options: 'b1' and 't1'.
+- `replicas` (Number) The desired number of replicas.
+- `shards` (Number) The desired number of shards.
+
+
+<a id="nestedatt--spec--serverless--read_capacity--on_demand"></a>
+### Nested Schema for `spec.serverless.read_capacity.on_demand`
+
+
 
 
 

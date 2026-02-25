@@ -29,16 +29,22 @@ func TestAccCollectionResource(t *testing.T) {
 					resource.TestCheckResourceAttrSet("pinecone_collection.test", "status"),
 				),
 			},
+			// Verify the data source reads back the same collection without creating new infrastructure.
+			{
+				Config: testAccCollectionResourceWithDataSourceConfig(rName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("data.pinecone_collection.test", "id", rName),
+					resource.TestCheckResourceAttr("data.pinecone_collection.test", "name", rName),
+					resource.TestCheckResourceAttr("data.pinecone_collection.test", "dimension", "1536"),
+					resource.TestCheckResourceAttrSet("data.pinecone_collection.test", "size"),
+					resource.TestCheckResourceAttrSet("data.pinecone_collection.test", "status"),
+				),
+			},
 			// ImportState testing
 			{
-				ResourceName:      "pinecone_collection.test",
-				ImportState:       true,
-				ImportStateVerify: true,
-				// ImportStateVerifyIdentifierAttribute: "name",
-				// This is not normally necessary, but is here because this
-				// example code does not have an actual upstream service.
-				// Once the Read method is able to refresh information from
-				// the upstream service, this can be removed.
+				ResourceName:            "pinecone_collection.test",
+				ImportState:             true,
+				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"source"},
 			},
 			// Delete testing automatically occurs in TestCase
@@ -65,6 +71,33 @@ resource "pinecone_index" "test" {
 resource "pinecone_collection" "test" {
 	name = %q
 	source = pinecone_index.test.name
+}
+`, name, name)
+}
+
+func testAccCollectionResourceWithDataSourceConfig(name string) string {
+	return fmt.Sprintf(`
+provider "pinecone" {
+}
+
+resource "pinecone_index" "test" {
+	name = %q
+	dimension = 1536
+	spec = {
+		pod = {
+			environment = "us-west4-gcp"
+			pod_type = "s1.x1"
+		}
+	}
+}
+  
+resource "pinecone_collection" "test" {
+	name = %q
+	source = pinecone_index.test.name
+}
+
+data "pinecone_collection" "test" {
+	name = pinecone_collection.test.name
 }
 `, name, name)
 }

@@ -84,8 +84,52 @@ Read-Only:
 
 Optional:
 
+- `byoc` (Attributes) Configuration for a BYOC (Bring Your Own Cloud) index. (see [below for nested schema](#nestedatt--spec--byoc))
 - `pod` (Attributes) Configuration needed to deploy a pod-based index. (see [below for nested schema](#nestedatt--spec--pod))
 - `serverless` (Attributes) Configuration needed to deploy a serverless index. (see [below for nested schema](#nestedatt--spec--serverless))
+
+<a id="nestedatt--spec--byoc"></a>
+### Nested Schema for `spec.byoc`
+
+Read-Only:
+
+- `environment` (String) The environment identifier for the BYOC index.
+- `read_capacity` (Attributes) Read capacity configuration for the index. (see [below for nested schema](#nestedatt--spec--byoc--read_capacity))
+
+<a id="nestedatt--spec--byoc--read_capacity"></a>
+### Nested Schema for `spec.byoc.read_capacity`
+
+Read-Only:
+
+- `dedicated` (Attributes) Dedicated read capacity configuration. (see [below for nested schema](#nestedatt--spec--byoc--read_capacity--dedicated))
+- `on_demand` (Attributes) OnDemand read capacity configuration. (see [below for nested schema](#nestedatt--spec--byoc--read_capacity--on_demand))
+
+<a id="nestedatt--spec--byoc--read_capacity--dedicated"></a>
+### Nested Schema for `spec.byoc.read_capacity.on_demand`
+
+Read-Only:
+
+- `current_replicas` (Number) The current number of replicas.
+- `current_shards` (Number) The current number of shards.
+- `error_message` (String) An optional error message if there are issues with the read capacity configuration.
+- `node_type` (String) The type of machines in use.
+- `replicas` (Number) The desired number of replicas.
+- `shards` (Number) The desired number of shards.
+- `state` (String) The overall status of the read capacity configuration.
+
+
+<a id="nestedatt--spec--byoc--read_capacity--on_demand"></a>
+### Nested Schema for `spec.byoc.read_capacity.on_demand`
+
+Read-Only:
+
+- `current_replicas` (Number) The current number of replicas.
+- `current_shards` (Number) The current number of shards.
+- `error_message` (String) An optional error message if there are issues with the read capacity configuration.
+- `state` (String) The overall status of the read capacity configuration.
+
+
+
 
 <a id="nestedatt--spec--pod"></a>
 ### Nested Schema for `spec.pod`
@@ -117,8 +161,43 @@ Read-Only:
 
 Read-Only:
 
-- `cloud` (String) Ready.
-- `region` (String) Initializing InitializationFailed ScalingUp ScalingDown ScalingUpPodSize ScalingDownPodSize Upgrading Terminating Ready
+- `cloud` (String) The public cloud where the index is hosted.
+- `read_capacity` (Attributes) Read capacity configuration for the index. (see [below for nested schema](#nestedatt--spec--serverless--read_capacity))
+- `region` (String) The region where the index is hosted.
+
+<a id="nestedatt--spec--serverless--read_capacity"></a>
+### Nested Schema for `spec.serverless.read_capacity`
+
+Read-Only:
+
+- `dedicated` (Attributes) Dedicated read capacity configuration. (see [below for nested schema](#nestedatt--spec--serverless--read_capacity--dedicated))
+- `on_demand` (Attributes) OnDemand read capacity configuration. (see [below for nested schema](#nestedatt--spec--serverless--read_capacity--on_demand))
+
+<a id="nestedatt--spec--serverless--read_capacity--dedicated"></a>
+### Nested Schema for `spec.serverless.read_capacity.on_demand`
+
+Read-Only:
+
+- `current_replicas` (Number) The current number of replicas.
+- `current_shards` (Number) The current number of shards.
+- `error_message` (String) An optional error message if there are issues with the read capacity configuration.
+- `node_type` (String) The type of machines in use.
+- `replicas` (Number) The desired number of replicas.
+- `shards` (Number) The desired number of shards.
+- `state` (String) The overall status of the read capacity configuration.
+
+
+<a id="nestedatt--spec--serverless--read_capacity--on_demand"></a>
+### Nested Schema for `spec.serverless.read_capacity.on_demand`
+
+Read-Only:
+
+- `current_replicas` (Number) The current number of replicas.
+- `current_shards` (Number) The current number of shards.
+- `error_message` (String) An optional error message if there are issues with the read capacity configuration.
+- `state` (String) The overall status of the read capacity configuration.
+
+
 
 
 
