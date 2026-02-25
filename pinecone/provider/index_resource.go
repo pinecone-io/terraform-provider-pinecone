@@ -764,47 +764,14 @@ func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		}
 	}
 
-	// A read_capacity mode switch is an asynchronous scaling operation: current_replicas,
-	// current_shards, and error_message remain null until the transition completes.
-	// Poll until the active sub-block reaches a terminal state so that nulls are never
-	// written to state, which would otherwise cause a perpetual non-empty plan (because
-	// UseStateForUnknown only preserves non-null prior values).
-	if configureRequest.ReadCapacity != nil {
-		err := retry.RetryContext(ctx, defaultIndexCreateTimeout, func() *retry.RetryError {
-			index, err := r.client.DescribeIndex(ctx, newData.Name.ValueString())
-			if err != nil {
-				return retry.NonRetryableError(err)
-			}
-
-			diags := newData.Read(ctx, index)
-			resp.Diagnostics.Append(diags...)
-			if resp.Diagnostics.HasError() {
-				return retry.NonRetryableError(fmt.Errorf("reading index after read_capacity update"))
-			}
-			resp.Diagnostics.Append(resp.State.Set(ctx, &newData)...)
-			if resp.Diagnostics.HasError() {
-				return retry.NonRetryableError(fmt.Errorf("setting state after read_capacity update"))
-			}
-
-			if ready, state := indexReadCapacityIsReady(index); !ready {
-				return retry.RetryableError(fmt.Errorf("read_capacity transitioning, state: %s", state))
-			}
-			return nil
-		})
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to wait for read_capacity update to complete.", err.Error())
-			return
-		}
-	} else {
-		index, err := r.client.DescribeIndex(ctx, newData.Name.ValueString())
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to describe index", err.Error())
-			return
-		}
-
-		resp.Diagnostics.Append(newData.Read(ctx, index)...)
-		resp.Diagnostics.Append(resp.State.Set(ctx, &newData)...)
+	index, err := r.client.DescribeIndex(ctx, newData.Name.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to describe index", err.Error())
+		return
 	}
+
+	resp.Diagnostics.Append(newData.Read(ctx, index)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &newData)...)
 }
 
 func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -872,40 +839,17 @@ func mergeTags(oldTags, newTags map[string]string) map[string]string {
 	return mergedTags
 }
 
-// indexReadCapacityIsReady reports whether the active read_capacity sub-block has
-// reached a terminal state. It returns (true, "") when no read_capacity is present,
-// (true, state) for "Ready" or "Error", and (false, state) while still transitioning.
-func indexReadCapacityIsReady(index *pinecone.Index) (ready bool, state string) {
-	var rc *pinecone.ReadCapacity
-	if index.Spec.Serverless != nil {
-		rc = index.Spec.Serverless.ReadCapacity
-	} else if index.Spec.BYOC != nil {
-		rc = index.Spec.BYOC.ReadCapacity
-	}
-	if rc == nil {
-		return true, ""
-	}
-	if rc.Dedicated != nil {
-		s := rc.Dedicated.Status.State
-		return s == "Ready" || s == "Error", s
-	}
-	if rc.OnDemand != nil {
-		s := rc.OnDemand.Status.State
-		return s == "Ready" || s == "Error", s
-	}
-	return true, ""
-}
 
 // extractReadCapacityFromSpec pulls the read_capacity object out of a spec object
 // (checking serverless and byoc sub-specs), returning types.ObjectNull if absent.
 func extractReadCapacityFromSpec(ctx context.Context, specObj types.Object, diagnostics *diag.Diagnostics) types.Object {
 	if specObj.IsNull() || specObj.IsUnknown() {
-		return types.ObjectNull(models.IndexReadCapacityModel{}.AttrTypes())
+		return types.ObjectNull(models.IndexReadCapacityResourceModel{}.AttrTypes())
 	}
 	var spec models.IndexSpecModel
 	diagnostics.Append(specObj.As(ctx, &spec, basetypes.ObjectAsOptions{})...)
 	if diagnostics.HasError() {
-		return types.ObjectNull(models.IndexReadCapacityModel{}.AttrTypes())
+		return types.ObjectNull(models.IndexReadCapacityResourceModel{}.AttrTypes())
 	}
 	if spec.Serverless != nil {
 		return spec.Serverless.ReadCapacity
@@ -913,75 +857,17 @@ func extractReadCapacityFromSpec(ctx context.Context, specObj types.Object, diag
 	if spec.BYOC != nil {
 		return spec.BYOC.ReadCapacity
 	}
-	return types.ObjectNull(models.IndexReadCapacityModel{}.AttrTypes())
+	return types.ObjectNull(models.IndexReadCapacityResourceModel{}.AttrTypes())
 }
 
 // readCapacitySchema returns the schema for the read_capacity block,
 // shared between spec.serverless and spec.byoc.
 //
-// User-configurable fields (node_type, replicas, shards) are Optional+Computed so
-// the API echo-back is stored in state. Status-only fields (state, current_replicas,
-// current_shards, error_message) are Computed-only with UseStateForUnknown so that
-// plans show the last-known API value rather than "(known after apply)" when the
-// read_capacity config itself hasn't changed.
+// Only user-configurable fields are exposed. Status-only fields (state, current_replicas,
+// current_shards, error_message) are intentionally omitted: they cannot be configured,
+// and their asynchronous, nullable nature makes them difficult to represent in the desired-state
+// model without custom plan modifiers. Use the index data source to observe them.
 func readCapacitySchema() schema.Attribute {
-	// statusAttrs are returned by the API and not configured by the user.
-	// UseStateForUnknown preserves the last-known value in the plan when the config
-	// hasn't changed, preventing perpetual "(known after apply)" diffs. Polling in
-	// Create/Update ensures these are only written to state once the API has settled
-	// on non-null values, which is required for UseStateForUnknown to be effective.
-	statusAttrs := map[string]schema.Attribute{
-		"state": schema.StringAttribute{
-			MarkdownDescription: "The overall status of the read capacity configuration. One of: Ready, Scaling, Migrating, Error.",
-			Computed:            true,
-			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
-			},
-		},
-		"current_replicas": schema.Int32Attribute{
-			MarkdownDescription: "The current number of replicas.",
-			Computed:            true,
-			PlanModifiers: []planmodifier.Int32{
-				int32planmodifier.UseStateForUnknown(),
-			},
-		},
-		"current_shards": schema.Int32Attribute{
-			MarkdownDescription: "The current number of shards.",
-			Computed:            true,
-			PlanModifiers: []planmodifier.Int32{
-				int32planmodifier.UseStateForUnknown(),
-			},
-		},
-		"error_message": schema.StringAttribute{
-			MarkdownDescription: "An optional error message if there are issues with the read capacity configuration.",
-			Computed:            true,
-			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
-			},
-		},
-	}
-
-	dedicatedAttrs := map[string]schema.Attribute{
-		"node_type": schema.StringAttribute{
-			MarkdownDescription: "The type of machines to use. Available options: 'b1' and 't1'.",
-			Optional:            true,
-			Computed:            true,
-		},
-		"replicas": schema.Int32Attribute{
-			MarkdownDescription: "The desired number of replicas.",
-			Optional:            true,
-			Computed:            true,
-		},
-		"shards": schema.Int32Attribute{
-			MarkdownDescription: "The desired number of shards.",
-			Optional:            true,
-			Computed:            true,
-		},
-	}
-	for k, v := range statusAttrs {
-		dedicatedAttrs[k] = v
-	}
-
 	return schema.SingleNestedAttribute{
 		MarkdownDescription: "Read capacity configuration for the index. Set exactly one of `dedicated` or `on_demand` to select the mode. " +
 			"Omitting `read_capacity` entirely on create defaults to OnDemand. " +
@@ -995,13 +881,29 @@ func readCapacitySchema() schema.Attribute {
 			"dedicated": schema.SingleNestedAttribute{
 				MarkdownDescription: "Dedicated read capacity mode. Set `node_type`, `replicas`, and `shards` to provision fixed compute for this index. " +
 					"All three fields are required when first switching to dedicated mode.",
-				Optional:   true,
-				Attributes: dedicatedAttrs,
+				Optional: true,
+				Attributes: map[string]schema.Attribute{
+					"node_type": schema.StringAttribute{
+						MarkdownDescription: "The type of machines to use. Available options: 'b1' and 't1'.",
+						Optional:            true,
+						Computed:            true,
+					},
+					"replicas": schema.Int32Attribute{
+						MarkdownDescription: "The desired number of replicas.",
+						Optional:            true,
+						Computed:            true,
+					},
+					"shards": schema.Int32Attribute{
+						MarkdownDescription: "The desired number of shards.",
+						Optional:            true,
+						Computed:            true,
+					},
+				},
 			},
 			"on_demand": schema.SingleNestedAttribute{
 				MarkdownDescription: "OnDemand read capacity mode (the default). Specify this block (even empty) to explicitly select OnDemand or to switch back from dedicated mode.",
 				Optional:            true,
-				Attributes:          statusAttrs,
+				Attributes:          map[string]schema.Attribute{},
 			},
 		},
 	}
