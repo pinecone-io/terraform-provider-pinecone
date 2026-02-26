@@ -931,10 +931,8 @@ func metadataSchemaResourceSchema() schema.Attribute {
 			"with `filterable: true` are indexed. This field can only be set at index creation time — " +
 			"changing it requires replacing the index.",
 		Optional: true,
-		Computed: true,
 		PlanModifiers: []planmodifier.Object{
 			objectplanmodifier.RequiresReplace(),
-			objectplanmodifier.UseStateForUnknown(),
 		},
 		Attributes: map[string]schema.Attribute{
 			"fields": schema.MapNestedAttribute{

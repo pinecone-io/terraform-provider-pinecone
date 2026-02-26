@@ -134,6 +134,7 @@ func (d *IndexesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 											Computed:            true,
 										},
 										"read_capacity": readCapacityDSSchema(),
+										"schema":        metadataSchemaComputedSchema(),
 									},
 								},
 								"byoc": schema.SingleNestedAttribute{
@@ -146,6 +147,7 @@ func (d *IndexesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 											Computed:            true,
 										},
 										"read_capacity": readCapacityDSSchema(),
+										"schema":        metadataSchemaComputedSchema(),
 									},
 								},
 							},
