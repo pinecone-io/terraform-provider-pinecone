@@ -91,7 +91,6 @@ func (d *ProjectsDataSource) Read(ctx context.Context, req datasource.ReadReques
 	}
 
 	projects, err := d.adminClient.Project.List(ctx)
-
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to list projects, got error: %s", err))
 		return
