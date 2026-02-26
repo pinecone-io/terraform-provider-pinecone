@@ -465,6 +465,12 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 			return
 		}
 
+		schemaParams, diags := models.ToMetadataSchema(ctx, spec.Serverless.Schema)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
 		if embed != nil {
 			fieldMap := mapAttrToInterfacePtr(embed.FieldMap)
 
@@ -490,6 +496,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 				Embed:              embedConfig,
 				DeletionProtection: &deletionProtection,
 				ReadCapacity:       readCapacityParams,
+				Schema:             schemaParams,
 			}
 
 			if tags != nil {
@@ -502,12 +509,6 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 				return
 			}
 		} else {
-			schemaParams, diags := models.ToMetadataSchema(ctx, spec.Serverless.Schema)
-			resp.Diagnostics.Append(diags...)
-			if resp.Diagnostics.HasError() {
-				return
-			}
-
 			serverlessReq := pinecone.CreateServerlessIndexRequest{
 				Name:               data.Name.ValueString(),
 				Dimension:          data.Dimension.ValueInt32Pointer(),
