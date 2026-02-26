@@ -9,8 +9,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
-	"github.com/pinecone-io/go-pinecone/v5/pinecone"
 	"github.com/pinecone-io/terraform-provider-pinecone/pinecone/models"
 )
 
@@ -92,15 +90,8 @@ func (d *ProjectsDataSource) Read(ctx context.Context, req datasource.ReadReques
 		return
 	}
 
-	var projects []*pinecone.Project
-	err := retry.RetryContext(ctx, 2*time.Minute, func() *retry.RetryError {
-		var listErr error
-		projects, listErr = d.adminClient.Project.List(ctx)
-		if listErr != nil {
-			return retry.RetryableError(fmt.Errorf("unable to list projects, retrying: %w", listErr))
-		}
-		return nil
-	})
+	projects, err := d.adminClient.Project.List(ctx)
+
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to list projects, got error: %s", err))
 		return
