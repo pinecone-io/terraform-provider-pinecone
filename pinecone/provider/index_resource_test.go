@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -35,7 +36,7 @@ func TestAccIndexResource_serverless_basic(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create and Read testing
 			{
-				Config: testAccIndexResourceConfig_serverless(rName, "enabled", "", map[string]string{"test": "testval", "remove": "testremove", "update": "testupdate"}),
+				Config: testAccIndexResourceConfig_serverless(rName, "enabled", "", map[string]string{"test": "testval", "remove": "testremove", "update": "testupdate"}, []string{"genre", "year"}),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckIndexExists(),
 					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
@@ -44,6 +45,9 @@ func TestAccIndexResource_serverless_basic(t *testing.T) {
 					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.cloud", "aws"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.region", "us-west-2"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.schema.fields.%", "2"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.schema.fields.genre.filterable", "true"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.schema.fields.year.filterable", "true"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "tags.%", "3"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "tags.test", "testval"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "tags.remove", "testremove"),
@@ -53,7 +57,7 @@ func TestAccIndexResource_serverless_basic(t *testing.T) {
 			},
 			// Upgrade to integrated index
 			{
-				Config: testAccIndexResourceConfig_serverless(rName, "enabled", embed, map[string]string{"test": "testval", "remove": "testremove", "update": "testupdate"}),
+				Config: testAccIndexResourceConfig_serverless(rName, "enabled", embed, map[string]string{"test": "testval", "remove": "testremove", "update": "testupdate"}, []string{"genre", "year"}),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckIndexExists(),
 					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
@@ -62,6 +66,9 @@ func TestAccIndexResource_serverless_basic(t *testing.T) {
 					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.cloud", "aws"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.region", "us-west-2"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.schema.fields.%", "2"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.schema.fields.genre.filterable", "true"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.schema.fields.year.filterable", "true"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "embed.model", "multilingual-e5-large"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "embed.field_map.%", "1"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "embed.field_map.text", "chunk_text"),
@@ -74,7 +81,7 @@ func TestAccIndexResource_serverless_basic(t *testing.T) {
 			},
 			// Disable deletion_protection, update tags
 			{
-				Config: testAccIndexResourceConfig_serverless(rName, "disabled", embed, map[string]string{"test": "testval", "update": "testupdatenew"}),
+				Config: testAccIndexResourceConfig_serverless(rName, "disabled", embed, map[string]string{"test": "testval", "update": "testupdatenew"}, []string{"genre", "year"}),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckIndexExists(),
 					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
@@ -407,7 +414,16 @@ func testAccCheckIndexDestroy() resource.TestCheckFunc {
 	}
 }
 
-func testAccIndexResourceConfig_serverless(name string, deletionProtection string, embed string, tags map[string]string) string {
+func testAccIndexResourceConfig_serverless(name string, deletionProtection string, embed string, tags map[string]string, schema []string) string {
+	schemaBlock := ""
+	if len(schema) > 0 {
+		var fields strings.Builder
+		for _, key := range schema {
+			fields.WriteString(fmt.Sprintf("\t\t\t%q = { filterable = true }\n", key))
+		}
+		schemaBlock = fmt.Sprintf("\t\tschema = {\n\t\t\tfields = {\n%s\t\t\t}\n\t\t}", fields.String())
+	}
+
 	return fmt.Sprintf(`
 provider "pinecone" {
 }
@@ -419,13 +435,14 @@ resource "pinecone_index" "%s" {
 	serverless = {
 		cloud = "aws"
 		region = "us-west-2"
+		%s
 	}
   }
   deletion_protection = %q
 %s
 %s
 }
-`, resourceName, name, deletionProtection, embed, convertTagsToString(tags))
+`, resourceName, name, schemaBlock, deletionProtection, embed, convertTagsToString(tags))
 }
 
 func testAccIndexResourceConfig_pod(name string, deletionProtection string, embed string, tags map[string]string, replicas string) string {
