@@ -74,6 +74,8 @@ Optional:
 Read-Only:
 
 - `dimension` (Number) The dimension of the embedding model, specifying the size of the output vector.
+- `effective_read_parameters` (Map of String) The effective read parameters as returned by the API after apply, including any server-injected defaults not present in `read_parameters`.
+- `effective_write_parameters` (Map of String) The effective write parameters as returned by the API after apply, including any server-injected defaults not present in `write_parameters`.
 - `metric` (String) The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'.
 - `vector_type` (String) The index vector type associated with the model. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension will be nil.
 

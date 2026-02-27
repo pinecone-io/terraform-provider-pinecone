@@ -158,17 +158,17 @@ func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index
 		BYOC:       byoc,
 	}
 
-	embed, diags := NewIndexEmbedModel(ctx, index.Embed)
+	embed, diags := NewIndexEmbedResourceModel(ctx, index.Embed)
 	if diags.HasError() {
 		return diags
 	}
 	if embed != nil {
-		model.Embed, diags = types.ObjectValueFrom(ctx, IndexEmbedModel{}.AttrTypes(), embed)
+		model.Embed, diags = types.ObjectValueFrom(ctx, IndexEmbedResourceModel{}.AttrTypes(), embed)
 		if diags.HasError() {
 			return diags
 		}
 	} else {
-		model.Embed = types.ObjectNull(IndexEmbedModel{}.AttrTypes())
+		model.Embed = types.ObjectNull(IndexEmbedResourceModel{}.AttrTypes())
 	}
 
 	model.Spec, diags = types.ObjectValueFrom(ctx, indexSpecResourceAttrTypes(), spec)
@@ -495,6 +495,64 @@ func (model IndexEmbedModel) AttrTypes() map[string]attr.Type {
 		"read_parameters":  types.MapType{ElemType: types.StringType},
 		"write_parameters": types.MapType{ElemType: types.StringType},
 	}
+}
+
+// IndexEmbedResourceModel extends IndexEmbedModel with effective_read_parameters and
+// effective_write_parameters — Computed-only attributes that surface the full API
+// response (including server-injected defaults like "truncate") while
+// read_parameters / write_parameters remain scoped to what the user configured.
+type IndexEmbedResourceModel struct {
+	Model                    types.String `tfsdk:"model"`
+	Dimension                types.Int32  `tfsdk:"dimension"`
+	Metric                   types.String `tfsdk:"metric"`
+	VectorType               types.String `tfsdk:"vector_type"`
+	FieldMap                 types.Map    `tfsdk:"field_map"`
+	ReadParameters           types.Map    `tfsdk:"read_parameters"`
+	WriteParameters          types.Map    `tfsdk:"write_parameters"`
+	EffectiveReadParameters  types.Map    `tfsdk:"effective_read_parameters"`
+	EffectiveWriteParameters types.Map    `tfsdk:"effective_write_parameters"`
+}
+
+func (model IndexEmbedResourceModel) AttrTypes() map[string]attr.Type {
+	return map[string]attr.Type{
+		"model":                      types.StringType,
+		"dimension":                  types.Int32Type,
+		"metric":                     types.StringType,
+		"vector_type":                types.StringType,
+		"field_map":                  types.MapType{ElemType: types.StringType},
+		"read_parameters":            types.MapType{ElemType: types.StringType},
+		"write_parameters":           types.MapType{ElemType: types.StringType},
+		"effective_read_parameters":  types.MapType{ElemType: types.StringType},
+		"effective_write_parameters": types.MapType{ElemType: types.StringType},
+	}
+}
+
+// NewIndexEmbedResourceModel converts a *pinecone.IndexEmbed to the resource embed model.
+// effective_read_parameters and effective_write_parameters are populated with the full API
+// response; the caller is responsible for restoring the user-configured read_parameters /
+// write_parameters values from prior state or plan after calling this function.
+// Returns nil when embed is nil so the caller can set ObjectNull.
+func NewIndexEmbedResourceModel(ctx context.Context, embed *pinecone.IndexEmbed) (*IndexEmbedResourceModel, diag.Diagnostics) {
+	if embed == nil {
+		return nil, nil
+	}
+
+	base, diags := NewIndexEmbedModel(ctx, embed)
+	if diags.HasError() {
+		return nil, diags
+	}
+
+	return &IndexEmbedResourceModel{
+		Model:                    base.Model,
+		Dimension:                base.Dimension,
+		Metric:                   base.Metric,
+		VectorType:               base.VectorType,
+		FieldMap:                 base.FieldMap,
+		ReadParameters:           base.ReadParameters,
+		WriteParameters:          base.WriteParameters,
+		EffectiveReadParameters:  base.ReadParameters,
+		EffectiveWriteParameters: base.WriteParameters,
+	}, nil
 }
 
 type IndexMetadataConfigModel struct {

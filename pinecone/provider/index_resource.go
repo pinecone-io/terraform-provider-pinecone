@@ -309,6 +309,24 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 							mapplanmodifier.UseStateForUnknown(),
 						},
 					},
+					"effective_read_parameters": schema.MapAttribute{
+						Computed: true,
+						MarkdownDescription: "The effective read parameters as returned by the API after apply, " +
+							"including any server-injected defaults not present in `read_parameters`.",
+						ElementType: types.StringType,
+						PlanModifiers: []planmodifier.Map{
+							mapplanmodifier.UseStateForUnknown(),
+						},
+					},
+					"effective_write_parameters": schema.MapAttribute{
+						Computed: true,
+						MarkdownDescription: "The effective write parameters as returned by the API after apply, " +
+							"including any server-injected defaults not present in `write_parameters`.",
+						ElementType: types.StringType,
+						PlanModifiers: []planmodifier.Map{
+							mapplanmodifier.UseStateForUnknown(),
+						},
+					},
 				},
 			},
 			"status": schema.SingleNestedAttribute{
@@ -361,7 +379,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	var embed *models.IndexEmbedModel
+	var embed *models.IndexEmbedResourceModel
 	if !data.Embed.IsUnknown() && !data.Embed.IsNull() {
 		resp.Diagnostics.Append(data.Embed.As(ctx, &embed, basetypes.ObjectAsOptions{})...)
 		if resp.Diagnostics.HasError() {
@@ -607,6 +625,16 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 			return retry.NonRetryableError(fmt.Errorf("reading index state: %v", resp.Diagnostics))
 		}
 
+		// Restore user-configured read_parameters / write_parameters from the plan
+		// so state matches the plan exactly. effective_* retains the full API response
+		// (set by NewIndexEmbedResourceModel) which may include server defaults like "truncate".
+		if embed != nil {
+			resp.Diagnostics.Append(restoreEmbedParams(ctx, embed, &data)...)
+			if resp.Diagnostics.HasError() {
+				return retry.NonRetryableError(fmt.Errorf("restoring embed params: %v", resp.Diagnostics))
+			}
+		}
+
 		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 		if resp.Diagnostics.HasError() {
 			return retry.NonRetryableError(fmt.Errorf("setting state: %v", resp.Diagnostics))
@@ -638,6 +666,16 @@ func (r *IndexResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
+	// Capture prior embed to restore user-configured read/write parameters after the
+	// API read overwrites them. effective_* will reflect the new full API response.
+	var priorEmbedModel *models.IndexEmbedResourceModel
+	if !data.Embed.IsNull() && !data.Embed.IsUnknown() {
+		priorEmbedModel = &models.IndexEmbedResourceModel{}
+		if d := data.Embed.As(ctx, priorEmbedModel, basetypes.ObjectAsOptions{}); d.HasError() {
+			priorEmbedModel = nil
+		}
+	}
+
 	index, err := r.client.DescribeIndex(ctx, data.Id.ValueString())
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
@@ -648,7 +686,17 @@ func (r *IndexResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
-	data.Read(ctx, index)
+	resp.Diagnostics.Append(data.Read(ctx, index)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if priorEmbedModel != nil {
+		resp.Diagnostics.Append(restoreEmbedParams(ctx, priorEmbedModel, &data)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
 
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -707,12 +755,12 @@ func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	if !newData.Embed.Equal(data.Embed) {
 		var embedConfig pinecone.ConfigureIndexEmbed
 
-		var embedModel models.IndexEmbedModel
+		var embedModel models.IndexEmbedResourceModel
 		resp.Diagnostics.Append(newData.Embed.As(ctx, &embedModel, basetypes.ObjectAsOptions{})...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
-		var oldEmbedModel models.IndexEmbedModel
+		var oldEmbedModel models.IndexEmbedResourceModel
 		resp.Diagnostics.Append(data.Embed.As(ctx, &oldEmbedModel, basetypes.ObjectAsOptions{})...)
 		if resp.Diagnostics.HasError() {
 			return
@@ -787,7 +835,28 @@ func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
+	// Capture the plan embed so we can restore user-configured read/write parameters
+	// after the API read overwrites them. effective_* will reflect the new full API response.
+	var planEmbedModel *models.IndexEmbedResourceModel
+	if !newData.Embed.IsNull() && !newData.Embed.IsUnknown() {
+		planEmbedModel = &models.IndexEmbedResourceModel{}
+		if d := newData.Embed.As(ctx, planEmbedModel, basetypes.ObjectAsOptions{}); d.HasError() {
+			planEmbedModel = nil
+		}
+	}
+
 	resp.Diagnostics.Append(newData.Read(ctx, index)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if planEmbedModel != nil {
+		resp.Diagnostics.Append(restoreEmbedParams(ctx, planEmbedModel, &newData)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newData)...)
 }
 
@@ -951,6 +1020,28 @@ func metadataSchemaResourceSchema() schema.Attribute {
 			},
 		},
 	}
+}
+
+// restoreEmbedParams writes the user-configured read_parameters and write_parameters
+// from refEmbed back into model.Embed after a data.Read() call. effective_read_parameters
+// and effective_write_parameters retain the full API response already populated by
+// NewIndexEmbedResourceModel, exposing server-injected defaults (e.g. "truncate") without
+// causing Terraform's plan-consistency check to fail.
+func restoreEmbedParams(ctx context.Context, refEmbed *models.IndexEmbedResourceModel, model *models.IndexResourceModel) diag.Diagnostics {
+	if refEmbed == nil || model.Embed.IsNull() || model.Embed.IsUnknown() {
+		return nil
+	}
+	var embedState models.IndexEmbedResourceModel
+	diags := model.Embed.As(ctx, &embedState, basetypes.ObjectAsOptions{})
+	if diags.HasError() {
+		return diags
+	}
+	embedState.ReadParameters = refEmbed.ReadParameters
+	embedState.WriteParameters = refEmbed.WriteParameters
+	var d diag.Diagnostics
+	model.Embed, d = types.ObjectValueFrom(ctx, models.IndexEmbedResourceModel{}.AttrTypes(), embedState)
+	diags.Append(d...)
+	return diags
 }
 
 func toStringMap(ctx context.Context, value basetypes.MapValue) (map[string]string, diag.Diagnostics) {
