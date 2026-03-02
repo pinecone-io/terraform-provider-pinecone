@@ -223,6 +223,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 								},
 							},
 							"read_capacity": readCapacitySchema(),
+							"schema":        metadataSchemaResourceSchema(),
 						},
 					},
 					"byoc": schema.SingleNestedAttribute{
@@ -237,6 +238,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 								},
 							},
 							"read_capacity": readCapacitySchema(),
+							"schema":        metadataSchemaResourceSchema(),
 						},
 					},
 				},
@@ -248,6 +250,7 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 				Optional: true,
 				Computed: true,
 				PlanModifiers: []planmodifier.Object{
+					embedNullForNullConfig{},
 					objectplanmodifier.UseStateForUnknown(),
 				},
 				Attributes: map[string]schema.Attribute{
@@ -307,6 +310,24 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 							mapplanmodifier.UseStateForUnknown(),
 						},
 					},
+					"effective_read_parameters": schema.MapAttribute{
+						Computed: true,
+						MarkdownDescription: "The effective read parameters as returned by the API after apply, " +
+							"including any server-injected defaults not present in `read_parameters`.",
+						ElementType: types.StringType,
+						PlanModifiers: []planmodifier.Map{
+							mapplanmodifier.UseStateForUnknown(),
+						},
+					},
+					"effective_write_parameters": schema.MapAttribute{
+						Computed: true,
+						MarkdownDescription: "The effective write parameters as returned by the API after apply, " +
+							"including any server-injected defaults not present in `write_parameters`.",
+						ElementType: types.StringType,
+						PlanModifiers: []planmodifier.Map{
+							mapplanmodifier.UseStateForUnknown(),
+						},
+					},
 				},
 			},
 			"status": schema.SingleNestedAttribute{
@@ -359,7 +380,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	var embed *models.IndexEmbedModel
+	var embed *models.IndexEmbedResourceModel
 	if !data.Embed.IsUnknown() && !data.Embed.IsNull() {
 		resp.Diagnostics.Append(data.Embed.As(ctx, &embed, basetypes.ObjectAsOptions{})...)
 		if resp.Diagnostics.HasError() {
@@ -463,6 +484,12 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 			return
 		}
 
+		schemaParams, diags := models.ToMetadataSchema(ctx, spec.Serverless.Schema)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
 		if embed != nil {
 			fieldMap := mapAttrToInterfacePtr(embed.FieldMap)
 
@@ -488,6 +515,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 				Embed:              embedConfig,
 				DeletionProtection: &deletionProtection,
 				ReadCapacity:       readCapacityParams,
+				Schema:             schemaParams,
 			}
 
 			if tags != nil {
@@ -508,6 +536,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 				Cloud:              pinecone.Cloud(spec.Serverless.Cloud.ValueString()),
 				Region:             spec.Serverless.Region.ValueString(),
 				ReadCapacity:       readCapacityParams,
+				Schema:             schemaParams,
 			}
 
 			if tags != nil {
@@ -539,6 +568,12 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 			return
 		}
 
+		byocSchemaParams, diags := models.ToMetadataSchema(ctx, spec.BYOC.Schema)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
 		byocReq := pinecone.CreateBYOCIndexRequest{
 			Name:               data.Name.ValueString(),
 			Environment:        spec.BYOC.Environment.ValueString(),
@@ -546,6 +581,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 			Metric:             &metric,
 			DeletionProtection: &deletionProtection,
 			ReadCapacity:       readCapacityParams,
+			Schema:             byocSchemaParams,
 		}
 
 		if tags != nil {
@@ -590,6 +626,16 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 			return retry.NonRetryableError(fmt.Errorf("reading index state: %v", resp.Diagnostics))
 		}
 
+		// Restore user-configured read_parameters / write_parameters from the plan
+		// so state matches the plan exactly. effective_* retains the full API response
+		// (set by NewIndexEmbedResourceModel) which may include server defaults like "truncate".
+		if embed != nil {
+			resp.Diagnostics.Append(restoreEmbedParams(ctx, embed, &data)...)
+			if resp.Diagnostics.HasError() {
+				return retry.NonRetryableError(fmt.Errorf("restoring embed params: %v", resp.Diagnostics))
+			}
+		}
+
 		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 		if resp.Diagnostics.HasError() {
 			return retry.NonRetryableError(fmt.Errorf("setting state: %v", resp.Diagnostics))
@@ -621,6 +667,16 @@ func (r *IndexResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
+	// Capture prior embed to restore user-configured read/write parameters after the
+	// API read overwrites them. effective_* will reflect the new full API response.
+	var priorEmbedModel *models.IndexEmbedResourceModel
+	if !data.Embed.IsNull() && !data.Embed.IsUnknown() {
+		priorEmbedModel = &models.IndexEmbedResourceModel{}
+		if d := data.Embed.As(ctx, priorEmbedModel, basetypes.ObjectAsOptions{}); d.HasError() {
+			priorEmbedModel = nil
+		}
+	}
+
 	index, err := r.client.DescribeIndex(ctx, data.Id.ValueString())
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
@@ -631,7 +687,17 @@ func (r *IndexResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
-	data.Read(ctx, index)
+	resp.Diagnostics.Append(data.Read(ctx, index)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if priorEmbedModel != nil {
+		resp.Diagnostics.Append(restoreEmbedParams(ctx, priorEmbedModel, &data)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
 
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -686,19 +752,26 @@ func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		configureRequest.Tags = mergeTags(oldTagsMap, newTagsMap)
 	}
 
-	// Update Embed fields if possible
-	if !newData.Embed.Equal(data.Embed) {
+	// Update Embed fields if possible.
+	// Guard: newData.Embed may be null or unknown when embed is Optional+Computed and the
+	// user didn't configure it. In that case UseStateForUnknown may produce a null/unknown
+	// plan value even when data.Embed != newData.Embed (type differences). Skip the update.
+	if !newData.Embed.Equal(data.Embed) && !newData.Embed.IsNull() && !newData.Embed.IsUnknown() {
 		var embedConfig pinecone.ConfigureIndexEmbed
 
-		var embedModel models.IndexEmbedModel
+		var embedModel models.IndexEmbedResourceModel
 		resp.Diagnostics.Append(newData.Embed.As(ctx, &embedModel, basetypes.ObjectAsOptions{})...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
-		var oldEmbedModel models.IndexEmbedModel
-		resp.Diagnostics.Append(data.Embed.As(ctx, &oldEmbedModel, basetypes.ObjectAsOptions{})...)
-		if resp.Diagnostics.HasError() {
-			return
+		// data.Embed (prior state) is null when upgrading a non-integrated index to integrated.
+		// Use a zero-value model in that case; Model.IsNull() will be true and the upgrade path fires.
+		var oldEmbedModel models.IndexEmbedResourceModel
+		if !data.Embed.IsNull() && !data.Embed.IsUnknown() {
+			resp.Diagnostics.Append(data.Embed.As(ctx, &oldEmbedModel, basetypes.ObjectAsOptions{})...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
 		}
 		var spec models.IndexSpecModel
 		resp.Diagnostics.Append(data.Spec.As(ctx, &spec, basetypes.ObjectAsOptions{})...)
@@ -770,7 +843,28 @@ func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
+	// Capture the plan embed so we can restore user-configured read/write parameters
+	// after the API read overwrites them. effective_* will reflect the new full API response.
+	var planEmbedModel *models.IndexEmbedResourceModel
+	if !newData.Embed.IsNull() && !newData.Embed.IsUnknown() {
+		planEmbedModel = &models.IndexEmbedResourceModel{}
+		if d := newData.Embed.As(ctx, planEmbedModel, basetypes.ObjectAsOptions{}); d.HasError() {
+			planEmbedModel = nil
+		}
+	}
+
 	resp.Diagnostics.Append(newData.Read(ctx, index)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if planEmbedModel != nil {
+		resp.Diagnostics.Append(restoreEmbedParams(ctx, planEmbedModel, &newData)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newData)...)
 }
 
@@ -905,6 +999,88 @@ func readCapacitySchema() schema.Attribute {
 				Attributes:          map[string]schema.Attribute{},
 			},
 		},
+	}
+}
+
+func metadataSchemaResourceSchema() schema.Attribute {
+	return schema.SingleNestedAttribute{
+		MarkdownDescription: "Schema for the behavior of Pinecone's internal metadata index. " +
+			"By default, all metadata is indexed; when `schema` is present, only fields listed in `fields` " +
+			"with `filterable: true` are indexed. This field can only be set at index creation time — " +
+			"changing it requires replacing the index.",
+		Optional: true,
+		PlanModifiers: []planmodifier.Object{
+			objectplanmodifier.RequiresReplace(),
+		},
+		Attributes: map[string]schema.Attribute{
+			"fields": schema.MapNestedAttribute{
+				MarkdownDescription: "Map of metadata field names to their schema configuration. " +
+					"Only fields with `filterable: true` are indexed.",
+				Optional: true,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"filterable": schema.BoolAttribute{
+							Description: "Whether the field is filterable. Only true is currently supported.",
+							Required:    true,
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+// restoreEmbedParams writes the user-configured read_parameters and write_parameters
+// from refEmbed back into model.Embed after a data.Read() call. effective_read_parameters
+// and effective_write_parameters retain the full API response already populated by
+// NewIndexEmbedResourceModel, exposing server-injected defaults (e.g. "truncate") without
+// causing Terraform's plan-consistency check to fail.
+//
+// Unknown values are NOT restored: when read_parameters / write_parameters were not set
+// in the user's config (Optional+Computed, no prior state), the plan holds unknown, and
+// storing unknown in state would fail Terraform's post-apply consistency check. In that
+// case we keep the API-populated value, which is what effective_* surfaces anyway.
+func restoreEmbedParams(ctx context.Context, refEmbed *models.IndexEmbedResourceModel, model *models.IndexResourceModel) diag.Diagnostics {
+	if refEmbed == nil || model.Embed.IsNull() || model.Embed.IsUnknown() {
+		return nil
+	}
+	var embedState models.IndexEmbedResourceModel
+	diags := model.Embed.As(ctx, &embedState, basetypes.ObjectAsOptions{})
+	if diags.HasError() {
+		return diags
+	}
+	if !refEmbed.ReadParameters.IsUnknown() {
+		embedState.ReadParameters = refEmbed.ReadParameters
+	}
+	if !refEmbed.WriteParameters.IsUnknown() {
+		embedState.WriteParameters = refEmbed.WriteParameters
+	}
+	var d diag.Diagnostics
+	model.Embed, d = types.ObjectValueFrom(ctx, models.IndexEmbedResourceModel{}.AttrTypes(), embedState)
+	diags.Append(d...)
+	return diags
+}
+
+// embedNullForNullConfig is a plan modifier for the embed SingleNestedAttribute.
+//
+// When embed is Optional+Computed and the user hasn't configured it (config is null),
+// the Terraform Framework generates an unknown plan value because the block contains
+// Computed children. UseStateForUnknown cannot suppress this for non-integrated indexes
+// because it no-ops when state is null. This modifier explicitly sets plan = null when
+// config is null, preventing spurious "(known after apply)" diffs.
+type embedNullForNullConfig struct{}
+
+func (embedNullForNullConfig) Description(_ context.Context) string {
+	return "Sets planned embed to null when the user has not configured it."
+}
+
+func (embedNullForNullConfig) MarkdownDescription(_ context.Context) string {
+	return "Sets planned embed to null when the user has not configured it."
+}
+
+func (embedNullForNullConfig) PlanModifyObject(_ context.Context, req planmodifier.ObjectRequest, resp *planmodifier.ObjectResponse) {
+	if req.ConfigValue.IsNull() && req.PlanValue.IsUnknown() {
+		resp.PlanValue = req.ConfigValue
 	}
 }
 

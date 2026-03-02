@@ -9,6 +9,7 @@ import (
 )
 
 func TestAccApiKeyResource(t *testing.T) {
+	t.Parallel()
 	projectId := os.Getenv("PINECONE_PROJECT_ID")
 	clientId := os.Getenv("PINECONE_CLIENT_ID")
 	clientSecret := os.Getenv("PINECONE_CLIENT_SECRET")
@@ -37,6 +38,7 @@ func TestAccApiKeyResource(t *testing.T) {
 }
 
 func TestAccApiKeyResourceWithCustomRoles(t *testing.T) {
+	t.Parallel()
 	projectId := os.Getenv("PINECONE_PROJECT_ID")
 	clientId := os.Getenv("PINECONE_CLIENT_ID")
 	clientSecret := os.Getenv("PINECONE_CLIENT_SECRET")
@@ -65,6 +67,7 @@ func TestAccApiKeyResourceWithCustomRoles(t *testing.T) {
 }
 
 func TestAccApiKeyResourceUpdate(t *testing.T) {
+	t.Parallel()
 	projectId := os.Getenv("PINECONE_PROJECT_ID")
 	clientId := os.Getenv("PINECONE_CLIENT_ID")
 	clientSecret := os.Getenv("PINECONE_CLIENT_SECRET")

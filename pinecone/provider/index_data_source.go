@@ -129,6 +129,7 @@ func (d *IndexDataSource) Schema(ctx context.Context, req datasource.SchemaReque
 								Computed:            true,
 							},
 							"read_capacity": readCapacityDSSchema(),
+							"schema":        metadataSchemaComputedSchema(),
 						},
 					},
 					"byoc": schema.SingleNestedAttribute{
@@ -141,6 +142,7 @@ func (d *IndexDataSource) Schema(ctx context.Context, req datasource.SchemaReque
 								Computed:            true,
 							},
 							"read_capacity": readCapacityDSSchema(),
+							"schema":        metadataSchemaComputedSchema(),
 						},
 					},
 				},
@@ -256,6 +258,28 @@ func readCapacityDSSchema() schema.Attribute {
 				MarkdownDescription: "OnDemand read capacity configuration.",
 				Computed:            true,
 				Attributes:          statusAttrs,
+			},
+		},
+	}
+}
+
+func metadataSchemaComputedSchema() schema.Attribute {
+	return schema.SingleNestedAttribute{
+		MarkdownDescription: "Schema for the behavior of Pinecone's internal metadata index. " +
+			"When present, only fields listed in `fields` with `filterable: true` are indexed.",
+		Computed: true,
+		Attributes: map[string]schema.Attribute{
+			"fields": schema.MapNestedAttribute{
+				MarkdownDescription: "Map of metadata field names to their schema configuration.",
+				Computed:            true,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"filterable": schema.BoolAttribute{
+							Description: "Whether the field is filterable.",
+							Computed:    true,
+						},
+					},
+				},
 			},
 		},
 	}

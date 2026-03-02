@@ -10,6 +10,7 @@ import (
 )
 
 func TestAccProjectDataSource(t *testing.T) {
+	t.Parallel()
 	// Test with invalid UUID format first
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -27,6 +28,7 @@ func TestAccProjectDataSource(t *testing.T) {
 }
 
 func TestAccProjectDataSourceWithRealProject(t *testing.T) {
+	t.Parallel()
 	// Test with a real project ID if credentials are available
 	projectID := os.Getenv("PINECONE_PROJECT_ID")
 	clientId := os.Getenv("PINECONE_CLIENT_ID")

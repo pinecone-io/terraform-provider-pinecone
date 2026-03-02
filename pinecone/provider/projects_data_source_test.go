@@ -9,6 +9,7 @@ import (
 )
 
 func TestAccProjectsDataSource(t *testing.T) {
+	t.Parallel()
 	// Test listing all projects
 	clientId := os.Getenv("PINECONE_CLIENT_ID")
 	clientSecret := os.Getenv("PINECONE_CLIENT_SECRET")
