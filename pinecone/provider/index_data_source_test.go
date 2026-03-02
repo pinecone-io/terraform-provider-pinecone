@@ -12,6 +12,7 @@ import (
 )
 
 func TestAccIndexDataSource_serverless(t *testing.T) {
+	t.Parallel()
 	rName := acctest.RandomWithPrefix("tftest")
 
 	resource.Test(t, resource.TestCase{

@@ -20,6 +20,7 @@ const resourceName = "test"
 const resourceAddress = providerName + "." + resourceName
 
 func TestAccIndexResource_serverless_basic(t *testing.T) {
+	t.Parallel()
 	rName := acctest.RandomWithPrefix("tftest")
 	embed := `
   embed = {
@@ -111,6 +112,7 @@ func TestAccIndexResource_serverless_basic(t *testing.T) {
 }
 
 func TestAccIndexResource_serverless_readCapacity(t *testing.T) {
+	t.Parallel()
 	rName := acctest.RandomWithPrefix("tftest")
 
 	resource.Test(t, resource.TestCase{
@@ -159,6 +161,7 @@ func TestAccIndexResource_serverless_readCapacity(t *testing.T) {
 }
 
 func TestAccIndexResource_pod_basic(t *testing.T) {
+	t.Parallel()
 	rName := acctest.RandomWithPrefix("tftest")
 	embed := `
   embed = {
@@ -237,6 +240,7 @@ func TestAccIndexResource_pod_basic(t *testing.T) {
 }
 
 func TestAccIndexResource_pod_invalidEmbedConfig(t *testing.T) {
+	t.Parallel()
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -266,6 +270,7 @@ resource "pinecone_index" "test" {
 }
 
 func TestAccIndexResource_pod_invalidDimension(t *testing.T) {
+	t.Parallel()
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -288,6 +293,7 @@ resource "pinecone_index" "test" {
 }
 
 func TestAccIndexResource_pod_invalidVectorType(t *testing.T) {
+	t.Parallel()
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -312,6 +318,7 @@ resource "pinecone_index" "test" {
 }
 
 func TestAccIndexResource_serverless_integratedWithExplicitDimension(t *testing.T) {
+	t.Parallel()
 	rName := acctest.RandomWithPrefix("tftest")
 
 	resource.Test(t, resource.TestCase{
@@ -344,6 +351,7 @@ func TestAccIndexResource_serverless_integratedWithExplicitDimension(t *testing.
 }
 
 func TestAccIndexResource_serverless_integratedWithoutDimension(t *testing.T) {
+	t.Parallel()
 	rName := acctest.RandomWithPrefix("tftest")
 
 	resource.Test(t, resource.TestCase{

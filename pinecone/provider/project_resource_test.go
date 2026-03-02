@@ -8,6 +8,7 @@ import (
 )
 
 func TestAccProjectResource(t *testing.T) {
+	t.Parallel()
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheckAdmin(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -43,6 +44,7 @@ func TestAccProjectResource(t *testing.T) {
 }
 
 func TestAccProjectResourceWithOptions(t *testing.T) {
+	t.Parallel()
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheckAdmin(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -88,6 +90,7 @@ resource "pinecone_project" "test" {
 }
 
 func TestAccProjectResourceWithCMEK(t *testing.T) {
+	t.Parallel()
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheckAdmin(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,

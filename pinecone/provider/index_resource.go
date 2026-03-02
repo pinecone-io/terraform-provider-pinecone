@@ -250,6 +250,7 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 				Optional: true,
 				Computed: true,
 				PlanModifiers: []planmodifier.Object{
+					embedNullForNullConfig{},
 					objectplanmodifier.UseStateForUnknown(),
 				},
 				Attributes: map[string]schema.Attribute{
@@ -751,8 +752,11 @@ func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		configureRequest.Tags = mergeTags(oldTagsMap, newTagsMap)
 	}
 
-	// Update Embed fields if possible
-	if !newData.Embed.Equal(data.Embed) {
+	// Update Embed fields if possible.
+	// Guard: newData.Embed may be null or unknown when embed is Optional+Computed and the
+	// user didn't configure it. In that case UseStateForUnknown may produce a null/unknown
+	// plan value even when data.Embed != newData.Embed (type differences). Skip the update.
+	if !newData.Embed.Equal(data.Embed) && !newData.Embed.IsNull() && !newData.Embed.IsUnknown() {
 		var embedConfig pinecone.ConfigureIndexEmbed
 
 		var embedModel models.IndexEmbedResourceModel
@@ -760,10 +764,14 @@ func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		if resp.Diagnostics.HasError() {
 			return
 		}
+		// data.Embed (prior state) is null when upgrading a non-integrated index to integrated.
+		// Use a zero-value model in that case; Model.IsNull() will be true and the upgrade path fires.
 		var oldEmbedModel models.IndexEmbedResourceModel
-		resp.Diagnostics.Append(data.Embed.As(ctx, &oldEmbedModel, basetypes.ObjectAsOptions{})...)
-		if resp.Diagnostics.HasError() {
-			return
+		if !data.Embed.IsNull() && !data.Embed.IsUnknown() {
+			resp.Diagnostics.Append(data.Embed.As(ctx, &oldEmbedModel, basetypes.ObjectAsOptions{})...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
 		}
 		var spec models.IndexSpecModel
 		resp.Diagnostics.Append(data.Spec.As(ctx, &spec, basetypes.ObjectAsOptions{})...)
@@ -1027,6 +1035,11 @@ func metadataSchemaResourceSchema() schema.Attribute {
 // and effective_write_parameters retain the full API response already populated by
 // NewIndexEmbedResourceModel, exposing server-injected defaults (e.g. "truncate") without
 // causing Terraform's plan-consistency check to fail.
+//
+// Unknown values are NOT restored: when read_parameters / write_parameters were not set
+// in the user's config (Optional+Computed, no prior state), the plan holds unknown, and
+// storing unknown in state would fail Terraform's post-apply consistency check. In that
+// case we keep the API-populated value, which is what effective_* surfaces anyway.
 func restoreEmbedParams(ctx context.Context, refEmbed *models.IndexEmbedResourceModel, model *models.IndexResourceModel) diag.Diagnostics {
 	if refEmbed == nil || model.Embed.IsNull() || model.Embed.IsUnknown() {
 		return nil
@@ -1036,12 +1049,39 @@ func restoreEmbedParams(ctx context.Context, refEmbed *models.IndexEmbedResource
 	if diags.HasError() {
 		return diags
 	}
-	embedState.ReadParameters = refEmbed.ReadParameters
-	embedState.WriteParameters = refEmbed.WriteParameters
+	if !refEmbed.ReadParameters.IsUnknown() {
+		embedState.ReadParameters = refEmbed.ReadParameters
+	}
+	if !refEmbed.WriteParameters.IsUnknown() {
+		embedState.WriteParameters = refEmbed.WriteParameters
+	}
 	var d diag.Diagnostics
 	model.Embed, d = types.ObjectValueFrom(ctx, models.IndexEmbedResourceModel{}.AttrTypes(), embedState)
 	diags.Append(d...)
 	return diags
+}
+
+// embedNullForNullConfig is a plan modifier for the embed SingleNestedAttribute.
+//
+// When embed is Optional+Computed and the user hasn't configured it (config is null),
+// the Terraform Framework generates an unknown plan value because the block contains
+// Computed children. UseStateForUnknown cannot suppress this for non-integrated indexes
+// because it no-ops when state is null. This modifier explicitly sets plan = null when
+// config is null, preventing spurious "(known after apply)" diffs.
+type embedNullForNullConfig struct{}
+
+func (embedNullForNullConfig) Description(_ context.Context) string {
+	return "Sets planned embed to null when the user has not configured it."
+}
+
+func (embedNullForNullConfig) MarkdownDescription(_ context.Context) string {
+	return "Sets planned embed to null when the user has not configured it."
+}
+
+func (embedNullForNullConfig) PlanModifyObject(_ context.Context, req planmodifier.ObjectRequest, resp *planmodifier.ObjectResponse) {
+	if req.ConfigValue.IsNull() && req.PlanValue.IsUnknown() {
+		resp.PlanValue = req.ConfigValue
+	}
 }
 
 func toStringMap(ctx context.Context, value basetypes.MapValue) (map[string]string, diag.Diagnostics) {

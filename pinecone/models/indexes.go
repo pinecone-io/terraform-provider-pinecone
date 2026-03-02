@@ -531,7 +531,10 @@ func (model IndexEmbedResourceModel) AttrTypes() map[string]attr.Type {
 // effective_read_parameters and effective_write_parameters are populated with the full API
 // response; the caller is responsible for restoring the user-configured read_parameters /
 // write_parameters values from prior state or plan after calling this function.
-// Returns nil when embed is nil so the caller can set ObjectNull.
+//
+// Returns nil when embed is nil (non-integrated index), which causes the caller to store
+// ObjectNull in state. Because the embed block is Optional (not Computed), Terraform never
+// generates an unknown plan value for it, so ObjectNull state produces no spurious diffs.
 func NewIndexEmbedResourceModel(ctx context.Context, embed *pinecone.IndexEmbed) (*IndexEmbedResourceModel, diag.Diagnostics) {
 	if embed == nil {
 		return nil, nil
