@@ -4,7 +4,6 @@
 package provider
 
 import (
-	"context"
 	"os"
 	"testing"
 
@@ -31,7 +30,7 @@ func TestDatasource_Configure(t *testing.T) {
 	}
 
 	// Create a mock context and request
-	ctx := context.Background()
+	ctx := t.Context()
 	req := datasource.ConfigureRequest{
 		ProviderData: testProviderData,
 	}
@@ -77,7 +76,7 @@ func TestResource_Configure(t *testing.T) {
 	}
 
 	// Create a mock context and request
-	ctx := context.Background()
+	ctx := t.Context()
 	req := resource.ConfigureRequest{
 		ProviderData: testProviderData,
 	}
