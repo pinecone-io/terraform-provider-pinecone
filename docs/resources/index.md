@@ -110,7 +110,7 @@ Optional:
 - `on_demand` (Attributes) OnDemand read capacity mode (the default). Specify this block (even empty) to explicitly select OnDemand or to switch back from dedicated mode. (see [below for nested schema](#nestedatt--spec--byoc--read_capacity--on_demand))
 
 <a id="nestedatt--spec--byoc--read_capacity--dedicated"></a>
-### Nested Schema for `spec.byoc.read_capacity.on_demand`
+### Nested Schema for `spec.byoc.read_capacity.dedicated`
 
 Optional:
 
@@ -191,7 +191,7 @@ Optional:
 - `on_demand` (Attributes) OnDemand read capacity mode (the default). Specify this block (even empty) to explicitly select OnDemand or to switch back from dedicated mode. (see [below for nested schema](#nestedatt--spec--serverless--read_capacity--on_demand))
 
 <a id="nestedatt--spec--serverless--read_capacity--dedicated"></a>
-### Nested Schema for `spec.serverless.read_capacity.on_demand`
+### Nested Schema for `spec.serverless.read_capacity.dedicated`
 
 Optional:
 

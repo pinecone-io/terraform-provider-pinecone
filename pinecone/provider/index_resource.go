@@ -275,21 +275,21 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 						Computed:    true,
 						Description: "The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'.",
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							embedComputedStringModifier{},
 						},
 					},
 					"dimension": schema.Int32Attribute{
 						Computed:    true,
 						Description: "The dimension of the embedding model, specifying the size of the output vector.",
 						PlanModifiers: []planmodifier.Int32{
-							int32planmodifier.UseStateForUnknown(),
+							embedComputedInt32Modifier{},
 						},
 					},
 					"vector_type": schema.StringAttribute{
 						Computed:    true,
 						Description: "The index vector type associated with the model. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension will be nil.",
 						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
+							embedComputedStringModifier{},
 						},
 					},
 					"read_parameters": schema.MapAttribute{
@@ -298,7 +298,7 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 						Description: "The read parameters for the embedding model.",
 						ElementType: types.StringType,
 						PlanModifiers: []planmodifier.Map{
-							mapplanmodifier.UseStateForUnknown(),
+							embedComputedStringMapModifier{},
 						},
 					},
 					"write_parameters": schema.MapAttribute{
@@ -307,7 +307,7 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 						Description: "The write parameters for the embedding model.",
 						ElementType: types.StringType,
 						PlanModifiers: []planmodifier.Map{
-							mapplanmodifier.UseStateForUnknown(),
+							embedComputedStringMapModifier{},
 						},
 					},
 					"effective_read_parameters": schema.MapAttribute{
@@ -316,7 +316,7 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 							"including any server-injected defaults not present in `read_parameters`.",
 						ElementType: types.StringType,
 						PlanModifiers: []planmodifier.Map{
-							mapplanmodifier.UseStateForUnknown(),
+							embedComputedStringMapModifier{},
 						},
 					},
 					"effective_write_parameters": schema.MapAttribute{
@@ -325,7 +325,7 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 							"including any server-injected defaults not present in `write_parameters`.",
 						ElementType: types.StringType,
 						PlanModifiers: []planmodifier.Map{
-							mapplanmodifier.UseStateForUnknown(),
+							embedComputedStringMapModifier{},
 						},
 					},
 				},
@@ -1036,10 +1036,12 @@ func metadataSchemaResourceSchema() schema.Attribute {
 // NewIndexEmbedResourceModel, exposing server-injected defaults (e.g. "truncate") without
 // causing Terraform's plan-consistency check to fail.
 //
-// Unknown values are NOT restored: when read_parameters / write_parameters were not set
-// in the user's config (Optional+Computed, no prior state), the plan holds unknown, and
-// storing unknown in state would fail Terraform's post-apply consistency check. In that
-// case we keep the API-populated value, which is what effective_* surfaces anyway.
+// Only non-null, non-unknown values are restored. A null value means the attribute was
+// not configured by the user (the plan held null because embedComputedStringMapModifier
+// set it to unknown, which UseStateForUnknown then didn't copy from a null prior state).
+// In that case the API-populated value is kept in state, which keeps import consistent
+// with regular applies. An unknown value means the attribute is still being computed and
+// must not be written to state.
 func restoreEmbedParams(ctx context.Context, refEmbed *models.IndexEmbedResourceModel, model *models.IndexResourceModel) diag.Diagnostics {
 	if refEmbed == nil || model.Embed.IsNull() || model.Embed.IsUnknown() {
 		return nil
@@ -1049,16 +1051,89 @@ func restoreEmbedParams(ctx context.Context, refEmbed *models.IndexEmbedResource
 	if diags.HasError() {
 		return diags
 	}
-	if !refEmbed.ReadParameters.IsUnknown() {
+	if !refEmbed.ReadParameters.IsNull() && !refEmbed.ReadParameters.IsUnknown() {
 		embedState.ReadParameters = refEmbed.ReadParameters
 	}
-	if !refEmbed.WriteParameters.IsUnknown() {
+	if !refEmbed.WriteParameters.IsNull() && !refEmbed.WriteParameters.IsUnknown() {
 		embedState.WriteParameters = refEmbed.WriteParameters
 	}
 	var d diag.Diagnostics
 	model.Embed, d = types.ObjectValueFrom(ctx, models.IndexEmbedResourceModel{}.AttrTypes(), embedState)
 	diags.Append(d...)
 	return diags
+}
+
+// embedComputedStringModifier is a plan modifier for Computed-only string attributes
+// inside the embed nested object. In terraform-plugin-framework ≥1.15, when the parent
+// embed transitions from null prior state to configured (e.g. upgrading a plain index to
+// an integrated-inference index), Computed-only children are initialised as null in the
+// plan instead of unknown. UseStateForUnknown does not correct this because it only fires
+// when the plan value is already unknown; null is not unknown, so it no-ops and the plan
+// value stays null. Terraform then rejects the apply result because the API populates
+// these fields (null → "cosine" triggers "inconsistent result after apply"). This modifier
+// fixes that by always returning unknown when prior state is null, allowing the provider to
+// return any value during apply. When state is non-null it behaves identically to
+// UseStateForUnknown, preserving the current value in the plan for no-change updates.
+type embedComputedStringModifier struct{}
+
+func (embedComputedStringModifier) Description(_ context.Context) string {
+	return "Returns unknown when prior state is null; otherwise copies state for unknown."
+}
+func (embedComputedStringModifier) MarkdownDescription(_ context.Context) string {
+	return "Returns unknown when prior state is null; otherwise copies state for unknown."
+}
+func (embedComputedStringModifier) PlanModifyString(_ context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	if req.StateValue.IsNull() {
+		resp.PlanValue = types.StringUnknown()
+		return
+	}
+	if resp.PlanValue.IsUnknown() {
+		resp.PlanValue = req.StateValue
+	}
+}
+
+// embedComputedInt32Modifier is the Int32 equivalent of embedComputedStringModifier.
+type embedComputedInt32Modifier struct{}
+
+func (embedComputedInt32Modifier) Description(_ context.Context) string {
+	return "Returns unknown when prior state is null; otherwise copies state for unknown."
+}
+func (embedComputedInt32Modifier) MarkdownDescription(_ context.Context) string {
+	return "Returns unknown when prior state is null; otherwise copies state for unknown."
+}
+func (embedComputedInt32Modifier) PlanModifyInt32(_ context.Context, req planmodifier.Int32Request, resp *planmodifier.Int32Response) {
+	if req.StateValue.IsNull() {
+		resp.PlanValue = types.Int32Unknown()
+		return
+	}
+	if resp.PlanValue.IsUnknown() {
+		resp.PlanValue = req.StateValue
+	}
+}
+
+// embedComputedStringMapModifier is the Map[string]string equivalent of embedComputedStringModifier.
+// For Optional+Computed map attributes (read_parameters, write_parameters) it also
+// preserves explicit config values so a user-provided map is not overwritten.
+type embedComputedStringMapModifier struct{}
+
+func (embedComputedStringMapModifier) Description(_ context.Context) string {
+	return "Returns unknown when prior state is null; otherwise copies state for unknown."
+}
+func (embedComputedStringMapModifier) MarkdownDescription(_ context.Context) string {
+	return "Returns unknown when prior state is null; otherwise copies state for unknown."
+}
+func (embedComputedStringMapModifier) PlanModifyMap(_ context.Context, req planmodifier.MapRequest, resp *planmodifier.MapResponse) {
+	// If the user supplied an explicit config value, leave it untouched.
+	if !resp.PlanValue.IsNull() && !resp.PlanValue.IsUnknown() {
+		return
+	}
+	if req.StateValue.IsNull() {
+		resp.PlanValue = types.MapUnknown(types.StringType)
+		return
+	}
+	if resp.PlanValue.IsUnknown() {
+		resp.PlanValue = req.StateValue
+	}
 }
 
 // embedNullForNullConfig is a plan modifier for the embed SingleNestedAttribute.
