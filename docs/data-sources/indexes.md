@@ -104,15 +104,15 @@ Read-Only:
 - `schema` (Attributes) Schema for the behavior of Pinecone's internal metadata index. When present, only fields listed in `fields` with `filterable: true` are indexed. (see [below for nested schema](#nestedatt--indexes--spec--byoc--schema))
 
 <a id="nestedatt--indexes--spec--byoc--read_capacity"></a>
-### Nested Schema for `indexes.spec.byoc.schema`
+### Nested Schema for `indexes.spec.byoc.read_capacity`
 
 Read-Only:
 
-- `dedicated` (Attributes) Dedicated read capacity configuration. (see [below for nested schema](#nestedatt--indexes--spec--byoc--schema--dedicated))
-- `on_demand` (Attributes) OnDemand read capacity configuration. (see [below for nested schema](#nestedatt--indexes--spec--byoc--schema--on_demand))
+- `dedicated` (Attributes) Dedicated read capacity configuration. (see [below for nested schema](#nestedatt--indexes--spec--byoc--read_capacity--dedicated))
+- `on_demand` (Attributes) OnDemand read capacity configuration. (see [below for nested schema](#nestedatt--indexes--spec--byoc--read_capacity--on_demand))
 
-<a id="nestedatt--indexes--spec--byoc--schema--dedicated"></a>
-### Nested Schema for `indexes.spec.byoc.schema.dedicated`
+<a id="nestedatt--indexes--spec--byoc--read_capacity--dedicated"></a>
+### Nested Schema for `indexes.spec.byoc.read_capacity.dedicated`
 
 Read-Only:
 
@@ -125,8 +125,8 @@ Read-Only:
 - `state` (String) The overall status of the read capacity configuration.
 
 
-<a id="nestedatt--indexes--spec--byoc--schema--on_demand"></a>
-### Nested Schema for `indexes.spec.byoc.schema.on_demand`
+<a id="nestedatt--indexes--spec--byoc--read_capacity--on_demand"></a>
+### Nested Schema for `indexes.spec.byoc.read_capacity.on_demand`
 
 Read-Only:
 
@@ -171,7 +171,7 @@ Read-Only:
 - `source_collection` (String) The name of the collection to create an index from.
 
 <a id="nestedatt--indexes--spec--pod--metadata_config"></a>
-### Nested Schema for `indexes.spec.pod.source_collection`
+### Nested Schema for `indexes.spec.pod.metadata_config`
 
 Read-Only:
 
@@ -190,15 +190,15 @@ Read-Only:
 - `schema` (Attributes) Schema for the behavior of Pinecone's internal metadata index. When present, only fields listed in `fields` with `filterable: true` are indexed. (see [below for nested schema](#nestedatt--indexes--spec--serverless--schema))
 
 <a id="nestedatt--indexes--spec--serverless--read_capacity"></a>
-### Nested Schema for `indexes.spec.serverless.schema`
+### Nested Schema for `indexes.spec.serverless.read_capacity`
 
 Read-Only:
 
-- `dedicated` (Attributes) Dedicated read capacity configuration. (see [below for nested schema](#nestedatt--indexes--spec--serverless--schema--dedicated))
-- `on_demand` (Attributes) OnDemand read capacity configuration. (see [below for nested schema](#nestedatt--indexes--spec--serverless--schema--on_demand))
+- `dedicated` (Attributes) Dedicated read capacity configuration. (see [below for nested schema](#nestedatt--indexes--spec--serverless--read_capacity--dedicated))
+- `on_demand` (Attributes) OnDemand read capacity configuration. (see [below for nested schema](#nestedatt--indexes--spec--serverless--read_capacity--on_demand))
 
-<a id="nestedatt--indexes--spec--serverless--schema--dedicated"></a>
-### Nested Schema for `indexes.spec.serverless.schema.dedicated`
+<a id="nestedatt--indexes--spec--serverless--read_capacity--dedicated"></a>
+### Nested Schema for `indexes.spec.serverless.read_capacity.dedicated`
 
 Read-Only:
 
@@ -211,8 +211,8 @@ Read-Only:
 - `state` (String) The overall status of the read capacity configuration.
 
 
-<a id="nestedatt--indexes--spec--serverless--schema--on_demand"></a>
-### Nested Schema for `indexes.spec.serverless.schema.on_demand`
+<a id="nestedatt--indexes--spec--serverless--read_capacity--on_demand"></a>
+### Nested Schema for `indexes.spec.serverless.read_capacity.on_demand`
 
 Read-Only:
 

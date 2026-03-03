@@ -106,7 +106,7 @@ Read-Only:
 - `on_demand` (Attributes) OnDemand read capacity configuration. (see [below for nested schema](#nestedatt--spec--byoc--read_capacity--on_demand))
 
 <a id="nestedatt--spec--byoc--read_capacity--dedicated"></a>
-### Nested Schema for `spec.byoc.read_capacity.on_demand`
+### Nested Schema for `spec.byoc.read_capacity.dedicated`
 
 Read-Only:
 
@@ -192,7 +192,7 @@ Read-Only:
 - `on_demand` (Attributes) OnDemand read capacity configuration. (see [below for nested schema](#nestedatt--spec--serverless--read_capacity--on_demand))
 
 <a id="nestedatt--spec--serverless--read_capacity--dedicated"></a>
-### Nested Schema for `spec.serverless.read_capacity.on_demand`
+### Nested Schema for `spec.serverless.read_capacity.dedicated`
 
 Read-Only:
 
