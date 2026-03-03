@@ -18,42 +18,42 @@ please responsibly disclose it by contacting us.
 ## Requirements
 
 - [Terraform](https://www.terraform.io/downloads.html) >= v1.4.6
-- [Go](https://golang.org/doc/install) >= 1.20. This is necessary to build the
+- [Go](https://golang.org/doc/install) >= 1.24. This is necessary to build the
   provider plugin.
 
 ## Installing the provider
 
-The provider is registered in the official [Terraform 
+The provider is registered in the official [Terraform
 registry](https://registry.terraform.io/providers/pinecone-io/pinecone/latest).
-This enables the provider to be auto-installed when you run ```terraform
-init```. You can also download the latest binary for your target platform from
+This enables the provider to be auto-installed when you run `terraform
+init`. You can also download the latest binary for your target platform from
 the
 [releases](https://github.com/pinecone-io/terraform-provider-pinecone/releases)
 tab.
 
 ## Building the provider
 
-Follow these steps to build the Terraform Provider for Pinecone: 
+Follow these steps to build the Terraform Provider for Pinecone:
 
-1. Clone the repository using the following command:
+1.  Clone the repository using the following command:
 
     ```
     sh $ git clone https://github.com/pinecone-io/terraform-provider-pinecone
     ```
 
-1. Build the provider using the following command. The install directory depends
-on the `GOPATH` environment variable.
+1.  Build the provider using the following command. The install directory depends
+    on the `GOPATH` environment variable.
 
-    ```
-    sh $ go install .  
-    ```
+        ```
+        sh $ go install .
+        ```
 
 ## Usage
 
 You can enable the provider in your Terraform configuration by adding the
 following to your Terraform configuration file:
 
-```terraform 
+```terraform
 terraform {
   required_providers {
     pinecone = {
@@ -93,7 +93,7 @@ provider "pinecone" {
 }
 ```
 
-Remember, your API Key should be a protected secret. See how to 
+Remember, your API Key should be a protected secret. See how to
 [protect sensitive input variables](https://developer.hashicorp.com/terraform/tutorials/configuration-language/sensitive-variables)
 when setting your API Key this way.
 
@@ -104,6 +104,7 @@ For creating and managing API keys and projects, you need admin credentials (Cli
 ##### Using Environment Variables
 
 Set the following environment variables:
+
 - `PINECONE_CLIENT_ID`: Your Pinecone Client ID
 - `PINECONE_CLIENT_SECRET`: Your Pinecone Client Secret
 
@@ -176,14 +177,137 @@ The Terraform Provider for Pinecone supports creating and managing Pinecone proj
 
 **Note**: Project management requires admin credentials (Client ID and Client Secret). Regular API keys cannot be used to manage projects.
 
+### Index Types
+
+The provider supports three index deployment types:
+
+#### Serverless Indexes
+
+Serverless indexes automatically scale based on usage. Specify `cloud` and `region`:
+
+```terraform
+resource "pinecone_index" "serverless" {
+  name      = "my-serverless-index"
+  dimension = 1536
+  spec = {
+    serverless = {
+      cloud  = "aws"
+      region = "us-east-1"
+    }
+  }
+}
+```
+
+#### BYOC Indexes (Bring Your Own Cloud)
+
+BYOC indexes are deployed into your own cloud environment. Specify the `environment` identifier provided by Pinecone:
+
+```terraform
+resource "pinecone_index" "byoc" {
+  name      = "my-byoc-index"
+  dimension = 1536
+  spec = {
+    byoc = {
+      environment = "my-byoc-env-id"
+    }
+  }
+}
+```
+
+#### Pod-based Indexes
+
+Pod-based indexes use dedicated infrastructure. Specify `environment` and `pod_type`:
+
+```terraform
+resource "pinecone_index" "pod" {
+  name      = "my-pod-index"
+  dimension = 1536
+  spec = {
+    pod = {
+      environment = "us-west4-gcp"
+      pod_type    = "p1.x1"
+    }
+  }
+}
+```
+
+### Read Capacity
+
+Serverless and BYOC indexes support configurable read capacity. Set `read_capacity` inside the `serverless` or `byoc` spec block.
+
+There are two modes — omitting `read_capacity` entirely defaults to `on_demand`:
+
+```terraform
+# On-demand (default) — explicit form
+resource "pinecone_index" "on_demand" {
+  name      = "my-index"
+  dimension = 1536
+  spec = {
+    serverless = {
+      cloud  = "aws"
+      region = "us-east-1"
+      read_capacity = {
+        on_demand = {}
+      }
+    }
+  }
+}
+
+# Dedicated — provision fixed compute
+resource "pinecone_index" "dedicated" {
+  name      = "my-index"
+  dimension = 1536
+  spec = {
+    serverless = {
+      cloud  = "aws"
+      region = "us-east-1"
+      read_capacity = {
+        dedicated = {
+          node_type = "b1"
+          replicas  = 1
+          shards    = 1
+        }
+      }
+    }
+  }
+}
+```
+
+**Note**: To switch from `dedicated` back to `on_demand` after creation, explicitly set the `on_demand = {}` sub-block. Removing the `read_capacity` block entirely will not change the mode already recorded in state.
+
+### Metadata Schema
+
+Serverless and BYOC indexes support a `schema` block that controls which metadata fields are indexed for filtering. By default (no `schema`), all metadata is indexed. When `schema` is present, only fields listed with `filterable: true` are indexed.
+
+**Important**: `schema` can only be set at index creation time. Changing it requires replacing the index.
+
+```terraform
+resource "pinecone_index" "with_schema" {
+  name      = "my-index"
+  dimension = 1536
+  spec = {
+    serverless = {
+      cloud  = "aws"
+      region = "us-east-1"
+      schema = {
+        fields = {
+          "category" = { filterable = true }
+          "language"  = { filterable = true }
+        }
+      }
+    }
+  }
+}
+```
+
 ## Documentation
 
 Documentation can be found on the [Terraform
-Registry](https://registry.terraform.io/providers/pinecone-io/pinecone/latest). 
+Registry](https://registry.terraform.io/providers/pinecone-io/pinecone/latest).
 
 ## Examples
 
-See the 
+See the
 [examples](https://github.com/pinecone-io/terraform-provider-pinecone/tree/main/examples)
 for example usage.
 
