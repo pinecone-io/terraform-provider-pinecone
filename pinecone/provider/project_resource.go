@@ -116,6 +116,23 @@ func (r *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
+	// The server may ignore the requested max_pods on create and instead
+	// inherit a value from the organization's pod quota. When the user
+	// explicitly set max_pods and the created project differs, issue a
+	// follow-up update to apply the requested value (update honors it).
+	if !data.MaxPods.IsNull() && !data.MaxPods.IsUnknown() &&
+		int64(project.MaxPods) != data.MaxPods.ValueInt64() {
+		maxPods := int(data.MaxPods.ValueInt64())
+		updated, err := r.adminClient.Project.Update(ctx, project.Id, &pinecone.UpdateProjectParams{
+			MaxPods: &maxPods,
+		})
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to set max_pods on project after creation", err.Error())
+			return
+		}
+		project = updated
+	}
+
 	// Set the computed values
 	data.Id = types.StringValue(project.Id)
 	data.Name = types.StringValue(project.Name)
