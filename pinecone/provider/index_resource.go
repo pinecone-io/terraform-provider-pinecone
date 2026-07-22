@@ -886,6 +886,12 @@ func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		return
 	}
 
+	// Bound the whole delete (issue + wait-for-gone) to a single delete
+	// timeout. Both retry phases share this deadline, so the operation cannot
+	// run for up to twice the configured budget.
+	ctx, cancel := context.WithTimeout(ctx, deleteTimeout)
+	defer cancel()
+
 	// Issue the delete, retrying transient server errors (e.g. a 500 blip).
 	// A successful call or "not found" ends the retry immediately, so the
 	// request is not re-issued once it has taken effect.

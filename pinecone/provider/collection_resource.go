@@ -195,6 +195,12 @@ func (r *CollectionResource) Delete(ctx context.Context, req resource.DeleteRequ
 		return
 	}
 
+	// Bound the whole delete (issue + wait-for-gone) to a single delete
+	// timeout. Both retry phases share this deadline, so the operation cannot
+	// run for up to twice the configured budget.
+	ctx, cancel := context.WithTimeout(ctx, deleteTimeout)
+	defer cancel()
+
 	// Issue the delete, retrying transient server errors. A collection that is
 	// already gone (404/not found) is treated as a successful delete.
 	err := retry.RetryContext(ctx, deleteTimeout, func() *retry.RetryError {
