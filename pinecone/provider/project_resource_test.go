@@ -22,7 +22,9 @@ func TestAccProjectResource(t *testing.T) {
 					resource.TestCheckResourceAttrSet("pinecone_project.test", "organization_id"),
 					resource.TestCheckResourceAttrSet("pinecone_project.test", "created_at"),
 					resource.TestCheckResourceAttr("pinecone_project.test", "force_encryption_with_cmek", "false"),
-					resource.TestCheckResourceAttr("pinecone_project.test", "max_pods", "20"),
+					// max_pods is not set in config; the create-time default is
+					// org-dependent (inherited pod quota), so only assert it is set.
+					resource.TestCheckResourceAttrSet("pinecone_project.test", "max_pods"),
 				),
 			},
 			// ImportState testing

@@ -11,7 +11,7 @@ jobs:
   test:
     name: Terraform Provider Acceptance Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -40,5 +40,8 @@ jobs:
           PINECONE_CLIENT_SECRET: ${{ secrets.PINECONE_CLIENT_SECRET }}
           PINECONE_PROJECT_ID: ${{ secrets.PINECONE_PROJECT_ID }}
           TF_ACC: '1'
-        run: go test -race -covermode=atomic -coverprofile=coverage.out -v ./pinecone/provider/
-        timeout-minutes: 15
+        # Explicit -timeout overrides Go's silent 10m default so a slow API
+        # response surfaces as a clean per-test failure rather than a binary-wide
+        # panic that marks every test failed.
+        run: go test -race -covermode=atomic -coverprofile=coverage.out -timeout 15m -v ./pinecone/provider/
+        timeout-minutes: 20

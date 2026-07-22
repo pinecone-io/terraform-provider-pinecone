@@ -116,19 +116,31 @@ func (r *ProjectResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	// Set the computed values
-	data.Id = types.StringValue(project.Id)
-	data.Name = types.StringValue(project.Name)
-	data.OrganizationId = types.StringValue(project.OrganizationId)
-	data.ForceEncryptionWithCmek = types.BoolValue(project.ForceEncryptionWithCmek)
-	data.MaxPods = types.Int64Value(int64(project.MaxPods))
-	if project.CreatedAt != nil {
-		data.CreatedAt = types.StringValue(project.CreatedAt.Format(time.RFC3339))
-	} else {
-		data.CreatedAt = types.StringNull()
+	// The server may ignore the requested max_pods on create and instead
+	// inherit a value from the organization's pod quota. When the user
+	// explicitly set max_pods and the created project differs, issue a
+	// follow-up update to apply the requested value (update honors it).
+	if !data.MaxPods.IsNull() && !data.MaxPods.IsUnknown() &&
+		int64(project.MaxPods) != data.MaxPods.ValueInt64() {
+		maxPods := int(data.MaxPods.ValueInt64())
+		updated, err := r.adminClient.Project.Update(ctx, project.Id, &pinecone.UpdateProjectParams{
+			MaxPods: &maxPods,
+		})
+		if err != nil {
+			// The project was created but applying max_pods failed. Persist the
+			// created project to state so Terraform can track (and later reconcile
+			// or destroy) it instead of orphaning it. A subsequent apply will see
+			// the drift and retry the max_pods update.
+			resp.Diagnostics.AddError("Failed to set max_pods on project after creation", err.Error())
+			setProjectModel(&data, project)
+			resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+			return
+		}
+		project = updated
 	}
 
-	// Save data into Terraform state
+	// Set the computed values and save data into Terraform state
+	setProjectModel(&data, project)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
@@ -160,16 +172,7 @@ func (r *ProjectResource) Read(ctx context.Context, req resource.ReadRequest, re
 	}
 
 	// Update the model with the found project
-	data.Id = types.StringValue(project.Id)
-	data.Name = types.StringValue(project.Name)
-	data.OrganizationId = types.StringValue(project.OrganizationId)
-	data.ForceEncryptionWithCmek = types.BoolValue(project.ForceEncryptionWithCmek)
-	data.MaxPods = types.Int64Value(int64(project.MaxPods))
-	if project.CreatedAt != nil {
-		data.CreatedAt = types.StringValue(project.CreatedAt.Format(time.RFC3339))
-	} else {
-		data.CreatedAt = types.StringNull()
-	}
+	setProjectModel(&data, project)
 
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -233,16 +236,7 @@ func (r *ProjectResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	// Update the model with the updated project
-	data.Id = types.StringValue(updatedProject.Id)
-	data.Name = types.StringValue(updatedProject.Name)
-	data.OrganizationId = types.StringValue(updatedProject.OrganizationId)
-	data.ForceEncryptionWithCmek = types.BoolValue(updatedProject.ForceEncryptionWithCmek)
-	data.MaxPods = types.Int64Value(int64(updatedProject.MaxPods))
-	if updatedProject.CreatedAt != nil {
-		data.CreatedAt = types.StringValue(updatedProject.CreatedAt.Format(time.RFC3339))
-	} else {
-		data.CreatedAt = types.StringNull()
-	}
+	setProjectModel(&data, updatedProject)
 
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -308,4 +302,18 @@ func (r *ProjectResource) ImportState(ctx context.Context, req resource.ImportSt
 	projectId := req.ID
 
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), projectId)...)
+}
+
+// setProjectModel maps a Pinecone project onto the Terraform model.
+func setProjectModel(data *models.ProjectResourceModel, project *pinecone.Project) {
+	data.Id = types.StringValue(project.Id)
+	data.Name = types.StringValue(project.Name)
+	data.OrganizationId = types.StringValue(project.OrganizationId)
+	data.ForceEncryptionWithCmek = types.BoolValue(project.ForceEncryptionWithCmek)
+	data.MaxPods = types.Int64Value(int64(project.MaxPods))
+	if project.CreatedAt != nil {
+		data.CreatedAt = types.StringValue(project.CreatedAt.Format(time.RFC3339))
+	} else {
+		data.CreatedAt = types.StringNull()
+	}
 }

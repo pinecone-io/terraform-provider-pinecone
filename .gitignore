@@ -37,3 +37,6 @@ coverage.out
 
 # don't check in dev builds
 terraform-provider-pinecone
+
+# local scratch / handoff notes
+scratch/
