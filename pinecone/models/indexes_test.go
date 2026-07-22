@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
-	"github.com/pinecone-io/go-pinecone/v5/pinecone"
+	"github.com/pinecone-io/go-pinecone/v6/pinecone"
 )
 
 // TestIndexResourceModelRead_pod covers the pod-based state mapping. Pod indexes

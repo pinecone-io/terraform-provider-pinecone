@@ -12,7 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
-	"github.com/pinecone-io/go-pinecone/v5/pinecone"
+	"github.com/pinecone-io/go-pinecone/v6/pinecone"
 )
 
 type IndexModel struct {
