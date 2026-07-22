@@ -128,14 +128,20 @@ func (r *CollectionResource) Create(ctx context.Context, req resource.CreateRequ
 
 	err = retry.RetryContext(ctx, createTimeout, func() *retry.RetryError {
 		collection, err := r.client.DescribeCollection(ctx, data.Name.ValueString())
+		if err != nil {
+			// Right after create the collection may not be visible yet (404),
+			// and the API can return transient 5xx errors. Retry those; on any
+			// other error stop. Do not touch state here — collection is nil.
+			if strings.Contains(err.Error(), "404") || isTransientError(err) {
+				return retry.RetryableError(err)
+			}
+			return retry.NonRetryableError(err)
+		}
 
 		data.Read(collection)
 		// Save current status to state
 		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 
-		if err != nil {
-			return retry.NonRetryableError(err)
-		}
 		if collection.Status != "Ready" {
 			return retry.RetryableError(fmt.Errorf("collection not ready. State: %s", collection.Status))
 		}
@@ -181,12 +187,6 @@ func (r *CollectionResource) Delete(ctx context.Context, req resource.DeleteRequ
 		return
 	}
 
-	err := r.client.DeleteCollection(ctx, data.Name.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to delete collection", err.Error())
-		return
-	}
-	// Wait for collection to be deleted
 	// Delete() is passed a default timeout to use if no value
 	// has been supplied in the Terraform configuration.
 	deleteTimeout, diags := data.Timeouts.Delete(ctx, defaultCollectionDeleteTimeout)
@@ -195,12 +195,35 @@ func (r *CollectionResource) Delete(ctx context.Context, req resource.DeleteRequ
 		return
 	}
 
+	// Issue the delete, retrying transient server errors. A collection that is
+	// already gone (404/not found) is treated as a successful delete.
+	err := retry.RetryContext(ctx, deleteTimeout, func() *retry.RetryError {
+		err := r.client.DeleteCollection(ctx, data.Name.ValueString())
+		if err == nil ||
+			strings.Contains(err.Error(), "404") ||
+			strings.Contains(err.Error(), "not found") {
+			return nil
+		}
+		if isTransientError(err) {
+			return retry.RetryableError(fmt.Errorf("delete collection request failed, retrying: %w", err))
+		}
+		return retry.NonRetryableError(err)
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to delete collection", err.Error())
+		return
+	}
+
+	// Wait for collection to be deleted.
 	err = retry.RetryContext(ctx, deleteTimeout, func() *retry.RetryError {
 		collection, err := r.client.DescribeCollection(ctx, data.Name.ValueString())
 
 		if err != nil {
 			if strings.Contains(err.Error(), "404") {
 				return nil
+			}
+			if isTransientError(err) {
+				return retry.RetryableError(err)
 			}
 			return retry.NonRetryableError(err)
 		}
