@@ -4,7 +4,6 @@
 package models
 
 import (
-	"context"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
@@ -16,7 +15,7 @@ import (
 // test guards the API-response -> Terraform-state translation that used to be
 // covered end-to-end by TestAccIndexResource_pod_basic.
 func TestIndexResourceModelRead_pod(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	dim := int32(1536)
 	tags := pinecone.IndexTags{"team": "search"}
 	index := &pinecone.Index{
@@ -95,7 +94,7 @@ func TestIndexResourceModelRead_pod(t *testing.T) {
 // panic) when handed a nil index pointer.
 func TestIndexResourceModelRead_nil(t *testing.T) {
 	var model IndexResourceModel
-	if diags := model.Read(context.Background(), nil); !diags.HasError() {
+	if diags := model.Read(t.Context(), nil); !diags.HasError() {
 		t.Fatal("expected an error diagnostic for a nil index, got none")
 	}
 }
