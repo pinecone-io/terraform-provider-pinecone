@@ -348,7 +348,7 @@ func testAccIndexResourceConfig_serverless(name string, deletionProtection strin
 	if len(schema) > 0 {
 		var fields strings.Builder
 		for _, key := range schema {
-			fields.WriteString(fmt.Sprintf("\t\t\t%q = { filterable = true }\n", key))
+			fmt.Fprintf(&fields, "\t\t\t%q = { filterable = true }\n", key)
 		}
 		schemaBlock = fmt.Sprintf("\t\tschema = {\n\t\t\tfields = {\n%s\t\t\t}\n\t\t}", fields.String())
 	}

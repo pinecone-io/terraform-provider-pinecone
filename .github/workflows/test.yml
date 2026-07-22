@@ -28,9 +28,9 @@ jobs:
       - run: go mod download
       - run: go build -v .
       - name: Run linters
-        uses: golangci/golangci-lint-action@v3
+        uses: golangci/golangci-lint-action@v7
         with:
-          version: latest
+          version: v2.12.2
       - name: Run tests
         run: go test ./pinecone/...
 
