@@ -878,20 +878,35 @@ func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		return
 	}
 
-	err := r.client.DeleteIndex(ctx, data.Name.ValueString())
-	if err != nil {
-		if !strings.Contains(err.Error(), "not found") {
-			resp.Diagnostics.AddError("Failed to delete index", err.Error())
-		}
-		return
-	}
-
-	// Wait for index to be deleted
-	// Create() is passed a default timeout to use if no value
+	// Delete() is passed a default timeout to use if no value
 	// has been supplied in the Terraform configuration.
 	deleteTimeout, diags := data.Timeouts.Delete(ctx, defaultIndexDeleteTimeout)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Bound the whole delete (issue + wait-for-gone) to a single delete
+	// timeout. Both retry phases share this deadline, so the operation cannot
+	// run for up to twice the configured budget.
+	ctx, cancel := context.WithTimeout(ctx, deleteTimeout)
+	defer cancel()
+
+	// Issue the delete, retrying transient server errors (e.g. a 500 blip).
+	// A successful call or "not found" ends the retry immediately, so the
+	// request is not re-issued once it has taken effect.
+	err := retry.RetryContext(ctx, deleteTimeout, func() *retry.RetryError {
+		err := r.client.DeleteIndex(ctx, data.Name.ValueString())
+		if err == nil || strings.Contains(err.Error(), "not found") {
+			return nil
+		}
+		if isTransientError(err) {
+			return retry.RetryableError(fmt.Errorf("delete index request failed, retrying: %w", err))
+		}
+		return retry.NonRetryableError(err)
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to delete index", err.Error())
 		return
 	}
 
@@ -900,6 +915,9 @@ func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		if err != nil {
 			if strings.Contains(err.Error(), "not found") {
 				return nil
+			}
+			if isTransientError(err) {
+				return retry.RetryableError(err)
 			}
 			return retry.NonRetryableError(err)
 		}
@@ -1157,6 +1175,32 @@ func (embedNullForNullConfig) PlanModifyObject(_ context.Context, req planmodifi
 	if req.ConfigValue.IsNull() && req.PlanValue.IsUnknown() {
 		resp.PlanValue = req.ConfigValue
 	}
+}
+
+// isTransientError reports whether err looks like a temporary, retryable
+// failure from the Pinecone API or the network rather than a permanent one.
+// It is intentionally string-based: the SDK surfaces API errors as formatted
+// strings (e.g. `{"status_code":500,"body":"Internal Error. Please try again later."}`)
+// rather than typed errors.
+func isTransientError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	transientMarkers := []string{
+		`"status_code":5`, // any 5xx from the API
+		"Internal Error",
+		"try again",
+		"timeout",
+		"connection reset",
+		"EOF",
+	}
+	for _, marker := range transientMarkers {
+		if strings.Contains(msg, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func toStringMap(ctx context.Context, value basetypes.MapValue) (map[string]string, diag.Diagnostics) {

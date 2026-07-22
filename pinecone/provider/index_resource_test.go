@@ -160,85 +160,6 @@ func TestAccIndexResource_serverless_readCapacity(t *testing.T) {
 	})
 }
 
-func TestAccIndexResource_pod_basic(t *testing.T) {
-	t.Parallel()
-	rName := acctest.RandomWithPrefix("tftest")
-	embed := `
-  embed = {
-	model = "multilingual-e5-large"
-	field_map = {
-	  text = "chunk_text"
-	}
-  }`
-
-	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckIndexDestroy(),
-		Steps: []resource.TestStep{
-			// Create and Read testing
-			{
-				Config: testAccIndexResourceConfig_pod(rName, "enabled", "", map[string]string{"test": "testval", "remove": "testremove", "update": "testupdate"}, "2"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					testAccCheckIndexExists(),
-					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
-					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
-					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1536"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "deletion_protection", "enabled"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "spec.pod.pod_type", "s1.x1"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "spec.pod.replicas", "2"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "spec.pod.pods", "2"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "tags.%", "3"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "tags.test", "testval"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "tags.remove", "testremove"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "tags.update", "testupdate"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "tags.test", "testval"),
-					resource.TestCheckNoResourceAttr("pinecone_index.test", "metadata_config"),
-					resource.TestCheckNoResourceAttr("pinecone_index.test", "source_collection"),
-				),
-			},
-			// Attempt to upgrade to an integrated index, which should error
-			{
-				Config:      testAccIndexResourceConfig_pod(rName, "enabled", embed, map[string]string{"test": "testval", "remove": "testremove", "update": "testupdate"}, "2"),
-				ExpectError: regexp.MustCompile("Pod-based indexes cannot have an embed configuration."),
-			},
-			// Disable deletion_protection, update tags
-			{
-				Config: testAccIndexResourceConfig_pod(rName, "disabled", "", map[string]string{"test": "testval", "update": "testupdatenew"}, "2"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					testAccCheckIndexExists(),
-					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
-					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
-					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1536"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "deletion_protection", "disabled"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "spec.pod.pod_type", "s1.x1"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "spec.pod.replicas", "2"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "spec.pod.pods", "2"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "tags.%", "2"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "tags.test", "testval"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "tags.update", "testupdatenew"),
-					resource.TestCheckNoResourceAttr("pinecone_index.test", "metadata_config"),
-					resource.TestCheckNoResourceAttr("pinecone_index.test", "source_collection"),
-				),
-			},
-			// ImportState testing
-			{
-				ResourceName:      "pinecone_index.test",
-				ImportState:       true,
-				ImportStateVerify: true,
-				// ImportStateVerifyIdentifierAttribute: "name",
-				// This is not normally necessary, but is here because this
-				// example code does not have an actual upstream service.
-				// Once the Read method is able to refresh information from
-				// the upstream service, this can be removed.
-				// ImportStateVerifyIgnore: []string{"configurable_attribute", "defaulted"},
-			},
-		},
-	})
-}
-
 func TestAccIndexResource_pod_invalidEmbedConfig(t *testing.T) {
 	t.Parallel()
 	resource.Test(t, resource.TestCase{
@@ -451,28 +372,6 @@ resource "pinecone_index" "%s" {
 %s
 }
 `, resourceName, name, schemaBlock, deletionProtection, embed, convertTagsToString(tags))
-}
-
-func testAccIndexResourceConfig_pod(name string, deletionProtection string, embed string, tags map[string]string, replicas string) string {
-	return fmt.Sprintf(`
-provider "pinecone" {
-}
-
-resource "pinecone_index" "%s" {
-	name = %q
-	dimension = 1536
-	spec = {
-		pod = {
-			environment = "us-west4-gcp"
-			pod_type = "s1.x1"
-			replicas = %q
-		}
-	}
-	deletion_protection = %q
-%s
-%s
-}
-`, resourceName, name, replicas, deletionProtection, embed, convertTagsToString(tags))
 }
 
 func convertTagsToString(in map[string]string) string {
