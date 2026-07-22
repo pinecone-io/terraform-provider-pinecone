@@ -6,7 +6,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/pinecone-io/go-pinecone/v5/pinecone"
+	"github.com/pinecone-io/go-pinecone/v6/pinecone"
 )
 
 type PineconeDatasource struct {
