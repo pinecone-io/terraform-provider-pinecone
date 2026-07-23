@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 	"github.com/pinecone-io/go-pinecone/v6/pinecone"
 )
 
@@ -21,6 +23,23 @@ func isNotFoundErr(err error) bool {
 	return strings.Contains(msg, "not found") ||
 		strings.Contains(msg, "NOT_FOUND") ||
 		strings.Contains(msg, "404")
+}
+
+// retryDeletion polls describe until it reports the resource is gone. Admin
+// deletes are asynchronous (HTTP 202), so callers pass a describe closure; a
+// not-found error means deletion completed, any other error is retried, and a
+// successful describe means the resource still exists.
+func retryDeletion(ctx context.Context, describe func() error) error {
+	return retry.RetryContext(ctx, 5*time.Minute, func() *retry.RetryError {
+		err := describe()
+		if err != nil {
+			if isNotFoundErr(err) {
+				return nil
+			}
+			return retry.RetryableError(fmt.Errorf("deletion verification in progress, retrying: %w", err))
+		}
+		return retry.RetryableError(fmt.Errorf("resource not deleted yet"))
+	})
 }
 
 type PineconeDatasource struct {

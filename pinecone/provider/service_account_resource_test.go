@@ -42,24 +42,26 @@ func TestAccServiceAccountResource(t *testing.T) {
 					}),
 				),
 			},
-			// Rename: the secret must not change.
+			// Rename and set rotate_trigger for the first time: neither a rename
+			// nor establishing the trigger baseline (null -> value) may rotate.
 			{
-				Config: testAccServiceAccountResourceConfig("test-service-account-updated", ""),
+				Config: testAccServiceAccountResourceConfig("test-service-account-updated", "rotate-1"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("pinecone_service_account.test", "name", "test-service-account-updated"),
+					resource.TestCheckResourceAttr("pinecone_service_account.test", "rotate_trigger", "rotate-1"),
 					resource.TestCheckResourceAttrWith("pinecone_service_account.test", "client_secret", func(v string) error {
 						if v != secretAfterCreate {
-							return fmt.Errorf("client_secret changed on a rename; expected it to be preserved")
+							return fmt.Errorf("client_secret changed on rename/baseline trigger; expected it to be preserved")
 						}
 						return nil
 					}),
 				),
 			},
-			// Rotate: changing rotate_trigger must issue a new secret.
+			// Change rotate_trigger to a new value: this must issue a new secret.
 			{
-				Config: testAccServiceAccountResourceConfig("test-service-account-updated", "rotate-1"),
+				Config: testAccServiceAccountResourceConfig("test-service-account-updated", "rotate-2"),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("pinecone_service_account.test", "rotate_trigger", "rotate-1"),
+					resource.TestCheckResourceAttr("pinecone_service_account.test", "rotate_trigger", "rotate-2"),
 					resource.TestCheckResourceAttrWith("pinecone_service_account.test", "client_secret", func(v string) error {
 						if v == secretAfterCreate {
 							return fmt.Errorf("client_secret was not rotated after rotate_trigger changed")

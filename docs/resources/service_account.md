@@ -67,7 +67,7 @@ output "example_client_secret" {
 
 ### Optional
 
-- `rotate_trigger` (String) An arbitrary value that, when changed, triggers rotation of the service account's client secret. The new secret is stored in `client_secret`.
+- `rotate_trigger` (String) An arbitrary value used to rotate the service account's client secret. Changing it from one non-empty value to another rotates the secret and stores the new value in `client_secret`. Setting it for the first time (or clearing it) establishes a baseline and does not rotate, so an existing credential is never invalidated unintentionally.
 
 ### Read-Only
 

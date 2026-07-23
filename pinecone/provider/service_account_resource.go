@@ -2,8 +2,6 @@ package provider
 
 import (
 	"context"
-	"fmt"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -13,7 +11,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 	"github.com/pinecone-io/go-pinecone/v6/pinecone"
 	"github.com/pinecone-io/terraform-provider-pinecone/pinecone/models"
 )
@@ -63,11 +60,24 @@ func (m rotateSecretPlanModifier) PlanModifyString(ctx context.Context, req plan
 		return
 	}
 
-	// If rotate_trigger is unchanged, preserve the current secret. When it
-	// changes, leave the value unknown so Update can store the rotated secret.
-	if planTrigger.Equal(stateTrigger) {
+	// Preserve the current secret unless a rotation is actually requested. When
+	// rotation will happen, leave the value unknown so Update can store the new
+	// secret; otherwise keep the stored value.
+	if !rotateRequested(planTrigger, stateTrigger) {
 		resp.PlanValue = req.StateValue
 	}
+}
+
+// rotateRequested reports whether a rotate_trigger change should rotate the
+// secret. Rotation happens only when moving between two concrete values. Adding
+// the attribute (null -> value), removing it (value -> null), an unknown value,
+// or importing (where the prior value cannot be recovered) must NOT rotate an
+// otherwise-valid credential.
+func rotateRequested(plan, state types.String) bool {
+	if plan.IsNull() || plan.IsUnknown() || state.IsNull() || state.IsUnknown() {
+		return false
+	}
+	return !plan.Equal(state)
 }
 
 func (r *ServiceAccountResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -112,7 +122,7 @@ func (r *ServiceAccountResource) Schema(ctx context.Context, req resource.Schema
 				},
 			},
 			"rotate_trigger": schema.StringAttribute{
-				MarkdownDescription: "An arbitrary value that, when changed, triggers rotation of the service account's client secret. The new secret is stored in `client_secret`.",
+				MarkdownDescription: "An arbitrary value used to rotate the service account's client secret. Changing it from one non-empty value to another rotates the secret and stores the new value in `client_secret`. Setting it for the first time (or clearing it) establishes a baseline and does not rotate, so an existing credential is never invalidated unintentionally.",
 				Optional:            true,
 			},
 			"created_at": schema.StringAttribute{
@@ -218,9 +228,9 @@ func (r *ServiceAccountResource) Update(ctx context.Context, req resource.Update
 		sa = updated
 	}
 
-	// Rotate the secret when rotate_trigger changes.
+	// Rotate the secret only on a genuine value change of rotate_trigger.
 	rotated := false
-	if !data.RotateTrigger.Equal(state.RotateTrigger) {
+	if rotateRequested(data.RotateTrigger, state.RotateTrigger) {
 		saWithSecret, err := r.adminClient.ServiceAccount.RotateSecret(ctx, saId)
 		if err != nil {
 			resp.Diagnostics.AddError("Failed to rotate service account secret", err.Error())
@@ -273,15 +283,9 @@ func (r *ServiceAccountResource) Delete(ctx context.Context, req resource.Delete
 	}
 
 	// Deletion is asynchronous (HTTP 202); wait until the service account is gone.
-	err = retry.RetryContext(ctx, 5*time.Minute, func() *retry.RetryError {
+	err = retryDeletion(ctx, func() error {
 		_, err := r.adminClient.ServiceAccount.Describe(ctx, data.Id.ValueString())
-		if err != nil {
-			if isNotFoundErr(err) {
-				return nil
-			}
-			return retry.RetryableError(fmt.Errorf("deletion verification in progress, retrying: %w", err))
-		}
-		return retry.RetryableError(fmt.Errorf("service account not deleted yet"))
+		return err
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to wait for service account to be deleted.", err.Error())
