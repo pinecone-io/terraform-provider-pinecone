@@ -142,6 +142,7 @@ func (p *PineconeProvider) Resources(ctx context.Context) []func() resource.Reso
 		NewIndexResource,
 		NewApiKeyResource,
 		NewProjectResource,
+		NewRoleBindingResource,
 	}
 }
 
@@ -153,6 +154,7 @@ func (p *PineconeProvider) DataSources(ctx context.Context) []func() datasource.
 		NewIndexDataSource,
 		NewProjectsDataSource,
 		NewProjectDataSource,
+		NewRoleBindingsDataSource,
 	}
 }
 

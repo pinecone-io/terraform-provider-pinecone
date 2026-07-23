@@ -3,11 +3,25 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/pinecone-io/go-pinecone/v6/pinecone"
 )
+
+// isNotFoundErr reports whether an admin API error indicates the resource no
+// longer exists, so callers can treat it as a removed resource rather than a
+// hard failure.
+func isNotFoundErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "not found") ||
+		strings.Contains(msg, "NOT_FOUND") ||
+		strings.Contains(msg, "404")
+}
 
 type PineconeDatasource struct {
 	client      *pinecone.Client
