@@ -42,7 +42,7 @@ resource "pinecone_user" "example" {
 
 ### Required
 
-- `id` (String) The unique ID of the user to manage. Use `terraform import` to populate it from an existing user.
+- `id` (String) The unique ID of the user to manage. Use `terraform import` to populate it from an existing user. This value is immutable — changing it is rejected (changing it would remove the original user from the organization); to manage a different user, `terraform state rm` this resource and import the intended one.
 
 ### Read-Only
 

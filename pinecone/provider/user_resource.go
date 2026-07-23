@@ -7,7 +7,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/pinecone-io/terraform-provider-pinecone/pinecone/models"
 )
 
@@ -27,6 +26,38 @@ type UserResource struct {
 	*PineconeResource
 }
 
+// immutableUserIdPlanModifier blocks changing a managed user's id in place. It
+// intentionally does NOT use RequiresReplace: replacing the resource would delete
+// the original user (removing them from the organization) before failing to
+// recreate one, so an id change is surfaced as a hard error instead.
+type immutableUserIdPlanModifier struct{}
+
+func (m immutableUserIdPlanModifier) Description(ctx context.Context) string {
+	return "Prevents changing a managed user's id in place, which would otherwise remove the original user from the organization."
+}
+
+func (m immutableUserIdPlanModifier) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (m immutableUserIdPlanModifier) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	// No prior state on create; nothing to protect.
+	if req.State.Raw.IsNull() {
+		return
+	}
+	// Only guard a change between two concrete values.
+	if req.StateValue.IsNull() || req.PlanValue.IsUnknown() || req.PlanValue.IsNull() {
+		return
+	}
+	if !req.StateValue.Equal(req.PlanValue) {
+		resp.Diagnostics.AddError(
+			"User id cannot be changed",
+			"A managed pinecone_user's id is immutable because changing it would remove the original user from the organization. "+
+				"To manage a different user, remove this resource from state (`terraform state rm`) and import the intended user.",
+		)
+	}
+}
+
 func (r *UserResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_user"
 }
@@ -37,10 +68,10 @@ func (r *UserResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				MarkdownDescription: "The unique ID of the user to manage. Use `terraform import` to populate it from an existing user.",
+				MarkdownDescription: "The unique ID of the user to manage. Use `terraform import` to populate it from an existing user. This value is immutable — changing it is rejected (changing it would remove the original user from the organization); to manage a different user, `terraform state rm` this resource and import the intended one.",
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
+					immutableUserIdPlanModifier{},
 				},
 			},
 			"email": schema.StringAttribute{
