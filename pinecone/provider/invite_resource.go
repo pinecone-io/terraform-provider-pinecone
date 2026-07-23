@@ -46,8 +46,10 @@ func (r *InviteResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			"Creating it sends an invite to the given email with a set of initial roles; deleting it revokes a still-pending invite. " +
 			"Once the invitee accepts, the invitation is complete (`status = processed`) and Terraform stops acting on it: destroying " +
 			"an accepted invite is a no-op, and that user's roles should be managed from then on with `pinecone_role_binding`. " +
-			"Invites are immutable — changing `email` or `role_bindings` sends a new invite. Because the API never returns the granted " +
-			"roles, `role_bindings` is set only at creation and is not drift-detected or recoverable on import.",
+			"Invites are immutable — changing `email` or `role_bindings` replaces the resource by sending a new invite; do not change " +
+			"either once the invite is accepted (`status = processed`), because the forced replacement re-sends an invite to an address " +
+			"that already belongs to a member and the create fails. Because the API never returns the granted roles, `role_bindings` is " +
+			"set only at creation and is not drift-detected or recoverable on import.",
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
@@ -58,7 +60,7 @@ func (r *InviteResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				},
 			},
 			"email": schema.StringAttribute{
-				MarkdownDescription: "The email address to invite.",
+				MarkdownDescription: "The email address to invite. Changing it replaces the resource by sending a new invite. Do not change `email` or `role_bindings` after the invite is accepted (`status = processed`) — the replacement re-invites an address that already belongs to a member and fails; manage that user with `pinecone_role_binding` instead.",
 				Required:            true,
 				Validators: []validator.String{
 					stringvalidator.LengthBetween(1, 254),
@@ -69,7 +71,7 @@ func (r *InviteResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				},
 			},
 			"role_bindings": schema.ListNestedAttribute{
-				MarkdownDescription: "The initial roles to grant the invitee. Must include at least one organization-scoped binding that grants membership (`OrgOwner`, `OrgManager`, `OrgBillingAdmin`, or `OrgMember`); project-scoped bindings are optional. These are applied only when the invite is created and are not returned by the API, so they cannot be drift-detected or imported. After the invite is accepted, manage the user's roles with `pinecone_role_binding`.",
+				MarkdownDescription: "The initial roles to grant the invitee. Must include at least one organization-scoped binding that grants membership (`OrgOwner`, `OrgManager`, `OrgBillingAdmin`, or `OrgMember`); project-scoped bindings are optional. These are applied only when the invite is created and are not returned by the API, so they cannot be drift-detected or imported. Changing this list replaces the resource; doing so after the invite is accepted fails because it re-invites an existing member. After the invite is accepted, manage the user's roles with `pinecone_role_binding`.",
 				Required:            true,
 				Validators: []validator.List{
 					listvalidator.SizeAtLeast(1),
