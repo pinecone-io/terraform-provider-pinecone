@@ -27,7 +27,7 @@ provider "pinecone" {
 }
 
 # Grant a service account an organization-scoped role.
-# For organization scope, omit resource_id (it is computed to the organization ID).
+# For organization scope, omit resource_id (the binding applies to the caller's organization).
 resource "pinecone_role_binding" "org_member" {
   principal_id   = "your-service-account-id"
   principal_type = "service_account"
@@ -58,7 +58,7 @@ resource "pinecone_role_binding" "project_editor" {
 
 ### Optional
 
-- `resource_id` (String) The ID of the project the binding applies to. Required when `resource_type` is `project`; must be omitted when `resource_type` is `organization` (it is then computed to the organization ID).
+- `resource_id` (String) The ID of the project the binding applies to. Required when `resource_type` is `project`; must be omitted when `resource_type` is `organization` (an organization binding is scoped to the caller's organization automatically).
 
 ### Read-Only
 

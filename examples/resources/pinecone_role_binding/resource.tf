@@ -12,7 +12,7 @@ provider "pinecone" {
 }
 
 # Grant a service account an organization-scoped role.
-# For organization scope, omit resource_id (it is computed to the organization ID).
+# For organization scope, omit resource_id (the binding applies to the caller's organization).
 resource "pinecone_role_binding" "org_member" {
   principal_id   = "your-service-account-id"
   principal_type = "service_account"

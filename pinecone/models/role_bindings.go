@@ -46,7 +46,15 @@ func SetRoleBindingResourceModel(data *RoleBindingResourceModel, rb *pinecone.Ro
 	data.PrincipalId = types.StringValue(rb.PrincipalId)
 	data.PrincipalType = types.StringValue(string(rb.PrincipalType))
 	data.ResourceType = types.StringValue(string(rb.ResourceType))
-	data.ResourceId = types.StringValue(rb.ResourceId)
+	// Only project-scoped bindings carry a user-supplied resource_id. For
+	// organization scope the server returns the organization ID, but the config
+	// omits resource_id, so keep state null to avoid perpetual drift and to keep
+	// replaces from re-sending it under organization scope.
+	if rb.ResourceType == pinecone.ResourceTypeProject {
+		data.ResourceId = types.StringValue(rb.ResourceId)
+	} else {
+		data.ResourceId = types.StringNull()
+	}
 	data.Role = types.StringValue(rb.Role)
 	data.CreatedAt = types.StringValue(rb.CreatedAt.Format(time.RFC3339))
 }

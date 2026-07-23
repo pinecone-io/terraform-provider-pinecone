@@ -81,12 +81,10 @@ func (r *RoleBindingResource) Schema(ctx context.Context, req resource.SchemaReq
 				},
 			},
 			"resource_id": schema.StringAttribute{
-				MarkdownDescription: "The ID of the project the binding applies to. Required when `resource_type` is `project`; must be omitted when `resource_type` is `organization` (it is then computed to the organization ID).",
+				MarkdownDescription: "The ID of the project the binding applies to. Required when `resource_type` is `project`; must be omitted when `resource_type` is `organization` (an organization binding is scoped to the caller's organization automatically).",
 				Optional:            true,
-				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
-					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"role": schema.StringAttribute{
@@ -99,6 +97,9 @@ func (r *RoleBindingResource) Schema(ctx context.Context, req resource.SchemaReq
 			"created_at": schema.StringAttribute{
 				MarkdownDescription: "The timestamp when the role binding was created.",
 				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 		},
 	}
