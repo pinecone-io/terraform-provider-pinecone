@@ -42,6 +42,34 @@ func TestAccInviteResource(t *testing.T) {
 	})
 }
 
+func TestInviteEmailRegex(t *testing.T) {
+	valid := []string{
+		"teammate@example.com",
+		"first.last@sub.example.co.uk",
+		"user+tag@example.io",
+	}
+	invalid := []string{
+		"",
+		"not-an-email",
+		"missing@domain", // no dot in the domain
+		"@example.com",   // no local part
+		"user@",          // no domain
+		"user @example.com",
+		"user@exa mple.com",
+		"two@at@example.com",
+	}
+	for _, e := range valid {
+		if !emailRegex.MatchString(e) {
+			t.Errorf("expected %q to be accepted", e)
+		}
+	}
+	for _, e := range invalid {
+		if emailRegex.MatchString(e) {
+			t.Errorf("expected %q to be rejected", e)
+		}
+	}
+}
+
 func testAccInviteResourceConfig(email string) string {
 	return fmt.Sprintf(`
 provider "pinecone" {

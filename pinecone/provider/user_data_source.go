@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -83,12 +84,21 @@ func (d *UserDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 			resp.Diagnostics.AddError("Failed to list users", err.Error())
 			return
 		}
-		switch len(users.Data) {
+		// The list email parameter is a server-side filter whose exactness is not
+		// guaranteed, so keep only exact case-insensitive matches to ensure a
+		// broadened server match can never resolve to the wrong user.
+		matches := make([]*pinecone.User, 0, len(users.Data))
+		for _, u := range users.Data {
+			if strings.EqualFold(u.Email, email) {
+				matches = append(matches, u)
+			}
+		}
+		switch len(matches) {
 		case 0:
 			resp.Diagnostics.AddError("User not found", fmt.Sprintf("No user found with email %q.", email))
 			return
 		case 1:
-			data.Read(users.Data[0])
+			data.Read(matches[0])
 		default:
 			resp.Diagnostics.AddError("Multiple users found", fmt.Sprintf("More than one user matched email %q; look up by id instead.", email))
 			return

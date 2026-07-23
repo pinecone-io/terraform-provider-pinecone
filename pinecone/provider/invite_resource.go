@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"regexp"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -16,6 +17,11 @@ import (
 	"github.com/pinecone-io/go-pinecone/v6/pinecone"
 	"github.com/pinecone-io/terraform-provider-pinecone/pinecone/models"
 )
+
+// emailRegex is a deliberately permissive sanity check that catches obvious
+// mistakes (missing "@" or domain) before a round trip. The API performs
+// authoritative validation.
+var emailRegex = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
 
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ resource.Resource = &InviteResource{}
@@ -56,6 +62,7 @@ func (r *InviteResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				Required:            true,
 				Validators: []validator.String{
 					stringvalidator.LengthBetween(1, 254),
+					stringvalidator.RegexMatches(emailRegex, "must be a valid email address"),
 				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),

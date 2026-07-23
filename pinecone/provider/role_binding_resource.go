@@ -226,6 +226,16 @@ func (r *RoleBindingResource) Delete(ctx context.Context, req resource.DeleteReq
 		resp.Diagnostics.AddError("Failed to delete role binding", err.Error())
 		return
 	}
+
+	// Deletion is asynchronous (HTTP 202); wait until the role binding is gone.
+	err = retryDeletion(ctx, func() error {
+		_, err := r.adminClient.RoleBinding.Describe(ctx, data.Id.ValueString())
+		return err
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to wait for role binding to be deleted.", err.Error())
+		return
+	}
 }
 
 func (r *RoleBindingResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

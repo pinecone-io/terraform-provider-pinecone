@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/pinecone-io/go-pinecone/v6/pinecone"
@@ -51,6 +52,9 @@ func (d *RoleBindingsDataSource) Schema(ctx context.Context, req datasource.Sche
 			"principal_id": schema.StringAttribute{
 				MarkdownDescription: "Filter by principal ID. Requires `principal_type`.",
 				Optional:            true,
+				Validators: []validator.String{
+					stringvalidator.AlsoRequires(path.MatchRoot("principal_type")),
+				},
 			},
 			"resource_type": schema.StringAttribute{
 				MarkdownDescription: "Filter by resource type. Required when `resource_id` is set. Valid values are: `organization`, `project`.",
@@ -65,6 +69,9 @@ func (d *RoleBindingsDataSource) Schema(ctx context.Context, req datasource.Sche
 			"resource_id": schema.StringAttribute{
 				MarkdownDescription: "Filter by resource ID. Requires `resource_type`.",
 				Optional:            true,
+				Validators: []validator.String{
+					stringvalidator.AlsoRequires(path.MatchRoot("resource_type")),
+				},
 			},
 			"role": schema.StringAttribute{
 				MarkdownDescription: "Filter by role.",

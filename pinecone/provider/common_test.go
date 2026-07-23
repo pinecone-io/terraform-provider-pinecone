@@ -4,6 +4,9 @@
 package provider
 
 import (
+	"errors"
+	"fmt"
+	"net/http"
 	"os"
 	"testing"
 
@@ -11,6 +14,62 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/pinecone-io/go-pinecone/v6/pinecone"
 )
+
+func pineconeErr(code int) *pinecone.PineconeError {
+	return &pinecone.PineconeError{Code: code, Msg: errors.New("boom")}
+}
+
+func TestHasStatusCode(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		code int
+		want bool
+	}{
+		{"nil error", nil, http.StatusNotFound, false},
+		{"matching code", pineconeErr(http.StatusNotFound), http.StatusNotFound, true},
+		{"non-matching code", pineconeErr(http.StatusConflict), http.StatusNotFound, false},
+		{"wrapped matching code", fmt.Errorf("describe failed: %w", pineconeErr(http.StatusNotFound)), http.StatusNotFound, true},
+		{"non-pinecone error", errors.New("boom"), http.StatusNotFound, false},
+		// Regression guard: the old string-matching heuristic would have matched
+		// the embedded "404" here; the typed check must not.
+		{"plain error containing status text", errors.New(`{"status_code":404,"body":"not found"}`), http.StatusNotFound, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := hasStatusCode(tt.err, tt.code); got != tt.want {
+				t.Errorf("hasStatusCode(%v, %d) = %v, want %v", tt.err, tt.code, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsNotFoundErr(t *testing.T) {
+	if !isNotFoundErr(pineconeErr(http.StatusNotFound)) {
+		t.Error("expected a 404 PineconeError to be treated as not found")
+	}
+	if isNotFoundErr(pineconeErr(http.StatusConflict)) {
+		t.Error("expected a 409 PineconeError to not be treated as not found")
+	}
+	if isNotFoundErr(errors.New("not found")) {
+		t.Error("expected a plain error containing 'not found' to not be treated as not found")
+	}
+	if isNotFoundErr(nil) {
+		t.Error("expected a nil error to not be treated as not found")
+	}
+}
+
+func TestIsConflictErr(t *testing.T) {
+	if !isConflictErr(pineconeErr(http.StatusConflict)) {
+		t.Error("expected a 409 PineconeError to be treated as a conflict")
+	}
+	if isConflictErr(pineconeErr(http.StatusNotFound)) {
+		t.Error("expected a 404 PineconeError to not be treated as a conflict")
+	}
+	if isConflictErr(errors.New("conflict")) {
+		t.Error("expected a plain error containing 'conflict' to not be treated as a conflict")
+	}
+}
 
 // NewTestClient returns a new Pinecone API client instance
 // to be used in acceptance tests.
