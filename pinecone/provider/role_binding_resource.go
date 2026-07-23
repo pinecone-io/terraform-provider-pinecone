@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -216,13 +215,10 @@ func (r *RoleBindingResource) Delete(ctx context.Context, req resource.DeleteReq
 		if isNotFoundErr(err) {
 			return
 		}
-		if isConflictErr(err) {
-			resp.Diagnostics.AddError(
-				"Failed to delete role binding",
-				fmt.Sprintf("The role binding could not be deleted, likely because it is the last organization-owner binding or the last organization-membership binding for the principal. Original error: %s", err.Error()),
-			)
-			return
-		}
+		// The API refuses some deletes (e.g. the last OrgOwner binding, or the
+		// last org-membership binding for a user/invite that has other bindings)
+		// with an HTTP 409 whose message is already specific and actionable, so
+		// surface it directly rather than guessing at the cause.
 		resp.Diagnostics.AddError("Failed to delete role binding", err.Error())
 		return
 	}
