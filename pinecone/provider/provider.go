@@ -115,9 +115,11 @@ func (p *PineconeProvider) Configure(ctx context.Context, req provider.Configure
 
 	// Create admin client only if admin credentials are provided
 	if clientId != "" && clientSecret != "" {
+		sourceTag := "terraform"
 		adminClient, err := pinecone.NewAdminClient(pinecone.NewAdminClientParams{
 			ClientId:     clientId,
 			ClientSecret: clientSecret,
+			SourceTag:    &sourceTag,
 		})
 		if err != nil {
 			resp.Diagnostics.AddError("Failed to create pinecone admin client", err.Error())

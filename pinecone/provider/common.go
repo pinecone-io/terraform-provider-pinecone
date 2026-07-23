@@ -2,8 +2,9 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"strings"
+	"net/http"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -12,26 +13,27 @@ import (
 	"github.com/pinecone-io/go-pinecone/v6/pinecone"
 )
 
+// hasStatusCode reports whether err is (or wraps) a *pinecone.PineconeError
+// whose HTTP status code equals code. The SDK returns this typed error for all
+// non-2xx admin API responses, so matching on the code is more reliable than
+// scanning the rendered error string (which embeds the raw response body).
+// Non-API errors (transport failures, uuid.Parse failures) do not match, which
+// is the desired behavior for the callers below.
+func hasStatusCode(err error, code int) bool {
+	var pineconeErr *pinecone.PineconeError
+	return errors.As(err, &pineconeErr) && pineconeErr.Code == code
+}
+
 // isNotFoundErr reports whether an admin API error indicates the resource no
 // longer exists, so callers can treat it as a removed resource rather than a
 // hard failure.
 func isNotFoundErr(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := err.Error()
-	return strings.Contains(msg, "not found") ||
-		strings.Contains(msg, "NOT_FOUND") ||
-		strings.Contains(msg, "404")
+	return hasStatusCode(err, http.StatusNotFound)
 }
 
 // isConflictErr reports whether an admin API error is an HTTP 409 Conflict.
 func isConflictErr(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "409") || strings.Contains(msg, "conflict")
+	return hasStatusCode(err, http.StatusConflict)
 }
 
 // retryDeletion polls describe until it reports the resource is gone. Admin
