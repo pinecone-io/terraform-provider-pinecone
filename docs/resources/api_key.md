@@ -73,4 +73,4 @@ output "api_key_roles" {
 ### Read-Only
 
 - `id` (String) API key identifier
-- `key` (String, Sensitive) The generated API key value.
+- `key` (String, Sensitive) The generated API key value. Returned only once, at creation. **This value is stored in plaintext in Terraform state.** `Sensitive` redacts it from CLI output and logs but does not encrypt it in state — secure your state backend (encryption at rest, restricted access) and never commit state to version control.
