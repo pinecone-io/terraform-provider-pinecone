@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -217,7 +216,7 @@ func (r *RoleBindingResource) Delete(ctx context.Context, req resource.DeleteReq
 		if isNotFoundErr(err) {
 			return
 		}
-		if strings.Contains(err.Error(), "409") || strings.Contains(strings.ToLower(err.Error()), "conflict") {
+		if isConflictErr(err) {
 			resp.Diagnostics.AddError(
 				"Failed to delete role binding",
 				fmt.Sprintf("The role binding could not be deleted, likely because it is the last organization-owner binding or the last organization-membership binding for the principal. Original error: %s", err.Error()),

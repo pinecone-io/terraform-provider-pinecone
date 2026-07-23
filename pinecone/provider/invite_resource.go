@@ -230,15 +230,22 @@ func (r *InviteResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	// An accepted invite has already converted to a membership; there is nothing
 	// to revoke, so deleting it is a no-op success. Manage that user's roles via
 	// pinecone_role_binding instead.
-	if invite, err := r.adminClient.Invite.Describe(ctx, inviteId); err == nil && invite.Status == pinecone.InviteStatusProcessed {
+	if r.inviteAcceptedOrGone(ctx, inviteId) {
 		return
 	}
 
 	err := r.adminClient.Invite.Delete(ctx, inviteId)
 	if err != nil {
-		if !isNotFoundErr(err) {
-			resp.Diagnostics.AddError("Failed to delete invite", err.Error())
+		if isNotFoundErr(err) {
+			return
 		}
+		// Acceptance can race with destroy: an invite accepted between the check
+		// above and this call can no longer be deleted and returns a conflict.
+		// If it is now processed (or already gone), treat the delete as a no-op.
+		if isConflictErr(err) && r.inviteAcceptedOrGone(ctx, inviteId) {
+			return
+		}
+		resp.Diagnostics.AddError("Failed to delete invite", err.Error())
 		return
 	}
 
@@ -251,6 +258,18 @@ func (r *InviteResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		resp.Diagnostics.AddError("Failed to wait for invite to be deleted.", err.Error())
 		return
 	}
+}
+
+// inviteAcceptedOrGone reports whether the invite no longer needs to be revoked:
+// it has been accepted (status processed) or no longer exists. A describe error
+// other than not-found is treated as "still present" so the caller surfaces the
+// original delete failure.
+func (r *InviteResource) inviteAcceptedOrGone(ctx context.Context, inviteId string) bool {
+	invite, err := r.adminClient.Invite.Describe(ctx, inviteId)
+	if err != nil {
+		return isNotFoundErr(err)
+	}
+	return invite.Status == pinecone.InviteStatusProcessed
 }
 
 func (r *InviteResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

@@ -25,6 +25,15 @@ func isNotFoundErr(err error) bool {
 		strings.Contains(msg, "404")
 }
 
+// isConflictErr reports whether an admin API error is an HTTP 409 Conflict.
+func isConflictErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "409") || strings.Contains(msg, "conflict")
+}
+
 // retryDeletion polls describe until it reports the resource is gone. Admin
 // deletes are asynchronous (HTTP 202), so callers pass a describe closure; a
 // not-found error means deletion completed, any other error is retried, and a
