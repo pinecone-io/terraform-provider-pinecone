@@ -47,7 +47,7 @@ output "user_id" {
 ### Optional
 
 - `email` (String) The user's email address (case-insensitive). Set this or `id`.
-- `id` (String) The unique ID of the user. Set this or `email`.
+- `id` (String) The unique ID of the user. Set this or `email`. Use it as the `principal_id` when creating a `pinecone_role_binding`.
 
 ### Read-Only
 

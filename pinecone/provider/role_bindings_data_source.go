@@ -34,7 +34,7 @@ func (d *RoleBindingsDataSource) Metadata(ctx context.Context, req datasource.Me
 
 func (d *RoleBindingsDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Role bindings data source. Lists role bindings in your organization, optionally filtered by principal, resource, or role.",
+		MarkdownDescription: "Role bindings data source. Lists role bindings in your organization, optionally filtered by principal, resource, or role. Filtering by a binding's own ID is not supported; fetch one by ID with the `pinecone_role_binding` data source.",
 
 		Attributes: map[string]schema.Attribute{
 			"principal_type": schema.StringAttribute{
@@ -95,7 +95,7 @@ func (d *RoleBindingsDataSource) Schema(ctx context.Context, req datasource.Sche
 							Computed:            true,
 						},
 						"resource_id": schema.StringAttribute{
-							MarkdownDescription: "The ID of the organization or project the binding is scoped to.",
+							MarkdownDescription: "The ID of the organization or project the binding is scoped to. Organization-scoped bindings report the organization ID here, unlike the `pinecone_role_binding` resource, which keeps `resource_id` null to match the config.",
 							Computed:            true,
 						},
 						"resource_type": schema.StringAttribute{

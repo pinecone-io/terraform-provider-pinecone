@@ -49,6 +49,6 @@ output "role" {
 - `created_at` (String) The timestamp when the role binding was created.
 - `principal_id` (String) The ID of the principal that receives permissions.
 - `principal_type` (String) The kind of principal that receives permissions: `user`, `service_account`, `api_key`, or `invite`.
-- `resource_id` (String) The ID of the organization or project the binding is scoped to. Note that this always reports the server value, so an organization-scoped binding returns the organization ID — unlike the `pinecone_role_binding` resource, which keeps `resource_id` null under organization scope to match the config.
+- `resource_id` (String) The ID of the organization or project the binding is scoped to. Organization-scoped bindings report the organization ID here, unlike the `pinecone_role_binding` resource, which keeps `resource_id` null to match the config.
 - `resource_type` (String) The kind of resource scope the binding applies to: `organization` or `project`.
 - `role` (String) The role assigned to the principal at the resource scope.

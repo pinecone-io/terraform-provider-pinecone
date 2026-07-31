@@ -111,7 +111,7 @@ func (r *RoleBindingResource) Schema(ctx context.Context, req resource.SchemaReq
 				},
 			},
 			"resource_id": schema.StringAttribute{
-				MarkdownDescription: "The ID of the project the binding applies to. Required when `resource_type` is `project`; must be omitted when `resource_type` is `organization` (an organization binding is scoped to the caller's organization automatically).",
+				MarkdownDescription: "The ID of the project the binding applies to. Required when `resource_type` is `project`; must be omitted when `resource_type` is `organization` (an organization binding is scoped to the caller's organization automatically). Under organization scope Terraform keeps this null in state to match your config, so it never appears in plan output; the `pinecone_role_binding` data source reports the organization ID instead.",
 				Optional:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),

@@ -108,12 +108,13 @@ func (r *InviteResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			"an accepted invite is a no-op, and that user's roles should be managed from then on with `pinecone_role_binding`. " +
 			"Invites are immutable — changing `email` or `role_bindings` replaces the resource by sending a new invite; do not change " +
 			"either once the invite is accepted (`status = processed`), because the forced replacement re-sends an invite to an address " +
-			"that already belongs to a member and the create fails. Because the API never returns the granted roles, `role_bindings` is " +
-			"set only at creation and is not drift-detected or recoverable on import.",
+			"that already belongs to a member and the create fails. Because the invite endpoint does not return the granted roles, " +
+			"`role_bindings` is set only at creation and is not drift-detected or recoverable on import. The bindings themselves are " +
+			"readable with the `pinecone_role_bindings` data source using `principal_type = \"invite\"`.",
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				MarkdownDescription: "The unique ID of the invite.",
+				MarkdownDescription: "The unique ID of the invite. Use this as the `principal_id`, with `principal_type = \"invite\"`, to look up the invite's role bindings.",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -131,7 +132,7 @@ func (r *InviteResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				},
 			},
 			"role_bindings": schema.ListNestedAttribute{
-				MarkdownDescription: "The initial roles to grant the invitee. Must include at least one organization-scoped binding that grants membership (`OrgOwner`, `OrgManager`, `OrgBillingAdmin`, or `OrgMember`); project-scoped bindings are optional. These are applied only when the invite is created and are not returned by the API, so they cannot be drift-detected or imported. Changing this list replaces the resource; doing so after the invite is accepted fails because it re-invites an existing member. After the invite is accepted, manage the user's roles with `pinecone_role_binding`.",
+				MarkdownDescription: "The initial roles to grant the invitee. Must include at least one organization-scoped binding that grants membership (`OrgOwner`, `OrgManager`, `OrgBillingAdmin`, or `OrgMember`); project-scoped bindings are optional. These are applied only when the invite is created and are not returned when reading the invite, so they cannot be drift-detected or imported; to inspect them, use the `pinecone_role_bindings` data source with `principal_type = \"invite\"`. Changing this list replaces the resource; doing so after the invite is accepted fails because it re-invites an existing member. After the invite is accepted, manage the user's roles with `pinecone_role_binding`.",
 				Required:            true,
 				Validators: []validator.List{
 					listvalidator.SizeAtLeast(1),
@@ -257,7 +258,9 @@ func (r *InviteResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	// role_bindings are preserved from prior state; the API never returns them.
+	// role_bindings are preserved from prior state; the invite endpoint does not
+	// return them (they are readable via the role bindings list, but only the
+	// server-assigned binding ids, not the create-time input recorded here).
 	models.SetInviteResourceModel(&data, invite)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -337,7 +340,8 @@ func (r *InviteResource) inviteAcceptedOrGone(ctx context.Context, inviteId stri
 
 func (r *InviteResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Import format: invite_id. Note: role_bindings cannot be imported because the
-	// API does not return them; the next plan will show a replacement until they
-	// are set to match the original invite.
+	// invite endpoint does not return them; the next plan will show a replacement
+	// until they are set to match the original invite. The pinecone_role_bindings
+	// data source (principal_type = "invite") can be used to see what to set.
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }

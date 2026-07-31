@@ -45,7 +45,7 @@ func (d *UserDataSource) Schema(ctx context.Context, req datasource.SchemaReques
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				MarkdownDescription: "The unique ID of the user. Set this or `email`.",
+				MarkdownDescription: "The unique ID of the user. Set this or `email`. Use it as the `principal_id` when creating a `pinecone_role_binding`.",
 				Optional:            true,
 				Computed:            true,
 			},

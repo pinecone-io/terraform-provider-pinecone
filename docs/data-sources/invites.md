@@ -3,12 +3,12 @@
 page_title: "pinecone_invites Data Source - terraform-provider-pinecone"
 subcategory: ""
 description: |-
-  Invites data source. Lists the organization's outstanding invites. Only pending and expired invites are returned; accepted (processed) invites are not listed.
+  Invites data source. Lists the organization's outstanding invites. Only pending and expired invites are returned; accepted (processed) invites are not listed. To read an accepted invite, fetch it by ID with the pinecone_invite data source.
 ---
 
 # pinecone_invites (Data Source)
 
-Invites data source. Lists the organization's outstanding invites. Only `pending` and `expired` invites are returned; accepted (`processed`) invites are not listed.
+Invites data source. Lists the organization's outstanding invites. Only `pending` and `expired` invites are returned; accepted (`processed`) invites are not listed. To read an accepted invite, fetch it by ID with the `pinecone_invite` data source.
 
 ## Example Usage
 

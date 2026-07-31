@@ -31,7 +31,7 @@ func (d *InvitesDataSource) Metadata(ctx context.Context, req datasource.Metadat
 
 func (d *InvitesDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Invites data source. Lists the organization's outstanding invites. Only `pending` and `expired` invites are returned; accepted (`processed`) invites are not listed.",
+		MarkdownDescription: "Invites data source. Lists the organization's outstanding invites. Only `pending` and `expired` invites are returned; accepted (`processed`) invites are not listed. To read an accepted invite, fetch it by ID with the `pinecone_invite` data source.",
 
 		Attributes: map[string]schema.Attribute{
 			"invites": schema.ListNestedAttribute{

@@ -19,7 +19,8 @@ type InviteResourceModel struct {
 }
 
 // InviteRoleBindingModel defines a single role binding granted to the invitee at
-// creation time. These are not returned by the API and are preserved from config.
+// creation time. These are not returned when reading the invite and are
+// preserved from config.
 type InviteRoleBindingModel struct {
 	ResourceType types.String `tfsdk:"resource_type"`
 	Role         types.String `tfsdk:"role"`
@@ -57,7 +58,8 @@ type InviteModel struct {
 
 // SetInviteResourceModel maps a Pinecone invite onto the Terraform resource model.
 // It intentionally does not touch role_bindings, which are create-time input that
-// the API never returns, so they are preserved from prior config/state.
+// the invite endpoint does not return, so they are preserved from prior
+// config/state.
 func SetInviteResourceModel(data *InviteResourceModel, invite *pinecone.Invite) {
 	data.Id = types.StringValue(invite.Id)
 	data.Email = types.StringValue(invite.Email)

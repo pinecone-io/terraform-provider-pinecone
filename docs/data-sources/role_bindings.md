@@ -3,12 +3,12 @@
 page_title: "pinecone_role_bindings Data Source - terraform-provider-pinecone"
 subcategory: ""
 description: |-
-  Role bindings data source. Lists role bindings in your organization, optionally filtered by principal, resource, or role.
+  Role bindings data source. Lists role bindings in your organization, optionally filtered by principal, resource, or role. Filtering by a binding's own ID is not supported; fetch one by ID with the pinecone_role_binding data source.
 ---
 
 # pinecone_role_bindings (Data Source)
 
-Role bindings data source. Lists role bindings in your organization, optionally filtered by principal, resource, or role.
+Role bindings data source. Lists role bindings in your organization, optionally filtered by principal, resource, or role. Filtering by a binding's own ID is not supported; fetch one by ID with the `pinecone_role_binding` data source.
 
 ## Example Usage
 
@@ -69,6 +69,6 @@ Read-Only:
 - `id` (String) The unique ID of the role binding.
 - `principal_id` (String) The ID of the principal that receives permissions.
 - `principal_type` (String) The kind of principal that receives permissions.
-- `resource_id` (String) The ID of the organization or project the binding is scoped to.
+- `resource_id` (String) The ID of the organization or project the binding is scoped to. Organization-scoped bindings report the organization ID here, unlike the `pinecone_role_binding` resource, which keeps `resource_id` null to match the config.
 - `resource_type` (String) The kind of resource scope the binding applies to.
 - `role` (String) The role assigned to the principal at the resource scope.

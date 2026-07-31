@@ -46,7 +46,7 @@ func (d *RoleBindingDataSource) Schema(ctx context.Context, req datasource.Schem
 				Computed:            true,
 			},
 			"resource_id": schema.StringAttribute{
-				MarkdownDescription: "The ID of the organization or project the binding is scoped to. Note that this always reports the server value, so an organization-scoped binding returns the organization ID — unlike the `pinecone_role_binding` resource, which keeps `resource_id` null under organization scope to match the config.",
+				MarkdownDescription: "The ID of the organization or project the binding is scoped to. Organization-scoped bindings report the organization ID here, unlike the `pinecone_role_binding` resource, which keeps `resource_id` null to match the config.",
 				Computed:            true,
 			},
 			"role": schema.StringAttribute{
