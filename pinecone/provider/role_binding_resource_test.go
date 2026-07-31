@@ -3,6 +3,7 @@ package provider
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -41,6 +42,58 @@ func TestAccRoleBindingResource(t *testing.T) {
 			},
 		},
 	})
+}
+
+// TestAccRoleBindingResource_scopeValidation exercises the plan-time
+// ConfigValidator. It needs no credentials: validation rejects the config before
+// the provider makes any API call, so the dummy credentials below are never used.
+func TestAccRoleBindingResource_scopeValidation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		config      string
+		expectError *regexp.Regexp
+	}{
+		{
+			name: "organization scope rejects resource_id",
+			config: `
+resource "pinecone_role_binding" "test" {
+  principal_id   = "00000000-0000-0000-0000-000000000000"
+  principal_type = "user"
+  resource_type  = "organization"
+  resource_id    = "00000000-0000-0000-0000-000000000001"
+  role           = "OrgMember"
+}`,
+			expectError: regexp.MustCompile("Unexpected resource_id"),
+		},
+		{
+			name: "project scope requires resource_id",
+			config: `
+resource "pinecone_role_binding" "test" {
+  principal_id   = "00000000-0000-0000-0000-000000000000"
+  principal_type = "user"
+  resource_type  = "project"
+  role           = "ProjectViewer"
+}`,
+			expectError: regexp.MustCompile("Missing resource_id"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			resource.Test(t, resource.TestCase{
+				ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+				Steps: []resource.TestStep{
+					{
+						Config:      testAccDummyAdminProviderConfig + tt.config,
+						ExpectError: tt.expectError,
+					},
+				},
+			})
+		})
+	}
 }
 
 func testAccRoleBindingResourceConfig(projectId string) string {

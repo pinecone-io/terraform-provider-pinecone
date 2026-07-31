@@ -3,6 +3,7 @@ package provider
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"testing"
 	"time"
 
@@ -40,6 +41,72 @@ func TestAccInviteResource(t *testing.T) {
 			},
 		},
 	})
+}
+
+// TestAccInviteResource_scopeValidation exercises the plan-time ConfigValidator
+// over the nested role_bindings list. It needs no credentials: validation rejects
+// the config before the provider makes any API call.
+func TestAccInviteResource_scopeValidation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		config      string
+		expectError *regexp.Regexp
+	}{
+		{
+			name: "organization binding rejects resource_id",
+			config: `
+resource "pinecone_invite" "test" {
+  email = "teammate@example.com"
+
+  role_bindings = [
+    {
+      resource_type = "organization"
+      role          = "OrgMember"
+      resource_id   = "00000000-0000-0000-0000-000000000001"
+    }
+  ]
+}`,
+			expectError: regexp.MustCompile("Unexpected resource_id"),
+		},
+		{
+			name: "project binding requires resource_id",
+			config: `
+resource "pinecone_invite" "test" {
+  email = "teammate@example.com"
+
+  role_bindings = [
+    {
+      resource_type = "organization"
+      role          = "OrgMember"
+    },
+    {
+      resource_type = "project"
+      role          = "ProjectViewer"
+    }
+  ]
+}`,
+			// The offending binding is the second one; the diagnostic must point
+			// at that index rather than the list as a whole.
+			expectError: regexp.MustCompile(`role_bindings\[1\]`),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			resource.Test(t, resource.TestCase{
+				ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+				Steps: []resource.TestStep{
+					{
+						Config:      testAccDummyAdminProviderConfig + tt.config,
+						ExpectError: tt.expectError,
+					},
+				},
+			})
+		})
+	}
 }
 
 func TestInviteEmailRegex(t *testing.T) {
