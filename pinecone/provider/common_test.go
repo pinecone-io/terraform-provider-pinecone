@@ -12,6 +12,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/pinecone-io/go-pinecone/v6/pinecone"
 )
 
@@ -39,6 +40,45 @@ func TestHasStatusCode(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := hasStatusCode(tt.err, tt.code); got != tt.want {
 				t.Errorf("hasStatusCode(%v, %d) = %v, want %v", tt.err, tt.code, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRoleBindingScopeError(t *testing.T) {
+	tests := []struct {
+		name         string
+		resourceType types.String
+		resourceId   types.String
+		wantOk       bool
+		wantSummary  string
+	}{
+		{"project with id", types.StringValue("project"), types.StringValue("proj-1"), true, ""},
+		{"project without id", types.StringValue("project"), types.StringNull(), false, "Missing resource_id"},
+		{"organization without id", types.StringValue("organization"), types.StringNull(), true, ""},
+		{"organization with id", types.StringValue("organization"), types.StringValue("org-1"), false, "Unexpected resource_id"},
+		// An unknown resource_id means the attribute is configured, just not yet
+		// resolved, so scope rules key on configured-ness and still apply.
+		{"project with unknown id", types.StringValue("project"), types.StringUnknown(), true, ""},
+		{"organization with unknown id", types.StringValue("organization"), types.StringUnknown(), false, "Unexpected resource_id"},
+		// An unknown or absent resource_type carries no scope to check; Create
+		// re-checks once the value is known.
+		{"unknown resource_type", types.StringUnknown(), types.StringNull(), true, ""},
+		{"null resource_type", types.StringNull(), types.StringValue("proj-1"), true, ""},
+		// Unrecognized scopes are left to the schema's OneOf validator and the API.
+		{"unrecognized resource_type", types.StringValue("nonsense"), types.StringValue("x"), true, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			summary, detail, ok := roleBindingScopeError(tt.resourceType, tt.resourceId)
+			if ok != tt.wantOk {
+				t.Fatalf("ok = %v, want %v (summary %q, detail %q)", ok, tt.wantOk, summary, detail)
+			}
+			if summary != tt.wantSummary {
+				t.Errorf("summary = %q, want %q", summary, tt.wantSummary)
+			}
+			if !ok && detail == "" {
+				t.Error("expected a non-empty detail alongside a failure")
 			}
 		})
 	}

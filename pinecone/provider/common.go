@@ -9,9 +9,40 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 	"github.com/pinecone-io/go-pinecone/v6/pinecone"
 )
+
+// roleBindingScopeError checks a role binding's resource_type against its
+// resource_id and returns the diagnostic to raise, or ok when they agree.
+// Project scope requires a resource_id; organization scope forbids one (the
+// server scopes the binding to the caller's organization automatically).
+//
+// It keys on whether resource_id is configured at all rather than on its value,
+// so an unknown resource_id — a project id from another resource, say —
+// validates correctly during plan. An unknown resource_type is skipped and
+// re-checked at apply, when its value is known.
+func roleBindingScopeError(resourceType, resourceId types.String) (summary, detail string, ok bool) {
+	if resourceType.IsNull() || resourceType.IsUnknown() {
+		return "", "", true
+	}
+
+	hasResourceId := !resourceId.IsNull()
+
+	switch resourceType.ValueString() {
+	case string(pinecone.ResourceTypeProject):
+		if !hasResourceId {
+			return "Missing resource_id", "resource_id is required when resource_type is \"project\".", false
+		}
+	case string(pinecone.ResourceTypeOrganization):
+		if hasResourceId {
+			return "Unexpected resource_id", "resource_id must be omitted when resource_type is \"organization\".", false
+		}
+	}
+
+	return "", "", true
+}
 
 // hasStatusCode reports whether err is (or wraps) a *pinecone.PineconeError
 // whose HTTP status code equals code. The SDK returns this typed error for all

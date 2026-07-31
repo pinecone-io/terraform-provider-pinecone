@@ -17,6 +17,32 @@ import (
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ resource.Resource = &RoleBindingResource{}
 var _ resource.ResourceWithImportState = &RoleBindingResource{}
+var _ resource.ResourceWithConfigValidators = &RoleBindingResource{}
+
+// roleBindingScopeValidator surfaces a resource_id/resource_type mismatch during
+// plan instead of waiting for the apply-time check in Create.
+type roleBindingScopeValidator struct{}
+
+func (v roleBindingScopeValidator) Description(ctx context.Context) string {
+	return "Checks that resource_id is set for project-scoped bindings and omitted for organization-scoped ones."
+}
+
+func (v roleBindingScopeValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (v roleBindingScopeValidator) ValidateResource(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var data models.RoleBindingResourceModel
+
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if summary, detail, ok := roleBindingScopeError(data.ResourceType, data.ResourceId); !ok {
+		resp.Diagnostics.AddAttributeError(path.Root("resource_id"), summary, detail)
+	}
+}
 
 func NewRoleBindingResource() resource.Resource {
 	return &RoleBindingResource{PineconeResource: &PineconeResource{}}
@@ -29,6 +55,12 @@ type RoleBindingResource struct {
 
 func (r *RoleBindingResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_role_binding"
+}
+
+func (r *RoleBindingResource) ConfigValidators(ctx context.Context) []resource.ConfigValidator {
+	return []resource.ConfigValidator{
+		roleBindingScopeValidator{},
+	}
 }
 
 func (r *RoleBindingResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
@@ -119,20 +151,11 @@ func (r *RoleBindingResource) Create(ctx context.Context, req resource.CreateReq
 	resourceType := data.ResourceType.ValueString()
 	hasResourceId := !data.ResourceId.IsNull() && !data.ResourceId.IsUnknown()
 
-	// Validate resource_id against resource_type. For project scope it is
-	// required; for organization scope it must be omitted (the server assigns
-	// the organization ID, which we surface as a computed value).
-	switch resourceType {
-	case string(pinecone.ResourceTypeProject):
-		if !hasResourceId {
-			resp.Diagnostics.AddError("Missing resource_id", "resource_id is required when resource_type is \"project\".")
-			return
-		}
-	case string(pinecone.ResourceTypeOrganization):
-		if hasResourceId {
-			resp.Diagnostics.AddError("Unexpected resource_id", "resource_id must be omitted when resource_type is \"organization\".")
-			return
-		}
+	// Backstop for the plan-time roleBindingScopeValidator, which does not run on
+	// every path into Create (an import followed by an apply, for example).
+	if summary, detail, ok := roleBindingScopeError(data.ResourceType, data.ResourceId); !ok {
+		resp.Diagnostics.AddError(summary, detail)
+		return
 	}
 
 	createParams := &pinecone.CreateRoleBindingParams{

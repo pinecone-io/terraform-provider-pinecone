@@ -5,14 +5,17 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/datasourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/pinecone-io/go-pinecone/v6/pinecone"
 	"github.com/pinecone-io/terraform-provider-pinecone/pinecone/models"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ datasource.DataSource = &UserDataSource{}
+var _ datasource.DataSourceWithConfigValidators = &UserDataSource{}
 
 func NewUserDataSource() datasource.DataSource {
 	return &UserDataSource{PineconeDatasource: &PineconeDatasource{}}
@@ -25,6 +28,15 @@ type UserDataSource struct {
 
 func (d *UserDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_user"
+}
+
+func (d *UserDataSource) ConfigValidators(ctx context.Context) []datasource.ConfigValidator {
+	return []datasource.ConfigValidator{
+		datasourcevalidator.ExactlyOneOf(
+			path.MatchRoot("id"),
+			path.MatchRoot("email"),
+		),
+	}
 }
 
 func (d *UserDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
@@ -68,6 +80,7 @@ func (d *UserDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 
 	switch {
 	case hasId == hasEmail:
+		// Backstop for the plan-time ExactlyOneOf config validator.
 		resp.Diagnostics.AddError("Invalid lookup", "Exactly one of `id` or `email` must be set.")
 		return
 	case hasId:
@@ -79,20 +92,34 @@ func (d *UserDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 		data.Read(user)
 	case hasEmail:
 		email := data.Email.ValueString()
-		users, err := d.adminClient.User.List(ctx, &pinecone.ListUsersParams{Email: &email})
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to list users", err.Error())
-			return
-		}
+		listParams := &pinecone.ListUsersParams{Email: &email}
+
 		// The list email parameter is a server-side filter whose exactness is not
 		// guaranteed, so keep only exact case-insensitive matches to ensure a
-		// broadened server match can never resolve to the wrong user.
-		matches := make([]*pinecone.User, 0, len(users.Data))
-		for _, u := range users.Data {
-			if strings.EqualFold(u.Email, email) {
-				matches = append(matches, u)
+		// broadened server match can never resolve to the wrong user. Collect
+		// across every page for the same reason: a broadened filter could push
+		// the exact match off the first page and turn it into a false "not found".
+		matches := make([]*pinecone.User, 0, 1)
+		for {
+			users, err := d.adminClient.User.List(ctx, listParams)
+			if err != nil {
+				resp.Diagnostics.AddError("Failed to list users", err.Error())
+				return
 			}
+
+			for _, u := range users.Data {
+				if strings.EqualFold(u.Email, email) {
+					matches = append(matches, u)
+				}
+			}
+
+			if users.Pagination == nil || users.Pagination.Next == "" {
+				break
+			}
+			next := users.Pagination.Next
+			listParams.PaginationToken = &next
 		}
+
 		switch len(matches) {
 		case 0:
 			resp.Diagnostics.AddError("User not found", fmt.Sprintf("No user found with email %q.", email))

@@ -14,6 +14,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/pinecone-io/go-pinecone/v6/pinecone"
 	"github.com/pinecone-io/terraform-provider-pinecone/pinecone/models"
 )
@@ -26,6 +28,58 @@ var emailRegex = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ resource.Resource = &InviteResource{}
 var _ resource.ResourceWithImportState = &InviteResource{}
+var _ resource.ResourceWithConfigValidators = &InviteResource{}
+
+// inviteRoleBindingScopeValidator surfaces a resource_id/resource_type mismatch
+// in any nested role binding during plan instead of waiting for the apply-time
+// check in Create.
+type inviteRoleBindingScopeValidator struct{}
+
+func (v inviteRoleBindingScopeValidator) Description(ctx context.Context) string {
+	return "Checks that each role binding sets resource_id for project scope and omits it for organization scope."
+}
+
+func (v inviteRoleBindingScopeValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (v inviteRoleBindingScopeValidator) ValidateResource(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	roleBindingsPath := path.Root("role_bindings")
+
+	var roleBindings types.List
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, roleBindingsPath, &roleBindings)...)
+	if resp.Diagnostics.HasError() || roleBindings.IsNull() || roleBindings.IsUnknown() {
+		return
+	}
+
+	// Convert one element at a time rather than with ElementsAs: a wholly unknown
+	// element cannot be read into a struct, and it carries no scope to check
+	// anyway, so it is skipped and left to the apply-time check in Create.
+	for i, element := range roleBindings.Elements() {
+		if element.IsNull() || element.IsUnknown() {
+			continue
+		}
+
+		object, isObject := element.(types.Object)
+		if !isObject {
+			continue
+		}
+
+		var binding models.InviteRoleBindingModel
+		diags := object.As(ctx, &binding, basetypes.ObjectAsOptions{})
+		if diags.HasError() {
+			continue
+		}
+
+		if summary, detail, ok := roleBindingScopeError(binding.ResourceType, binding.ResourceId); !ok {
+			resp.Diagnostics.AddAttributeError(
+				roleBindingsPath.AtListIndex(i).AtName("resource_id"),
+				summary,
+				fmt.Sprintf("role_bindings[%d]: %s", i, detail),
+			)
+		}
+	}
+}
 
 func NewInviteResource() resource.Resource {
 	return &InviteResource{PineconeResource: &PineconeResource{}}
@@ -38,6 +92,12 @@ type InviteResource struct {
 
 func (r *InviteResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_invite"
+}
+
+func (r *InviteResource) ConfigValidators(ctx context.Context) []resource.ConfigValidator {
+	return []resource.ConfigValidator{
+		inviteRoleBindingScopeValidator{},
+	}
 }
 
 func (r *InviteResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
@@ -143,17 +203,11 @@ func (r *InviteResource) Create(ctx context.Context, req resource.CreateRequest,
 		resourceType := rb.ResourceType.ValueString()
 		hasResourceId := !rb.ResourceId.IsNull() && !rb.ResourceId.IsUnknown()
 
-		switch resourceType {
-		case string(pinecone.ResourceTypeProject):
-			if !hasResourceId {
-				resp.Diagnostics.AddError("Missing resource_id", fmt.Sprintf("role_bindings[%d]: resource_id is required when resource_type is \"project\".", i))
-				return
-			}
-		case string(pinecone.ResourceTypeOrganization):
-			if hasResourceId {
-				resp.Diagnostics.AddError("Unexpected resource_id", fmt.Sprintf("role_bindings[%d]: resource_id must be omitted when resource_type is \"organization\".", i))
-				return
-			}
+		// Backstop for the plan-time inviteRoleBindingScopeValidator, which does
+		// not run on every path into Create and skips unknown bindings.
+		if summary, detail, ok := roleBindingScopeError(rb.ResourceType, rb.ResourceId); !ok {
+			resp.Diagnostics.AddError(summary, fmt.Sprintf("role_bindings[%d]: %s", i, detail))
+			return
 		}
 
 		input := pinecone.RoleBindingInput{
