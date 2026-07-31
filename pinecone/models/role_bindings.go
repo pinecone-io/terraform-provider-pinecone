@@ -18,6 +18,17 @@ type RoleBindingResourceModel struct {
 	CreatedAt     types.String `tfsdk:"created_at"`
 }
 
+// RoleBindingDataSourceModel defines the role binding model for the singular data source.
+type RoleBindingDataSourceModel struct {
+	Id            types.String `tfsdk:"id"`
+	PrincipalId   types.String `tfsdk:"principal_id"`
+	PrincipalType types.String `tfsdk:"principal_type"`
+	ResourceId    types.String `tfsdk:"resource_id"`
+	ResourceType  types.String `tfsdk:"resource_type"`
+	Role          types.String `tfsdk:"role"`
+	CreatedAt     types.String `tfsdk:"created_at"`
+}
+
 // RoleBindingsDataSourceModel defines the role bindings list model for the data source.
 type RoleBindingsDataSourceModel struct {
 	PrincipalType types.String       `tfsdk:"principal_type"`
@@ -57,6 +68,21 @@ func SetRoleBindingResourceModel(data *RoleBindingResourceModel, rb *pinecone.Ro
 	}
 	data.Role = types.StringValue(rb.Role)
 	data.CreatedAt = types.StringValue(rb.CreatedAt.Format(time.RFC3339))
+}
+
+// Read populates the RoleBindingDataSourceModel from a pinecone.RoleBinding.
+// Unlike the resource model, resource_id always carries the server value — for
+// organization scope that is the organization ID. A data source is read-only, so
+// there is no drift or replace concern, and reporting the real scope is more
+// useful than hiding it.
+func (m *RoleBindingDataSourceModel) Read(rb *pinecone.RoleBinding) {
+	m.Id = types.StringValue(rb.Id)
+	m.PrincipalId = types.StringValue(rb.PrincipalId)
+	m.PrincipalType = types.StringValue(string(rb.PrincipalType))
+	m.ResourceId = types.StringValue(rb.ResourceId)
+	m.ResourceType = types.StringValue(string(rb.ResourceType))
+	m.Role = types.StringValue(rb.Role)
+	m.CreatedAt = types.StringValue(rb.CreatedAt.Format(time.RFC3339))
 }
 
 // NewRoleBindingModel creates a new RoleBindingModel from a pinecone.RoleBinding.

@@ -26,6 +26,19 @@ type InviteRoleBindingModel struct {
 	ResourceId   types.String `tfsdk:"resource_id"`
 }
 
+// InviteDataSourceModel defines the invite model for the singular data source.
+// It intentionally has no role_bindings field: the invite endpoint does not
+// return the granted roles. Use the pinecone_role_bindings data source with
+// principal_type = "invite" to read those.
+type InviteDataSourceModel struct {
+	Id          types.String `tfsdk:"id"`
+	Email       types.String `tfsdk:"email"`
+	Status      types.String `tfsdk:"status"`
+	CreatedAt   types.String `tfsdk:"created_at"`
+	ExpiresAt   types.String `tfsdk:"expires_at"`
+	ProcessedAt types.String `tfsdk:"processed_at"`
+}
+
 // InvitesDataSourceModel defines the invites list model for the data source.
 type InvitesDataSourceModel struct {
 	Invites []InviteModel `tfsdk:"invites"`
@@ -52,6 +65,16 @@ func SetInviteResourceModel(data *InviteResourceModel, invite *pinecone.Invite) 
 	data.CreatedAt = types.StringValue(invite.CreatedAt.Format(time.RFC3339))
 	data.ExpiresAt = formatOptionalTime(invite.ExpiresAt)
 	data.ProcessedAt = formatOptionalTime(invite.ProcessedAt)
+}
+
+// Read populates the InviteDataSourceModel from a pinecone.Invite.
+func (m *InviteDataSourceModel) Read(invite *pinecone.Invite) {
+	m.Id = types.StringValue(invite.Id)
+	m.Email = types.StringValue(invite.Email)
+	m.Status = types.StringValue(string(invite.Status))
+	m.CreatedAt = types.StringValue(invite.CreatedAt.Format(time.RFC3339))
+	m.ExpiresAt = formatOptionalTime(invite.ExpiresAt)
+	m.ProcessedAt = formatOptionalTime(invite.ProcessedAt)
 }
 
 // NewInviteModel creates a new InviteModel from a pinecone.Invite.
