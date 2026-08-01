@@ -68,7 +68,7 @@ resource "pinecone_invite" "project_editor" {
 
 - `created_at` (String) The timestamp when the invite was created.
 - `expires_at` (String) The timestamp when the invite expires if not accepted. The default TTL is 7 days.
-- `id` (String) The unique ID of the invite. Use this as the `principal_id`, with `principal_type = "invite"`, to look up the invite's role bindings.
+- `id` (String) The unique ID of the invite. Pass it as `principal_id` to the `pinecone_role_bindings` data source, with `principal_type = "invite"`, to read the roles this invite granted. The `pinecone_role_binding` resource does not accept `invite` as a principal type, because the server moves those bindings to the user principal on acceptance.
 - `processed_at` (String) The timestamp when the invite was accepted. Null while the invite is still pending or expired.
 - `status` (String) The lifecycle status of the invite: `pending`, `expired`, or `processed`.
 

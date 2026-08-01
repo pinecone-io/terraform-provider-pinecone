@@ -3,12 +3,12 @@
 page_title: "pinecone_role_binding Resource - terraform-provider-pinecone"
 subcategory: ""
 description: |-
-  The pinecone_role_binding resource lets you grant a role to a principal (user, service account, API key, or invite) at organization or project scope. Role bindings are immutable: changing any attribute forces the binding to be recreated. Learn more about roles in the docs https://docs.pinecone.io/guides/organizations/understanding-organizations#roles.
+  The pinecone_role_binding resource lets you grant a role to a principal (user, service account, or API key) at organization or project scope. Role bindings are immutable: changing any attribute forces the binding to be recreated. Bindings for a pending invite are not managed here — grant those with pinecone_invite.role_bindings, which the server moves to the user principal when the invite is accepted. Learn more about roles in the docs https://docs.pinecone.io/guides/organizations/understanding-organizations#roles.
 ---
 
 # pinecone_role_binding (Resource)
 
-The `pinecone_role_binding` resource lets you grant a role to a principal (user, service account, API key, or invite) at organization or project scope. Role bindings are immutable: changing any attribute forces the binding to be recreated. Learn more about roles in the [docs](https://docs.pinecone.io/guides/organizations/understanding-organizations#roles).
+The `pinecone_role_binding` resource lets you grant a role to a principal (user, service account, or API key) at organization or project scope. Role bindings are immutable: changing any attribute forces the binding to be recreated. Bindings for a pending invite are not managed here — grant those with `pinecone_invite.role_bindings`, which the server moves to the user principal when the invite is accepted. Learn more about roles in the [docs](https://docs.pinecone.io/guides/organizations/understanding-organizations#roles).
 
 ## Example Usage
 
@@ -51,8 +51,8 @@ resource "pinecone_role_binding" "project_editor" {
 
 ### Required
 
-- `principal_id` (String) The ID of the principal to grant the role to. A UUID for all principal types (the user, service account, API key, or invite ID).
-- `principal_type` (String) The kind of principal that receives permissions. Valid values are: `user`, `service_account`, `api_key`, `invite`.
+- `principal_id` (String) The ID of the principal to grant the role to. A UUID for all principal types (the user, service account, or API key ID).
+- `principal_type` (String) The kind of principal that receives permissions. Valid values are: `user`, `service_account`, `api_key`. `invite` is not accepted here — an invite's bindings move to the user principal when the invite is accepted, so Terraform cannot manage them across that transition. Grant roles at invite time with `pinecone_invite.role_bindings`, then manage them with `principal_type = "user"` afterwards.
 - `resource_type` (String) The kind of resource scope the binding applies to. Valid values are: `organization`, `project`.
 - `role` (String) The role to assign to the principal at the resource scope. Organization-scoped values: `OrgOwner`, `OrgManager`, `OrgBillingAdmin`, `OrgMember`. Project-scoped values: `ProjectOwner`, `ProjectManager`, `ProjectMember`, `ProjectEditor`, `ProjectViewer`, `ControlPlaneEditor`, `ControlPlaneViewer`, `DataPlaneEditor`, `DataPlaneViewer`.
 

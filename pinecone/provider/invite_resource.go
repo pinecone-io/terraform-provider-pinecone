@@ -114,7 +114,7 @@ func (r *InviteResource) Schema(ctx context.Context, req resource.SchemaRequest,
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				MarkdownDescription: "The unique ID of the invite. Use this as the `principal_id`, with `principal_type = \"invite\"`, to look up the invite's role bindings.",
+				MarkdownDescription: "The unique ID of the invite. Pass it as `principal_id` to the `pinecone_role_bindings` data source, with `principal_type = \"invite\"`, to read the roles this invite granted. The `pinecone_role_binding` resource does not accept `invite` as a principal type, because the server moves those bindings to the user principal on acceptance.",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),

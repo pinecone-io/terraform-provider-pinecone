@@ -2,6 +2,9 @@ package provider
 
 import (
 	"context"
+	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -18,6 +21,68 @@ import (
 var _ resource.Resource = &RoleBindingResource{}
 var _ resource.ResourceWithImportState = &RoleBindingResource{}
 var _ resource.ResourceWithConfigValidators = &RoleBindingResource{}
+
+// roleBindingPrincipalTypes are the principal types whose bindings Terraform can
+// track for the lifetime of the resource.
+//
+// "invite" is deliberately absent. When an invitee accepts, the server re-points
+// their existing bindings to the new user principal — the same binding id and
+// created_at, with principal_type flipped from "invite" to "user". A managed
+// invite binding would therefore refresh into a principal that no longer matches
+// its config, and because principal_type and principal_id both force replacement,
+// the next apply would delete the binding (revoking the user's real role) and try
+// to recreate it against an already-processed invite.
+//
+// Reading invite bindings is unaffected: the pinecone_role_bindings data source
+// still accepts principal_type = "invite" as a filter.
+var roleBindingPrincipalTypes = []string{
+	string(pinecone.PrincipalTypeUser),
+	string(pinecone.PrincipalTypeServiceAccount),
+	string(pinecone.PrincipalTypeAPIKey),
+}
+
+// roleBindingPrincipalTypeValidator restricts principal_type to the trackable
+// types. It exists instead of a plain stringvalidator.OneOf so that "invite" —
+// which the API accepts and which users will reasonably reach for — gets an
+// explanation and a redirect rather than being silently missing from a list.
+type roleBindingPrincipalTypeValidator struct{}
+
+func (v roleBindingPrincipalTypeValidator) Description(ctx context.Context) string {
+	return fmt.Sprintf("Must be one of: %s. \"invite\" is not supported because the server re-points invite bindings to the user principal on acceptance.", strings.Join(roleBindingPrincipalTypes, ", "))
+}
+
+func (v roleBindingPrincipalTypeValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (v roleBindingPrincipalTypeValidator) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+
+	value := req.ConfigValue.ValueString()
+	if slices.Contains(roleBindingPrincipalTypes, value) {
+		return
+	}
+
+	if value == string(pinecone.PrincipalTypeInvite) {
+		resp.Diagnostics.AddAttributeError(
+			req.Path,
+			"Unsupported principal_type",
+			"principal_type \"invite\" is not supported by pinecone_role_binding. When the invitee accepts, the server moves this binding to their new user principal, "+
+				"which Terraform would see as a changed principal and resolve by deleting the binding — revoking the role it had just granted.\n\n"+
+				"Grant roles at invite time with `pinecone_invite.role_bindings`, and manage them with `pinecone_role_binding` using principal_type = \"user\" once the invite is accepted. "+
+				"To read an invite's bindings, use the `pinecone_role_bindings` data source, which does accept principal_type = \"invite\".",
+		)
+		return
+	}
+
+	resp.Diagnostics.AddAttributeError(
+		req.Path,
+		"Invalid principal_type",
+		fmt.Sprintf("principal_type must be one of: %s. Got: %q.", strings.Join(roleBindingPrincipalTypes, ", "), value),
+	)
+}
 
 // roleBindingScopeValidator surfaces a resource_id/resource_type mismatch during
 // plan instead of waiting for the apply-time check in Create.
@@ -65,7 +130,7 @@ func (r *RoleBindingResource) ConfigValidators(ctx context.Context) []resource.C
 
 func (r *RoleBindingResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "The `pinecone_role_binding` resource lets you grant a role to a principal (user, service account, API key, or invite) at organization or project scope. Role bindings are immutable: changing any attribute forces the binding to be recreated. Learn more about roles in the [docs](https://docs.pinecone.io/guides/organizations/understanding-organizations#roles).",
+		MarkdownDescription: "The `pinecone_role_binding` resource lets you grant a role to a principal (user, service account, or API key) at organization or project scope. Role bindings are immutable: changing any attribute forces the binding to be recreated. Bindings for a pending invite are not managed here — grant those with `pinecone_invite.role_bindings`, which the server moves to the user principal when the invite is accepted. Learn more about roles in the [docs](https://docs.pinecone.io/guides/organizations/understanding-organizations#roles).",
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
@@ -76,22 +141,17 @@ func (r *RoleBindingResource) Schema(ctx context.Context, req resource.SchemaReq
 				},
 			},
 			"principal_id": schema.StringAttribute{
-				MarkdownDescription: "The ID of the principal to grant the role to. A UUID for all principal types (the user, service account, API key, or invite ID).",
+				MarkdownDescription: "The ID of the principal to grant the role to. A UUID for all principal types (the user, service account, or API key ID).",
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"principal_type": schema.StringAttribute{
-				MarkdownDescription: "The kind of principal that receives permissions. Valid values are: `user`, `service_account`, `api_key`, `invite`.",
+				MarkdownDescription: "The kind of principal that receives permissions. Valid values are: `user`, `service_account`, `api_key`. `invite` is not accepted here — an invite's bindings move to the user principal when the invite is accepted, so Terraform cannot manage them across that transition. Grant roles at invite time with `pinecone_invite.role_bindings`, then manage them with `principal_type = \"user\"` afterwards.",
 				Required:            true,
 				Validators: []validator.String{
-					stringvalidator.OneOf(
-						string(pinecone.PrincipalTypeUser),
-						string(pinecone.PrincipalTypeServiceAccount),
-						string(pinecone.PrincipalTypeAPIKey),
-						string(pinecone.PrincipalTypeInvite),
-					),
+					roleBindingPrincipalTypeValidator{},
 				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
