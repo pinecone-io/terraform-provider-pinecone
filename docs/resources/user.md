@@ -48,3 +48,19 @@ resource "pinecone_user" "example" {
 
 - `email` (String) The user's email address.
 - `name` (String) The user's display name. Null if the user has not set one.
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+# Users cannot be created through Terraform — they join the organization by
+# accepting an invite — so importing is the only way to bring one under
+# management. Once imported, destroying the resource removes the user from the
+# organization.
+#
+# Find the user's ID with the pinecone_user data source, which accepts an email.
+terraform import pinecone_user.example 495a1437-79de-4121-9326-c0d3aa6090f8
+```

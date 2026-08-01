@@ -11,6 +11,11 @@ provider "pinecone" {
   client_secret = "your-client-secret"
 }
 
+# role_bindings grants the invitee's initial roles. When the invite is accepted,
+# the server moves those bindings to the new user principal — the same bindings,
+# reassigned — so the roles carry over without being reissued. From that point on
+# manage them with pinecone_role_binding using principal_type = "user".
+#
 # Invite a user as an organization member.
 resource "pinecone_invite" "member" {
   email = "teammate@example.com"

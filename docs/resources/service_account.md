@@ -76,3 +76,18 @@ output "example_client_secret" {
 - `created_at` (String) The timestamp when the service account was created.
 - `id` (String) Service account identifier. Use this as the `principal_id` when creating a `pinecone_role_binding`.
 - `updated_at` (String) The timestamp of the service account's most recent metadata update.
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+# Import a service account by its ID.
+#
+# Note that client_secret cannot be imported: the API returns it only once, at
+# creation or rotation, so it stays empty in state for an imported service
+# account. Change rotate_trigger to issue and store a new secret.
+terraform import pinecone_service_account.example 8c1d4e7a-3f92-4b18-9d5c-6a2e0b7f1c34
+```
