@@ -57,9 +57,12 @@ func (r *ApiKeyResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				Optional:            true,
 			},
 			"key": schema.StringAttribute{
-				MarkdownDescription: "The generated API key value.",
-				Computed:            true,
-				Sensitive:           true,
+				MarkdownDescription: "The generated API key value. Returned only once, at creation. " +
+					"**This value is stored in plaintext in Terraform state.** `Sensitive` redacts it from CLI " +
+					"output and logs but does not encrypt it in state — secure your state backend (encryption at " +
+					"rest, restricted access) and never commit state to version control.",
+				Computed:  true,
+				Sensitive: true,
 			},
 			"roles": schema.SetAttribute{
 				ElementType:         types.StringType,
