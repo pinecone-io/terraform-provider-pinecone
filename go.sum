@@ -179,8 +179,8 @@ github.com/oapi-codegen/runtime v1.6.0 h1:7Xx+GlueD6nRuyKoCPzL434Jfi3BetbiJOrzCH
 github.com/oapi-codegen/runtime v1.6.0/go.mod h1:GwV7hC2hviaMzj+ITfHVRESK5J2W/GefVwIND/bMGvU=
 github.com/oklog/run v1.2.0 h1:O8x3yXwah4A73hJdlrwo/2X6J62gE5qTMusH0dvz60E=
 github.com/oklog/run v1.2.0/go.mod h1:mgDbKRSwPhJfesJ4PntqFUbKQRZ50NgmZTSPlFA0YFk=
-github.com/pinecone-io/go-pinecone/v6 v6.0.0 h1:qj9u+nhn24wZ9Ghi79XS5AT3qNvJnAfd14ipbrY+C1M=
-github.com/pinecone-io/go-pinecone/v6 v6.0.0/go.mod h1:qaJTGfFdxjYwX1pM6/c21ZWaL7TYMWVODycz/kq63MI=
+github.com/pinecone-io/go-pinecone/v6 v6.1.0 h1:3HuWky6AaLuuyxyTqyHPwXVVVpmOBIJM2BjF0HgqZVg=
+github.com/pinecone-io/go-pinecone/v6 v6.1.0/go.mod h1:qaJTGfFdxjYwX1pM6/c21ZWaL7TYMWVODycz/kq63MI=
 github.com/pjbgf/sha1cd v0.3.2 h1:a9wb0bp1oC2TGwStyn0Umc/IGKQnEgF0vVaZ8QF8eo4=
 github.com/pjbgf/sha1cd v0.3.2/go.mod h1:zQWigSxVmsHEZow5qaLtPYxpcKMMQpa09ixqBxuCS6A=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
