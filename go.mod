@@ -1,6 +1,6 @@
 module github.com/pinecone-io/terraform-provider-pinecone
 
-go 1.25.8
+go 1.25.13
 
 require (
 	github.com/hashicorp/terraform-plugin-docs v0.25.0
