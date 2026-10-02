@@ -9,7 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/path"
-	"github.com/pinecone-io/go-pinecone/v6/pinecone"
+	"github.com/pinecone-io/go-pinecone/v7/pinecone"
 	"github.com/pinecone-io/terraform-provider-pinecone/pinecone/models"
 )
 

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int32planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int32validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -29,18 +31,20 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
-	"github.com/pinecone-io/go-pinecone/v6/pinecone"
+	"github.com/pinecone-io/go-pinecone/v7/pinecone"
 	"github.com/pinecone-io/terraform-provider-pinecone/pinecone/models"
 )
 
 const (
 	defaultIndexCreateTimeout time.Duration = 10 * time.Minute
+	defaultIndexUpdateTimeout time.Duration = 10 * time.Minute
 	defaultIndexDeleteTimeout time.Duration = 10 * time.Minute
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ resource.Resource = &IndexResource{}
 var _ resource.ResourceWithImportState = &IndexResource{}
+var _ resource.ResourceWithModifyPlan = &IndexResource{}
 
 func NewIndexResource() resource.Resource {
 	return &IndexResource{PineconeResource: &PineconeResource{}}
@@ -144,8 +148,10 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				Optional:    true,
 				Attributes: map[string]schema.Attribute{
 					"pod": schema.SingleNestedAttribute{
-						Description: "Configuration needed to deploy a pod-based index.",
-						Optional:    true,
+						MarkdownDescription: "Configuration of an existing pod-based index. New pod-based indexes can't be created: " +
+							"Pinecone API version 2026-07 doesn't support it. Existing pod-based indexes can still be imported, " +
+							"scaled with `replicas` and `pod_type`, and deleted.",
+						Optional: true,
 						Attributes: map[string]schema.Attribute{
 							"environment": schema.StringAttribute{
 								MarkdownDescription: "The environment where the index is hosted.",
@@ -155,12 +161,12 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 								},
 							},
 							"replicas": schema.Int64Attribute{
-								MarkdownDescription: "The number of replicas. Replicas duplicate your index. They provide higher availability and throughput. Replicas can be scaled up or down as your needs change.",
+								MarkdownDescription: "The number of replicas. Replicas duplicate your index. They provide higher availability and throughput. Replicas can be scaled up or down in place.",
 								Optional:            true,
 								Computed:            true,
 								Default:             int64default.StaticInt64(1),
-								PlanModifiers: []planmodifier.Int64{
-									int64planmodifier.RequiresReplace(),
+								Validators: []validator.Int64{
+									int64validator.AtLeast(1),
 								},
 							},
 							"shards": schema.Int64Attribute{
@@ -173,18 +179,16 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 								},
 							},
 							"pod_type": schema.StringAttribute{
-								MarkdownDescription: "The type of pod to use. One of s1, p1, or p2 appended with . and one of x1, x2, x4, or x8.",
-								Required:            true,
-								PlanModifiers: []planmodifier.String{
-									stringplanmodifier.RequiresReplace(),
-								},
+								MarkdownDescription: "The type of pod to use. One of s1, p1, or p2 appended with . and one of x1, x2, x4, or x8. " +
+									"The pod size can be increased in place, for example from `p1.x1` to `p1.x2`. It can't be decreased, and the pod family can't be changed.",
+								Required: true,
 							},
 							"pods": schema.Int64Attribute{
 								MarkdownDescription: "The number of pods to be used in the index. This should be equal to shards x replicas.'",
 								Computed:            true,
 							},
 							"metadata_config": schema.SingleNestedAttribute{
-								Description: "Configuration for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when metadata_config is present, only specified metadata fields are indexed. These configurations are only valid for use with pod-based indexes.",
+								Description: "Configuration for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when metadata_config is present, only specified metadata fields are indexed. These configurations are only valid for use with pod-based indexes. The API no longer reports this setting, so the value recorded in state is kept.",
 								Optional:    true,
 								Computed:    true,
 								Attributes: map[string]schema.Attribute{
@@ -196,7 +200,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 								},
 							},
 							"source_collection": schema.StringAttribute{
-								MarkdownDescription: "The name of the collection to create an index from.",
+								MarkdownDescription: "The name of the collection the index was created from. Creating an index from a collection is no longer supported.",
 								Optional:            true,
 								PlanModifiers: []planmodifier.String{
 									stringplanmodifier.RequiresReplace(),
@@ -244,7 +248,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				},
 			},
 			"embed": schema.SingleNestedAttribute{
-				Description: `Specify the integrated inference embedding configuration for the index. Once set, the model cannot be changed. However, you can later update the embedding configuration—including field map, read parameters, and write parameters.
+				Description: `Specify the integrated inference embedding configuration for the index. It can only be set when the index is created: ` + "`model`" + ` and ` + "`field_map`" + ` can't be changed afterwards, and ` + "`embed`" + ` can't be added to or removed from an existing index. ` + "`read_parameters`" + ` and ` + "`write_parameters`" + ` can be updated in place.
 
 Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details.`,
 				Optional: true,
@@ -342,7 +346,7 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 						Computed:    true,
 					},
 					"state": schema.StringAttribute{
-						MarkdownDescription: "Initializing InitializationFailed ScalingUp ScalingDown ScalingUpPodSize ScalingDownPodSize Upgrading Terminating Ready",
+						MarkdownDescription: "Initializing InitializationFailed ScalingUp ScalingDown ScalingUpPodSize Terminating Ready Failed Disabled",
 						Computed:            true,
 					},
 				},
@@ -353,6 +357,10 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 				timeouts.Opts{
 					Create: true,
 					CreateDescription: `Timeout defaults to 5 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) ` +
+						`consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are ` +
+						`"s" (seconds), "m" (minutes), "h" (hours).`,
+					Update: true,
+					UpdateDescription: `How long to wait for a pod-based index to finish scaling. Defaults to 10 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) ` +
 						`consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are ` +
 						`"s" (seconds), "m" (minutes), "h" (hours).`,
 					Delete: true,
@@ -421,60 +429,13 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	// Prepare the payload for the API request
+	// Prepare the payload for the API request. ModifyPlan rejects spec.pod on create; this guards
+	// against a plan that skipped it.
 	if spec.Pod != nil {
-		// If trying to create a pod index with an embed configuration, reject
-		if embed != nil {
-			resp.Diagnostics.AddError("Invalid configuration", "Pod-based indexes cannot have an embed configuration.")
-			return
-		}
-
-		if data.VectorType.ValueString() == "sparse" {
-			resp.Diagnostics.AddError("Invalid configuration", "Pod-based indexes cannot have a sparse vector_type.")
-			return
-		}
-
-		if data.Dimension.IsUnknown() || data.Dimension.IsNull() {
-			resp.Diagnostics.AddError("Invalid configuration", "Pod-based indexes must have a dimension.")
-			return
-		}
-
-		metric := pinecone.IndexMetric(data.Metric.ValueString())
-		deletionProtection := pinecone.DeletionProtection(data.DeletionProtection.ValueString())
-		podReq := pinecone.CreatePodIndexRequest{
-			Name:               data.Name.ValueString(),
-			Dimension:          data.Dimension.ValueInt32(),
-			Metric:             &metric,
-			DeletionProtection: &deletionProtection,
-			Environment:        spec.Pod.Environment.ValueString(),
-			PodType:            spec.Pod.PodType.ValueString(),
-			Shards:             int32(spec.Pod.ShardCount.ValueInt64()),
-			Replicas:           int32(spec.Pod.Replicas.ValueInt64()),
-		}
-
-		if tags != nil {
-			podReq.Tags = &tags
-		}
-
-		if !spec.Pod.SourceCollection.IsUnknown() {
-			podReq.SourceCollection = spec.Pod.SourceCollection.ValueStringPointer()
-		}
-
-		var metadataConfig *pinecone.PodSpecMetadataConfig
-		if !spec.Pod.MetadataConfig.IsUnknown() {
-			resp.Diagnostics.Append(spec.Pod.MetadataConfig.As(ctx, &metadataConfig, basetypes.ObjectAsOptions{})...)
-			if resp.Diagnostics.HasError() {
-				return
-			}
-		}
-		podReq.MetadataConfig = metadataConfig
-
-		_, err := r.client.CreatePodIndex(ctx, &podReq)
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to create pod index", err.Error())
-			return
-		}
-	} else if spec.Serverless != nil {
+		resp.Diagnostics.AddError(podCreateUnsupportedSummary, podCreateUnsupportedDetail)
+		return
+	}
+	if spec.Serverless != nil {
 		metric := pinecone.IndexMetric(data.Metric.ValueString())
 		deletionProtection := pinecone.DeletionProtection(data.DeletionProtection.ValueString())
 
@@ -641,12 +602,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 			return retry.NonRetryableError(fmt.Errorf("setting state: %v", resp.Diagnostics))
 		}
 
-		// Retry if the index is not ready
-		if !index.Status.Ready && index.Status.State != "Ready" {
-			return retry.RetryableError(fmt.Errorf("index not ready. State: %s", index.Status.State))
-		}
-
-		return nil
+		return indexReadyRetry(index)
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to wait for index to become ready.", err.Error())
@@ -752,55 +708,49 @@ func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		configureRequest.Tags = mergeTags(oldTagsMap, newTagsMap)
 	}
 
-	// Update Embed fields if possible.
-	// Guard: newData.Embed may be null or unknown when embed is Optional+Computed and the
-	// user didn't configure it. In that case UseStateForUnknown may produce a null/unknown
-	// plan value even when data.Embed != newData.Embed (type differences). Skip the update.
-	if !newData.Embed.Equal(data.Embed) && !newData.Embed.IsNull() && !newData.Embed.IsUnknown() {
-		var embedConfig pinecone.ConfigureIndexEmbed
-
-		var embedModel models.IndexEmbedResourceModel
-		resp.Diagnostics.Append(newData.Embed.As(ctx, &embedModel, basetypes.ObjectAsOptions{})...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-		// data.Embed (prior state) is null when upgrading a non-integrated index to integrated.
-		// Use a zero-value model in that case; Model.IsNull() will be true and the upgrade path fires.
-		var oldEmbedModel models.IndexEmbedResourceModel
-		if !data.Embed.IsNull() && !data.Embed.IsUnknown() {
-			resp.Diagnostics.Append(data.Embed.As(ctx, &oldEmbedModel, basetypes.ObjectAsOptions{})...)
-			if resp.Diagnostics.HasError() {
-				return
-			}
-		}
-		var spec models.IndexSpecModel
-		resp.Diagnostics.Append(data.Spec.As(ctx, &spec, basetypes.ObjectAsOptions{})...)
+	// Update the embedding model's read and write parameters. ModifyPlan rejects every other embed
+	// change on an existing index, since 2026-07 can't change the model or field map in place.
+	if !data.Embed.IsNull() && !data.Embed.IsUnknown() && !newData.Embed.IsNull() && !newData.Embed.IsUnknown() {
+		var oldEmbed, newEmbed models.IndexEmbedResourceModel
+		resp.Diagnostics.Append(data.Embed.As(ctx, &oldEmbed, basetypes.ObjectAsOptions{})...)
+		resp.Diagnostics.Append(newData.Embed.As(ctx, &newEmbed, basetypes.ObjectAsOptions{})...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
 
-		// if existing Embed is present update it
-		if !oldEmbedModel.Model.IsUnknown() && !oldEmbedModel.Model.IsNull() {
-			// can only update field_map, read_parameters, and write_parameters for existing integrated index
-			embedConfig.FieldMap = mapAttrToInterfacePtr(embedModel.FieldMap)
-			embedConfig.ReadParameters = mapAttrToInterfacePtr(embedModel.ReadParameters)
-			embedConfig.WriteParameters = mapAttrToInterfacePtr(embedModel.WriteParameters)
-		} else {
-			// if existing Embed is not present upgrade to an integrated model (serverless only)
-			if spec.Pod != nil {
-				resp.Diagnostics.AddError("Invalid configuration", "Pod-based indexes cannot have an embed configuration.")
+		readChanged := !newEmbed.ReadParameters.IsUnknown() && !newEmbed.ReadParameters.Equal(oldEmbed.ReadParameters)
+		writeChanged := !newEmbed.WriteParameters.IsUnknown() && !newEmbed.WriteParameters.Equal(oldEmbed.WriteParameters)
+		if readChanged || writeChanged {
+			fieldName, ok := semanticTextFieldName(oldEmbed.FieldMap)
+			if !ok {
+				resp.Diagnostics.AddError("Failed to update index", "Couldn't determine the embedded text field from embed.field_map.")
 				return
 			}
-			if spec.BYOC != nil {
-				resp.Diagnostics.AddError("Invalid configuration", "BYOC indexes cannot have an embed configuration.")
-				return
+			var field pinecone.ConfigureSemanticTextField
+			if readChanged {
+				field.ReadParameters = mapAttrToInterfacePtr(newEmbed.ReadParameters)
 			}
-			embedConfig.Model = embedModel.Model.ValueStringPointer()
-			embedConfig.FieldMap = mapAttrToInterfacePtr(embedModel.FieldMap)
-			embedConfig.ReadParameters = mapAttrToInterfacePtr(embedModel.ReadParameters)
-			embedConfig.WriteParameters = mapAttrToInterfacePtr(embedModel.WriteParameters)
+			if writeChanged {
+				field.WriteParameters = mapAttrToInterfacePtr(newEmbed.WriteParameters)
+			}
+			configureRequest.Schema = &pinecone.ConfigureIndexSchema{
+				Fields: map[string]pinecone.ConfigureSemanticTextField{fieldName: field},
+			}
 		}
-		configureRequest.Embed = &embedConfig
+	}
+
+	// Scale a pod-based index. ModifyPlan rejects pod_type changes the API can't apply.
+	oldPod, newPod := extractPodSpec(ctx, data.Spec, &resp.Diagnostics), extractPodSpec(ctx, newData.Spec, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if oldPod != nil && newPod != nil {
+		if !newPod.Replicas.IsUnknown() && !newPod.Replicas.Equal(oldPod.Replicas) {
+			configureRequest.Replicas = int32(newPod.Replicas.ValueInt64())
+		}
+		if !newPod.PodType.IsUnknown() && !newPod.PodType.Equal(oldPod.PodType) {
+			configureRequest.PodType = newPod.PodType.ValueString()
+		}
 	}
 
 	// Update ReadCapacity if it has changed (serverless and BYOC only)
@@ -829,7 +779,8 @@ func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	}
 
 	// send configure index request if there are things that have been updated
-	if configureRequest.DeletionProtection != "" || configureRequest.Embed != nil || configureRequest.Tags != nil || configureRequest.ReadCapacity != nil {
+	if configureRequest.DeletionProtection != "" || configureRequest.Schema != nil || configureRequest.Tags != nil ||
+		configureRequest.ReadCapacity != nil || configureRequest.PodType != "" || configureRequest.Replicas != 0 {
 		_, err := r.client.ConfigureIndex(ctx, data.Name.ValueString(), configureRequest)
 		if err != nil {
 			resp.Diagnostics.AddError("Failed to update index", err.Error())
@@ -837,10 +788,26 @@ func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		}
 	}
 
-	index, err := r.client.DescribeIndex(ctx, newData.Name.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to describe index", err.Error())
-		return
+	var index *pinecone.Index
+	if configureRequest.PodType != "" || configureRequest.Replicas != 0 {
+		updateTimeout, diags := newData.Timeouts.Update(ctx, defaultIndexUpdateTimeout)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		var err error
+		index, err = r.waitForPodScaling(ctx, newData.Name.ValueString(), newPod, updateTimeout)
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to wait for index to finish scaling.", err.Error())
+			return
+		}
+	} else {
+		var err error
+		index, err = r.client.DescribeIndex(ctx, newData.Name.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to describe index", err.Error())
+			return
+		}
 	}
 
 	// Capture the plan embed so we can restore user-configured read/write parameters
@@ -921,7 +888,7 @@ func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 			}
 			return retry.NonRetryableError(err)
 		}
-		return retry.RetryableError(fmt.Errorf("index not deleted. State: %s", index.Status.State))
+		return retry.RetryableError(fmt.Errorf("index not deleted. State: %s", indexState(index)))
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to wait for index to be deleted.", err.Error())
@@ -931,6 +898,275 @@ func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 
 func (r *IndexResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+const (
+	podCreateUnsupportedSummary = "Pod-based indexes can't be created"
+	podCreateUnsupportedDetail  = "Pinecone API version 2026-07 doesn't support creating pod-based indexes. " +
+		"Existing pod-based indexes can still be imported, scaled, and deleted. Use spec.serverless or spec.byoc to create a new index."
+	recreateIndexHint = "To recreate the index with the new configuration, taint it first (`terraform taint <address>`). " +
+		"Recreating an index deletes all of its data."
+)
+
+// indexReplacePaths lists the attributes whose RequiresReplace plan modifier recreates the index.
+// The framework doesn't pass attribute-level replacements to resource ModifyPlan, so ModifyPlan
+// checks these itself.
+var indexReplacePaths = []path.Path{
+	path.Root("name"),
+	path.Root("dimension"),
+	path.Root("metric"),
+	path.Root("spec").AtName("pod").AtName("environment"),
+	path.Root("spec").AtName("pod").AtName("shards"),
+	path.Root("spec").AtName("pod").AtName("source_collection"),
+	path.Root("spec").AtName("serverless").AtName("cloud"),
+	path.Root("spec").AtName("serverless").AtName("region"),
+	path.Root("spec").AtName("serverless").AtName("schema"),
+	path.Root("spec").AtName("byoc").AtName("environment"),
+	path.Root("spec").AtName("byoc").AtName("schema"),
+}
+
+// ModifyPlan rejects configurations that API version 2026-07 can't apply, so they fail at plan time
+// instead of partway through an apply.
+func (r *IndexResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.Plan.Raw.IsNull() {
+		return
+	}
+
+	var config models.IndexResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if req.State.Raw.IsNull() {
+		resp.Diagnostics.Append(validateIndexCreate(ctx, config)...)
+		return
+	}
+
+	replace, diags := plansIndexReplacement(ctx, req)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if replace {
+		resp.Diagnostics.Append(validateIndexCreate(ctx, config)...)
+		return
+	}
+
+	var state models.IndexResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	resp.Diagnostics.Append(validateIndexUpdate(ctx, config, state)...)
+}
+
+// plansIndexReplacement reports whether the plan changes an attribute that recreates the index.
+func plansIndexReplacement(ctx context.Context, req resource.ModifyPlanRequest) (bool, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	for _, p := range indexReplacePaths {
+		var planned, prior attr.Value
+		diags.Append(req.Plan.GetAttribute(ctx, p, &planned)...)
+		diags.Append(req.State.GetAttribute(ctx, p, &prior)...)
+		if diags.HasError() {
+			return false, diags
+		}
+		if planned.IsUnknown() || !planned.Equal(prior) {
+			return true, diags
+		}
+	}
+	return false, diags
+}
+
+// validateIndexCreate checks a configuration that creates a new index.
+func validateIndexCreate(ctx context.Context, config models.IndexResourceModel) diag.Diagnostics {
+	var diags diag.Diagnostics
+	if config.Spec.IsNull() || config.Spec.IsUnknown() {
+		return diags
+	}
+	var spec models.IndexSpecModel
+	diags.Append(config.Spec.As(ctx, &spec, basetypes.ObjectAsOptions{UnhandledUnknownAsEmpty: true})...)
+	if diags.HasError() {
+		return diags
+	}
+
+	if spec.Pod != nil {
+		diags.AddAttributeError(path.Root("spec").AtName("pod"), podCreateUnsupportedSummary, podCreateUnsupportedDetail)
+	}
+	metadataSchemaDetail := "Metadata fields are indexed automatically when you upsert data, so they no longer need to be declared. " +
+		"Remove the schema attribute. It's only accepted together with embed, for integrated indexes."
+	if spec.Serverless != nil && !spec.Serverless.Schema.IsNull() && config.Embed.IsNull() {
+		diags.AddAttributeError(path.Root("spec").AtName("serverless").AtName("schema"), "Metadata schema isn't supported", metadataSchemaDetail)
+	}
+	if spec.BYOC != nil && !spec.BYOC.Schema.IsNull() {
+		diags.AddAttributeError(path.Root("spec").AtName("byoc").AtName("schema"), "Metadata schema isn't supported", metadataSchemaDetail)
+	}
+	return diags
+}
+
+// validateIndexUpdate checks a configuration that updates an existing index in place.
+func validateIndexUpdate(ctx context.Context, config, state models.IndexResourceModel) diag.Diagnostics {
+	var diags diag.Diagnostics
+
+	if !config.Embed.IsUnknown() {
+		embedPath := path.Root("embed")
+		switch {
+		case state.Embed.IsNull() && !config.Embed.IsNull():
+			diags.AddAttributeError(embedPath, "embed can't be added to an existing index",
+				"Integrated embedding can only be configured when an index is created. "+recreateIndexHint)
+		case !state.Embed.IsNull() && config.Embed.IsNull():
+			diags.AddAttributeError(embedPath, "embed can't be removed from an existing index",
+				"An index created with integrated embedding keeps it. Add the embed block back to match the index. "+recreateIndexHint)
+		case !state.Embed.IsNull() && !config.Embed.IsNull():
+			var configEmbed, stateEmbed models.IndexEmbedResourceModel
+			diags.Append(config.Embed.As(ctx, &configEmbed, basetypes.ObjectAsOptions{UnhandledUnknownAsEmpty: true})...)
+			diags.Append(state.Embed.As(ctx, &stateEmbed, basetypes.ObjectAsOptions{})...)
+			if diags.HasError() {
+				return diags
+			}
+			if !configEmbed.Model.IsNull() && !configEmbed.Model.IsUnknown() && !configEmbed.Model.Equal(stateEmbed.Model) {
+				diags.AddAttributeError(embedPath.AtName("model"), "embed.model can't be changed",
+					fmt.Sprintf("The index uses the embedding model %s, which can't be changed after the index is created. %s", stateEmbed.Model, recreateIndexHint))
+			}
+			if !configEmbed.FieldMap.IsNull() && !configEmbed.FieldMap.IsUnknown() && !configEmbed.FieldMap.Equal(stateEmbed.FieldMap) {
+				diags.AddAttributeError(embedPath.AtName("field_map"), "embed.field_map can't be changed",
+					"The embedded text field can't be changed after the index is created. "+recreateIndexHint)
+			}
+		}
+	}
+
+	if !config.Spec.IsNull() && !config.Spec.IsUnknown() && !state.Spec.IsNull() {
+		var configSpec, stateSpec models.IndexSpecModel
+		diags.Append(config.Spec.As(ctx, &configSpec, basetypes.ObjectAsOptions{UnhandledUnknownAsEmpty: true})...)
+		diags.Append(state.Spec.As(ctx, &stateSpec, basetypes.ObjectAsOptions{})...)
+		if diags.HasError() {
+			return diags
+		}
+		if configSpec.Pod != nil && stateSpec.Pod != nil && !configSpec.Pod.PodType.IsUnknown() {
+			if detail, ok := podTypeChange(stateSpec.Pod.PodType.ValueString(), configSpec.Pod.PodType.ValueString()); !ok {
+				diags.AddAttributeError(path.Root("spec").AtName("pod").AtName("pod_type"), "pod_type can't be changed this way", detail)
+			}
+		}
+	}
+
+	return diags
+}
+
+// podSizes orders the pod sizes a pod type can scale between.
+var podSizes = map[string]int{"x1": 1, "x2": 2, "x4": 4, "x8": 8}
+
+// podTypeChange reports whether a pod-based index can scale from one pod type to another in place:
+// the size can only grow, within the same pod family. Pod types it can't parse are left for the
+// API to judge.
+func podTypeChange(from, to string) (detail string, ok bool) {
+	if from == to {
+		return "", true
+	}
+	fromFamily, fromSize, fromOk := strings.Cut(from, ".")
+	toFamily, toSize, toOk := strings.Cut(to, ".")
+	if !fromOk || !toOk || podSizes[fromSize] == 0 || podSizes[toSize] == 0 {
+		return "", true
+	}
+	if fromFamily != toFamily {
+		return fmt.Sprintf("The pod family can't be changed (from %s to %s). %s", fromFamily, toFamily, recreateIndexHint), false
+	}
+	if podSizes[toSize] < podSizes[fromSize] {
+		return fmt.Sprintf("The pod size can only be increased (from %s to %s). %s", fromSize, toSize, recreateIndexHint), false
+	}
+	return "", true
+}
+
+// semanticTextFieldName returns the name of the schema field an integrated index embeds, which
+// ConfigureIndex addresses the embedding model by. It's the "text" entry of the field map, or the
+// only entry when the map has one.
+func semanticTextFieldName(fieldMap types.Map) (string, bool) {
+	if fieldMap.IsNull() || fieldMap.IsUnknown() {
+		return "", false
+	}
+	elements := fieldMap.Elements()
+	value, ok := elements["text"]
+	if !ok && len(elements) == 1 {
+		for _, v := range elements {
+			value, ok = v, true
+		}
+	}
+	name, isString := value.(basetypes.StringValue)
+	if !ok || !isString || name.IsNull() || name.IsUnknown() || name.ValueString() == "" {
+		return "", false
+	}
+	return name.ValueString(), true
+}
+
+// indexState returns the reported state of an index, or "Unknown" when it has no status yet.
+func indexState(index *pinecone.Index) string {
+	if index == nil || index.Status == nil {
+		return "Unknown"
+	}
+	return string(index.Status.State)
+}
+
+// indexReadyRetry classifies a described index for a wait loop: nil once it's ready, a
+// non-retryable error once it reaches a state it won't leave on its own, and a retryable error
+// otherwise.
+func indexReadyRetry(index *pinecone.Index) *retry.RetryError {
+	if index.Status == nil {
+		return retry.RetryableError(fmt.Errorf("index status not reported yet"))
+	}
+	switch index.Status.State {
+	case pinecone.IndexStatusStateFailed, pinecone.IndexStatusStateInitializationFailed, pinecone.IndexStatusStateDisabled:
+		return retry.NonRetryableError(fmt.Errorf("index entered state %s", index.Status.State))
+	}
+	if !index.Status.Ready && index.Status.State != pinecone.IndexStatusStateReady {
+		return retry.RetryableError(fmt.Errorf("index not ready. State: %s", index.Status.State))
+	}
+	return nil
+}
+
+// waitForPodScaling waits until a pod-based index is ready and reports the target pod type and
+// replica count, and returns its final description.
+func (r *IndexResource) waitForPodScaling(ctx context.Context, name string, target *models.IndexPodSpecModel, timeout time.Duration) (*pinecone.Index, error) {
+	var index *pinecone.Index
+	err := retry.RetryContext(ctx, timeout, func() *retry.RetryError {
+		described, err := r.client.DescribeIndex(ctx, name)
+		if err != nil {
+			if isTransientError(err) {
+				return retry.RetryableError(err)
+			}
+			return retry.NonRetryableError(err)
+		}
+		index = described
+		if retryErr := indexReadyRetry(described); retryErr != nil {
+			return retryErr
+		}
+		if !podDeploymentMatches(described, target) {
+			return retry.RetryableError(fmt.Errorf("index still scaling to %s with %d replicas", target.PodType.ValueString(), target.Replicas.ValueInt64()))
+		}
+		return nil
+	})
+	return index, err
+}
+
+// podDeploymentMatches reports whether a pod-based index reports the target pod type and replicas.
+func podDeploymentMatches(index *pinecone.Index, target *models.IndexPodSpecModel) bool {
+	if index.Deployment == nil || index.Deployment.Pod == nil {
+		return false
+	}
+	pod := index.Deployment.Pod
+	replicas := int64(1)
+	if pod.Replicas != nil {
+		replicas = int64(*pod.Replicas)
+	}
+	return pod.PodType == target.PodType.ValueString() && replicas == target.Replicas.ValueInt64()
+}
+
+// extractPodSpec pulls the pod spec out of a spec object, returning nil if absent.
+func extractPodSpec(ctx context.Context, specObj types.Object, diagnostics *diag.Diagnostics) *models.IndexPodSpecModel {
+	if specObj.IsNull() || specObj.IsUnknown() {
+		return nil
+	}
+	var spec models.IndexSpecModel
+	diagnostics.Append(specObj.As(ctx, &spec, basetypes.ObjectAsOptions{})...)
+	return spec.Pod
 }
 
 func mergeTags(oldTags, newTags map[string]string) map[string]string {
@@ -1025,7 +1261,10 @@ func metadataSchemaResourceSchema() schema.Attribute {
 		MarkdownDescription: "Schema for the behavior of Pinecone's internal metadata index. " +
 			"By default, all metadata is indexed; when `schema` is present, only fields listed in `fields` " +
 			"with `filterable: true` are indexed. This field can only be set at index creation time — " +
-			"changing it requires replacing the index.",
+			"changing it requires replacing the index. New indexes accept it only together with `embed`; " +
+			"other indexes index metadata automatically when you upsert data.",
+		DeprecationMessage: "Metadata fields are indexed automatically when you upsert data, so they no longer need to be declared. " +
+			"This attribute is kept for existing indexes and for integrated indexes created with embed.",
 		Optional: true,
 		PlanModifiers: []planmodifier.Object{
 			objectplanmodifier.RequiresReplace(),

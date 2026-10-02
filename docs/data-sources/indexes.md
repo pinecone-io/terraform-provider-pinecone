@@ -52,7 +52,7 @@ data "pinecone_indexes" "test" {
 
 Optional:
 
-- `embed` (Attributes) Specify the integrated inference embedding configuration for the index. Once set, the model cannot be changed. However, you can later update the embedding configuration—including field map, read parameters, and write parameters.
+- `embed` (Attributes) Specify the integrated inference embedding configuration for the index. The model and field map are fixed when the index is created; the read and write parameters can be updated.
 			
 Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details. (see [below for nested schema](#nestedatt--indexes--embed))
 - `spec` (Attributes) Spec (see [below for nested schema](#nestedatt--indexes--spec))

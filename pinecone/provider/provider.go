@@ -12,7 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/pinecone-io/go-pinecone/v6/pinecone"
+	"github.com/pinecone-io/go-pinecone/v7/pinecone"
 )
 
 // Ensure PineconeProvider satisfies various provider interfaces.

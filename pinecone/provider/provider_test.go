@@ -12,7 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
-	"github.com/pinecone-io/go-pinecone/v6/pinecone"
+	"github.com/pinecone-io/go-pinecone/v7/pinecone"
 )
 
 // testAccProtoV6ProviderFactories are used to instantiate a provider during
@@ -30,6 +30,14 @@ const testAccDummyAdminProviderConfig = `
 provider "pinecone" {
   client_id     = "dummy-client-id"
   client_secret = "dummy-client-secret"
+}
+`
+
+// testAccDummyApiKeyProviderConfig configures the provider with a placeholder API key, for tests
+// that only assert on plan-time errors and make no API calls.
+const testAccDummyApiKeyProviderConfig = `
+provider "pinecone" {
+  api_key = "dummy-api-key"
 }
 `
 

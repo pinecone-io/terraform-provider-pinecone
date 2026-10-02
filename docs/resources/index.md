@@ -107,7 +107,7 @@ resource "pinecone_index" "pod" {
 
 - `deletion_protection` (String) Whether deletion protection for the index is enabled. You can use 'enabled', or 'disabled'.
 - `dimension` (Number) The dimensions of the vectors to be inserted in the index. Required for pod-based and non-integrated serverless indexes. For integrated indexes with an embed model, this is optional and will default to the model's dimension if not specified.
-- `embed` (Attributes) Specify the integrated inference embedding configuration for the index. Once set, the model cannot be changed. However, you can later update the embedding configuration—including field map, read parameters, and write parameters.
+- `embed` (Attributes) Specify the integrated inference embedding configuration for the index. It can only be set when the index is created: `model` and `field_map` can't be changed afterwards, and `embed` can't be added to or removed from an existing index. `read_parameters` and `write_parameters` can be updated in place.
 
 Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details. (see [below for nested schema](#nestedatt--embed))
 - `metric` (String) The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'.
@@ -147,7 +147,7 @@ Read-Only:
 Optional:
 
 - `byoc` (Attributes) Configuration needed to deploy a BYOC (Bring Your Own Cloud) index. (see [below for nested schema](#nestedatt--spec--byoc))
-- `pod` (Attributes) Configuration needed to deploy a pod-based index. (see [below for nested schema](#nestedatt--spec--pod))
+- `pod` (Attributes) Configuration of an existing pod-based index. New pod-based indexes can't be created: Pinecone API version 2026-07 doesn't support it. Existing pod-based indexes can still be imported, scaled with `replicas` and `pod_type`, and deleted. (see [below for nested schema](#nestedatt--spec--pod))
 - `serverless` (Attributes) Configuration needed to deploy a serverless index. (see [below for nested schema](#nestedatt--spec--serverless))
 
 <a id="nestedatt--spec--byoc"></a>
@@ -160,7 +160,7 @@ Required:
 Optional:
 
 - `read_capacity` (Attributes) Read capacity configuration for the index. Set exactly one of `dedicated` or `on_demand` to select the mode. Omitting `read_capacity` entirely on create defaults to OnDemand. To switch modes after creation, explicitly set the desired sub-block — removing `read_capacity` from config will not change the mode already recorded in state. (see [below for nested schema](#nestedatt--spec--byoc--read_capacity))
-- `schema` (Attributes) Schema for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when `schema` is present, only fields listed in `fields` with `filterable: true` are indexed. This field can only be set at index creation time — changing it requires replacing the index. (see [below for nested schema](#nestedatt--spec--byoc--schema))
+- `schema` (Attributes, Deprecated) Schema for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when `schema` is present, only fields listed in `fields` with `filterable: true` are indexed. This field can only be set at index creation time — changing it requires replacing the index. New indexes accept it only together with `embed`; other indexes index metadata automatically when you upsert data. (see [below for nested schema](#nestedatt--spec--byoc--schema))
 
 <a id="nestedatt--spec--byoc--read_capacity"></a>
 ### Nested Schema for `spec.byoc.read_capacity`
@@ -208,14 +208,14 @@ Required:
 Required:
 
 - `environment` (String) The environment where the index is hosted.
-- `pod_type` (String) The type of pod to use. One of s1, p1, or p2 appended with . and one of x1, x2, x4, or x8.
+- `pod_type` (String) The type of pod to use. One of s1, p1, or p2 appended with . and one of x1, x2, x4, or x8. The pod size can be increased in place, for example from `p1.x1` to `p1.x2`. It can't be decreased, and the pod family can't be changed.
 
 Optional:
 
-- `metadata_config` (Attributes) Configuration for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when metadata_config is present, only specified metadata fields are indexed. These configurations are only valid for use with pod-based indexes. (see [below for nested schema](#nestedatt--spec--pod--metadata_config))
-- `replicas` (Number) The number of replicas. Replicas duplicate your index. They provide higher availability and throughput. Replicas can be scaled up or down as your needs change.
+- `metadata_config` (Attributes) Configuration for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when metadata_config is present, only specified metadata fields are indexed. These configurations are only valid for use with pod-based indexes. The API no longer reports this setting, so the value recorded in state is kept. (see [below for nested schema](#nestedatt--spec--pod--metadata_config))
+- `replicas` (Number) The number of replicas. Replicas duplicate your index. They provide higher availability and throughput. Replicas can be scaled up or down in place.
 - `shards` (Number) The number of shards. Shards split your data across multiple pods so you can fit more data into an index.
-- `source_collection` (String) The name of the collection to create an index from.
+- `source_collection` (String) The name of the collection the index was created from. Creating an index from a collection is no longer supported.
 
 Read-Only:
 
@@ -241,7 +241,7 @@ Required:
 Optional:
 
 - `read_capacity` (Attributes) Read capacity configuration for the index. Set exactly one of `dedicated` or `on_demand` to select the mode. Omitting `read_capacity` entirely on create defaults to OnDemand. To switch modes after creation, explicitly set the desired sub-block — removing `read_capacity` from config will not change the mode already recorded in state. (see [below for nested schema](#nestedatt--spec--serverless--read_capacity))
-- `schema` (Attributes) Schema for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when `schema` is present, only fields listed in `fields` with `filterable: true` are indexed. This field can only be set at index creation time — changing it requires replacing the index. (see [below for nested schema](#nestedatt--spec--serverless--schema))
+- `schema` (Attributes, Deprecated) Schema for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when `schema` is present, only fields listed in `fields` with `filterable: true` are indexed. This field can only be set at index creation time — changing it requires replacing the index. New indexes accept it only together with `embed`; other indexes index metadata automatically when you upsert data. (see [below for nested schema](#nestedatt--spec--serverless--schema))
 
 <a id="nestedatt--spec--serverless--read_capacity"></a>
 ### Nested Schema for `spec.serverless.read_capacity`
@@ -291,6 +291,7 @@ Optional:
 
 - `create` (String) Timeout defaults to 5 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
 - `delete` (String) Timeout defaults to 5 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
+- `update` (String) How long to wait for a pod-based index to finish scaling. Defaults to 10 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
 
 
 <a id="nestedatt--status"></a>
@@ -299,4 +300,4 @@ Optional:
 Read-Only:
 
 - `ready` (Boolean) Ready.
-- `state` (String) Initializing InitializationFailed ScalingUp ScalingDown ScalingUpPodSize ScalingDownPodSize Upgrading Terminating Ready
+- `state` (String) Initializing InitializationFailed ScalingUp ScalingDown ScalingUpPodSize Terminating Ready Failed Disabled
