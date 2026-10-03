@@ -491,7 +491,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		} else {
 			serverlessReq := pinecone.CreateServerlessIndexRequest{
 				Name:               data.Name.ValueString(),
-				Dimension:          data.Dimension.ValueInt32Pointer(),
+				Dimension:          knownInt32Pointer(data.Dimension),
 				Metric:             &metric,
 				DeletionProtection: &deletionProtection,
 				Cloud:              pinecone.Cloud(spec.Serverless.Cloud.ValueString()),
@@ -538,7 +538,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		byocReq := pinecone.CreateBYOCIndexRequest{
 			Name:               data.Name.ValueString(),
 			Environment:        spec.BYOC.Environment.ValueString(),
-			Dimension:          data.Dimension.ValueInt32Pointer(),
+			Dimension:          knownInt32Pointer(data.Dimension),
 			Metric:             &metric,
 			DeletionProtection: &deletionProtection,
 			ReadCapacity:       readCapacityParams,
@@ -959,6 +959,34 @@ func (r *IndexResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 		return
 	}
 	resp.Diagnostics.Append(validateIndexUpdate(ctx, config, state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	resp.Diagnostics.Append(planEffectiveEmbedParameters(ctx, req, resp)...)
+}
+
+// planEffectiveEmbedParameters marks effective_read_parameters and effective_write_parameters
+// unknown when the configured parameters change, since the API may add defaults to the new values.
+// Their plan modifier otherwise keeps the prior value, which the apply result then contradicts.
+func planEffectiveEmbedParameters(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) diag.Diagnostics {
+	var diags diag.Diagnostics
+	embedPath := path.Root("embed")
+	for configured, effective := range map[string]string{
+		"read_parameters":  "effective_read_parameters",
+		"write_parameters": "effective_write_parameters",
+	} {
+		var configValue, priorValue types.Map
+		diags.Append(req.Config.GetAttribute(ctx, embedPath.AtName(configured), &configValue)...)
+		diags.Append(req.State.GetAttribute(ctx, embedPath.AtName(configured), &priorValue)...)
+		if diags.HasError() {
+			return diags
+		}
+		if configValue.IsNull() || configValue.Equal(priorValue) {
+			continue
+		}
+		diags.Append(resp.Plan.SetAttribute(ctx, embedPath.AtName(effective), types.MapUnknown(types.StringType))...)
+	}
+	return diags
 }
 
 // plansIndexReplacement reports whether the plan changes an attribute that recreates the index.
@@ -1095,6 +1123,15 @@ func semanticTextFieldName(fieldMap types.Map) (string, bool) {
 		return "", false
 	}
 	return name.ValueString(), true
+}
+
+// knownInt32Pointer returns nil for a null or unknown value. An unknown value reaches Create when
+// an Optional+Computed attribute isn't configured, and ValueInt32Pointer would turn it into 0.
+func knownInt32Pointer(v types.Int32) *int32 {
+	if v.IsNull() || v.IsUnknown() {
+		return nil
+	}
+	return v.ValueInt32Pointer()
 }
 
 // indexState returns the reported state of an index, or "Unknown" when it has no status yet.

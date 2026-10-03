@@ -85,6 +85,48 @@ func TestAccIndexResource_serverless_basic(t *testing.T) {
 	})
 }
 
+func TestAccIndexResource_serverless_sparse(t *testing.T) {
+	t.Parallel()
+	rName := acctest.RandomWithPrefix("tftest")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckIndexDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+provider "pinecone" {
+}
+
+resource "pinecone_index" "%s" {
+  name        = %q
+  metric      = "dotproduct"
+  vector_type = "sparse"
+  spec = {
+    serverless = {
+      cloud  = "aws"
+      region = "us-west-2"
+    }
+  }
+}
+`, resourceName, rName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckIndexExists(),
+					resource.TestCheckResourceAttr("pinecone_index.test", "vector_type", "sparse"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "dotproduct"),
+					resource.TestCheckNoResourceAttr("pinecone_index.test", "dimension"),
+				),
+			},
+			{
+				ResourceName:      "pinecone_index.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
 func TestAccIndexResource_serverless_readCapacity(t *testing.T) {
 	t.Parallel()
 	rName := acctest.RandomWithPrefix("tftest")

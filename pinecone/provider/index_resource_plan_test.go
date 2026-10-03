@@ -10,10 +10,13 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/pinecone-io/go-pinecone/v7/pinecone"
 	"github.com/pinecone-io/terraform-provider-pinecone/pinecone/models"
@@ -52,7 +55,10 @@ func testIndexModel(t *testing.T, s schema.Schema) models.IndexResourceModel {
 	if d.HasError() {
 		t.Fatalf("building spec: %v", d)
 	}
-	timeoutsType := s.Blocks["timeouts"].Type().(timeouts.Type)
+	timeoutsType, ok := s.Blocks["timeouts"].Type().(timeouts.Type)
+	if !ok {
+		t.Fatal("timeouts block has an unexpected type")
+	}
 	return models.IndexResourceModel{
 		Id:                 types.StringValue("my-index"),
 		Name:               types.StringValue("my-index"),
@@ -136,8 +142,8 @@ func withServerlessMetadataSchema(t *testing.T, s schema.Schema, model models.In
 	return model
 }
 
-// runModifyPlan calls ModifyPlan with the given models; a nil state plans a create.
-func runModifyPlan(t *testing.T, s schema.Schema, config models.IndexResourceModel, state *models.IndexResourceModel) []string {
+// modifyPlan calls ModifyPlan with the given models; a nil state plans a create.
+func modifyPlan(t *testing.T, s schema.Schema, config models.IndexResourceModel, state *models.IndexResourceModel) resource.ModifyPlanResponse {
 	t.Helper()
 	ctx := context.Background()
 	schemaType := s.Type().TerraformType(ctx)
@@ -157,7 +163,12 @@ func runModifyPlan(t *testing.T, s schema.Schema, config models.IndexResourceMod
 	resp := resource.ModifyPlanResponse{Plan: plan}
 	r := &IndexResource{PineconeResource: &PineconeResource{}}
 	r.ModifyPlan(ctx, resource.ModifyPlanRequest{Config: configValue, Plan: plan, State: priorState}, &resp)
+	return resp
+}
 
+func runModifyPlan(t *testing.T, s schema.Schema, config models.IndexResourceModel, state *models.IndexResourceModel) []string {
+	t.Helper()
+	resp := modifyPlan(t, s, config, state)
 	var summaries []string
 	for _, d := range resp.Diagnostics.Errors() {
 		summaries = append(summaries, d.Summary())
@@ -212,6 +223,73 @@ func TestIndexResourceModifyPlan(t *testing.T) {
 			}
 			if len(errs) != 1 || errs[0] != tt.wantErr {
 				t.Fatalf("errors = %v, want [%q]", errs, tt.wantErr)
+			}
+		})
+	}
+}
+
+func withEmbedReadParameters(t *testing.T, s schema.Schema, model models.IndexResourceModel, configured, effective map[string]string) models.IndexResourceModel {
+	t.Helper()
+	ctx := context.Background()
+	var embed models.IndexEmbedResourceModel
+	if d := model.Embed.As(ctx, &embed, basetypes.ObjectAsOptions{}); d.HasError() {
+		t.Fatalf("decoding embed: %v", d)
+	}
+	embed.ReadParameters = types.MapValueMust(types.StringType, stringValues(configured))
+	embed.EffectiveReadParameters = types.MapValueMust(types.StringType, stringValues(effective))
+	var d diag.Diagnostics
+	model.Embed, d = types.ObjectValueFrom(ctx, attrTypesOf(t, s, "embed"), embed)
+	if d.HasError() {
+		t.Fatalf("encoding embed: %v", d)
+	}
+	return model
+}
+
+func stringValues(m map[string]string) map[string]attr.Value {
+	values := make(map[string]attr.Value, len(m))
+	for k, v := range m {
+		values[k] = types.StringValue(v)
+	}
+	return values
+}
+
+func TestIndexResourceModifyPlan_effectiveEmbedParameters(t *testing.T) {
+	ctx := context.Background()
+	s := indexResourceSchema(t)
+	integrated := withEmbed(t, s, testIndexModel(t, s), "multilingual-e5-large", "chunk_text")
+	effective := map[string]string{"input_type": "query", "truncate": "END"}
+	state := withEmbedReadParameters(t, s, integrated, map[string]string{"truncate": "END"}, effective)
+
+	tests := []struct {
+		name        string
+		configured  map[string]string
+		wantUnknown bool
+	}{
+		{"unchanged", map[string]string{"truncate": "END"}, false},
+		{"changed", map[string]string{"truncate": "NONE"}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := withEmbedReadParameters(t, s, integrated, tt.configured, effective)
+			resp := modifyPlan(t, s, config, &state)
+			if resp.Diagnostics.HasError() {
+				t.Fatalf("unexpected errors: %v", resp.Diagnostics)
+			}
+
+			var planned types.Map
+			if d := resp.Plan.GetAttribute(ctx, path.Root("embed").AtName("effective_read_parameters"), &planned); d.HasError() {
+				t.Fatalf("reading plan: %v", d)
+			}
+			if planned.IsUnknown() != tt.wantUnknown {
+				t.Errorf("effective_read_parameters unknown = %v, want %v", planned.IsUnknown(), tt.wantUnknown)
+			}
+
+			var plannedWrite types.Map
+			if d := resp.Plan.GetAttribute(ctx, path.Root("embed").AtName("effective_write_parameters"), &plannedWrite); d.HasError() {
+				t.Fatalf("reading plan: %v", d)
+			}
+			if plannedWrite.IsUnknown() {
+				t.Error("effective_write_parameters is unknown, but write_parameters didn't change")
 			}
 		})
 	}

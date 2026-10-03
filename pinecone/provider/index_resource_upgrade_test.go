@@ -27,10 +27,6 @@ func TestAccIndexResource_upgradeFromPublished(t *testing.T) {
 		{"dense", func(name string) string {
 			return testAccIndexUpgradeConfig(name, "dimension = 1024", "")
 		}},
-		{"sparse", func(name string) string {
-			return testAccIndexUpgradeConfig(name, `metric = "dotproduct"
-  vector_type = "sparse"`, "")
-		}},
 		{"metadata schema", func(name string) string {
 			return testAccIndexUpgradeConfig(name, "dimension = 1024", `
       schema = {
