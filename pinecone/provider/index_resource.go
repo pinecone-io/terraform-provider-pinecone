@@ -920,8 +920,13 @@ var indexReplacePaths = []path.Path{
 	path.Root("spec").AtName("pod").AtName("source_collection"),
 	path.Root("spec").AtName("serverless").AtName("cloud"),
 	path.Root("spec").AtName("serverless").AtName("region"),
-	path.Root("spec").AtName("serverless").AtName("schema"),
 	path.Root("spec").AtName("byoc").AtName("environment"),
+}
+
+// indexReplaceUnlessRemovedPaths lists the attributes that recreate the index when set or changed,
+// but not when removed. See requiresReplaceUnlessRemoved.
+var indexReplaceUnlessRemovedPaths = []path.Path{
+	path.Root("spec").AtName("serverless").AtName("schema"),
 	path.Root("spec").AtName("byoc").AtName("schema"),
 }
 
@@ -992,18 +997,30 @@ func planEffectiveEmbedParameters(ctx context.Context, req resource.ModifyPlanRe
 // plansIndexReplacement reports whether the plan changes an attribute that recreates the index.
 func plansIndexReplacement(ctx context.Context, req resource.ModifyPlanRequest) (bool, diag.Diagnostics) {
 	var diags diag.Diagnostics
-	for _, p := range indexReplacePaths {
-		var planned, prior attr.Value
+	changed := func(p path.Path) (planned attr.Value, changed bool) {
+		var prior attr.Value
 		diags.Append(req.Plan.GetAttribute(ctx, p, &planned)...)
 		diags.Append(req.State.GetAttribute(ctx, p, &prior)...)
-		if diags.HasError() {
-			return false, diags
+		return planned, !diags.HasError() && (planned.IsUnknown() || !planned.Equal(prior))
+	}
+	for _, p := range indexReplacePaths {
+		if _, ok := changed(p); ok {
+			return true, diags
 		}
-		if planned.IsUnknown() || !planned.Equal(prior) {
+	}
+	for _, p := range indexReplaceUnlessRemovedPaths {
+		if planned, ok := changed(p); ok && !planned.IsNull() {
 			return true, diags
 		}
 	}
 	return false, diags
+}
+
+// requiresReplaceUnlessRemoved recreates the index when the deprecated metadata schema is set or
+// changed, which only takes effect at creation, but not when it's removed from the configuration.
+// Removing it is what the deprecation asks for, and the index keeps indexing metadata either way.
+func requiresReplaceUnlessRemoved(_ context.Context, req planmodifier.ObjectRequest, resp *objectplanmodifier.RequiresReplaceIfFuncResponse) {
+	resp.RequiresReplace = !req.PlanValue.IsNull()
 }
 
 // validateIndexCreate checks a configuration that creates a new index.
@@ -1298,13 +1315,16 @@ func metadataSchemaResourceSchema() schema.Attribute {
 		MarkdownDescription: "Schema for the behavior of Pinecone's internal metadata index. " +
 			"By default, all metadata is indexed; when `schema` is present, only fields listed in `fields` " +
 			"with `filterable: true` are indexed. This field can only be set at index creation time — " +
-			"changing it requires replacing the index. New indexes accept it only together with `embed`; " +
+			"setting or changing it requires replacing the index, while removing it leaves the index in place. " +
+			"New indexes accept it only together with `embed`; " +
 			"other indexes index metadata automatically when you upsert data.",
 		DeprecationMessage: "Metadata fields are indexed automatically when you upsert data, so they no longer need to be declared. " +
 			"This attribute is kept for existing indexes and for integrated indexes created with embed.",
 		Optional: true,
 		PlanModifiers: []planmodifier.Object{
-			objectplanmodifier.RequiresReplace(),
+			objectplanmodifier.RequiresReplaceIf(requiresReplaceUnlessRemoved,
+				"Replaces the index when the schema is set or changed, but not when it's removed.",
+				"Replaces the index when the schema is set or changed, but not when it's removed."),
 		},
 		Attributes: map[string]schema.Attribute{
 			"fields": schema.MapNestedAttribute{

@@ -42,15 +42,15 @@ func (model *IndexModel) Read(ctx context.Context, index *pinecone.Index) diag.D
 		model.Dimension = types.Int32Null()
 	}
 
-	pod, diags := NewIndexPodSpecModel(ctx, index.Spec.Pod)
+	pod, diags := NewIndexPodSpecModel(ctx, indexSpec(index).Pod)
 	if diags.HasError() {
 		return diags
 	}
-	serverless, diags := NewIndexServerlessSpecModel(ctx, index.Spec.Serverless, index.Schema)
+	serverless, diags := NewIndexServerlessSpecModel(ctx, indexSpec(index).Serverless, index.Schema)
 	if diags.HasError() {
 		return diags
 	}
-	byoc, diags := NewIndexBYOCSpecModel(ctx, index.Spec.BYOC, index.Schema)
+	byoc, diags := NewIndexBYOCSpecModel(ctx, indexSpec(index).BYOC, index.Schema)
 	if diags.HasError() {
 		return diags
 	}
@@ -78,12 +78,16 @@ func (model *IndexModel) Read(ctx context.Context, index *pinecone.Index) diag.D
 		return diags
 	}
 
-	model.Status, diags = types.ObjectValueFrom(ctx, IndexStatusModel{}.AttrTypes(), IndexStatusModel{
-		Ready: types.BoolValue(index.Status.Ready),
-		State: types.StringValue(string(index.Status.State)),
-	})
-	if diags.HasError() {
-		return diags
+	if index.Status != nil {
+		model.Status, diags = types.ObjectValueFrom(ctx, IndexStatusModel{}.AttrTypes(), IndexStatusModel{
+			Ready: types.BoolValue(index.Status.Ready),
+			State: types.StringValue(string(index.Status.State)),
+		})
+		if diags.HasError() {
+			return diags
+		}
+	} else {
+		model.Status = types.ObjectNull(IndexStatusModel{}.AttrTypes())
 	}
 
 	if index.Tags != nil {
@@ -145,15 +149,15 @@ func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index
 		model.Dimension = types.Int32Null()
 	}
 
-	pod, diags := NewIndexPodSpecModel(ctx, index.Spec.Pod)
+	pod, diags := NewIndexPodSpecModel(ctx, indexSpec(index).Pod)
 	if diags.HasError() {
 		return diags
 	}
-	serverless, diags := NewIndexServerlessSpecResourceModel(ctx, index.Spec.Serverless, index.Schema)
+	serverless, diags := NewIndexServerlessSpecResourceModel(ctx, indexSpec(index).Serverless, index.Schema)
 	if diags.HasError() {
 		return diags
 	}
-	byoc, diags := NewIndexBYOCSpecResourceModel(ctx, index.Spec.BYOC, index.Schema)
+	byoc, diags := NewIndexBYOCSpecResourceModel(ctx, indexSpec(index).BYOC, index.Schema)
 	if diags.HasError() {
 		return diags
 	}
@@ -177,9 +181,13 @@ func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index
 		model.Embed = types.ObjectNull(IndexEmbedResourceModel{}.AttrTypes())
 	}
 
-	model.Spec, diags = types.ObjectValueFrom(ctx, indexSpecResourceAttrTypes(), spec)
-	if diags.HasError() {
-		return diags
+	// Without a spec in the response, keep the prior one: a null spec would plan a replacement
+	// through spec.*.cloud, region, and environment.
+	if index.Spec != nil || priorSpec == nil {
+		model.Spec, diags = types.ObjectValueFrom(ctx, indexSpecResourceAttrTypes(), spec)
+		if diags.HasError() {
+			return diags
+		}
 	}
 
 	if index.Status != nil {
@@ -239,15 +247,15 @@ func (model *IndexDatasourceModel) Read(ctx context.Context, index *pinecone.Ind
 		model.Dimension = types.Int32Null()
 	}
 
-	pod, diags := NewIndexPodSpecModel(ctx, index.Spec.Pod)
+	pod, diags := NewIndexPodSpecModel(ctx, indexSpec(index).Pod)
 	if diags.HasError() {
 		return diags
 	}
-	serverless, diags := NewIndexServerlessSpecModel(ctx, index.Spec.Serverless, index.Schema)
+	serverless, diags := NewIndexServerlessSpecModel(ctx, indexSpec(index).Serverless, index.Schema)
 	if diags.HasError() {
 		return diags
 	}
-	byoc, diags := NewIndexBYOCSpecModel(ctx, index.Spec.BYOC, index.Schema)
+	byoc, diags := NewIndexBYOCSpecModel(ctx, indexSpec(index).BYOC, index.Schema)
 	if diags.HasError() {
 		return diags
 	}
@@ -395,6 +403,15 @@ func (model IndexPodSpecModel) AttrTypes() map[string]attr.Type {
 		"metadata_config":   types.ObjectType{AttrTypes: IndexMetadataConfigModel{}.AttrTypes()},
 		"source_collection": types.StringType,
 	}
+}
+
+// indexSpec returns the index's spec, or an empty one when the SDK couldn't derive it from the
+// index's deployment, as for a deployment type it doesn't recognize.
+func indexSpec(index *pinecone.Index) *pinecone.IndexSpec {
+	if index.Spec == nil {
+		return &pinecone.IndexSpec{}
+	}
+	return index.Spec
 }
 
 // indexEmbed returns the index's embed configuration with its vector type filled in. 2026-07

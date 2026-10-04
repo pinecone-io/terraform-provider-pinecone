@@ -273,3 +273,72 @@ func TestIndexResourceModelRead_embedVectorType(t *testing.T) {
 		t.Error("Read modified the SDK's embed in place")
 	}
 }
+
+// indexWithoutSpecOrStatus is an index whose deployment type the SDK doesn't recognize, so it
+// derives no spec, described before the API reports a status.
+func indexWithoutSpecOrStatus() *pinecone.Index {
+	return &pinecone.Index{Name: "my-index", Host: "https://my-index.example.com", VectorType: "dense"}
+}
+
+func TestIndexModelRead_noSpecOrStatus(t *testing.T) {
+	ctx := t.Context()
+
+	var listModel IndexModel
+	if diags := listModel.Read(ctx, indexWithoutSpecOrStatus()); diags.HasError() {
+		t.Fatalf("IndexModel.Read returned errors: %v", diags)
+	}
+	var dataSourceModel IndexDatasourceModel
+	if diags := dataSourceModel.Read(ctx, indexWithoutSpecOrStatus()); diags.HasError() {
+		t.Fatalf("IndexDatasourceModel.Read returned errors: %v", diags)
+	}
+
+	for name, m := range map[string]struct{ spec, status types.Object }{
+		"IndexModel":           {listModel.Spec, listModel.Status},
+		"IndexDatasourceModel": {dataSourceModel.Spec, dataSourceModel.Status},
+	} {
+		if !m.status.IsNull() {
+			t.Errorf("%s: status = %v, want null", name, m.status)
+		}
+		var spec IndexSpecModel
+		if d := m.spec.As(ctx, &spec, basetypes.ObjectAsOptions{}); d.HasError() {
+			t.Fatalf("%s: decoding spec: %v", name, d)
+		}
+		if spec.Pod != nil || spec.Serverless != nil || spec.BYOC != nil {
+			t.Errorf("%s: spec = %+v, want no deployment", name, spec)
+		}
+	}
+}
+
+func TestIndexResourceModelRead_noSpecKeepsPriorSpec(t *testing.T) {
+	ctx := t.Context()
+	var model IndexResourceModel
+	if diags := model.Read(ctx, serverlessIndexWithMetadata()); diags.HasError() {
+		t.Fatalf("first Read returned errors: %v", diags)
+	}
+	prior := model.Spec
+
+	if diags := model.Read(ctx, indexWithoutSpecOrStatus()); diags.HasError() {
+		t.Fatalf("second Read returned errors: %v", diags)
+	}
+	if !model.Spec.Equal(prior) {
+		t.Errorf("spec = %v, want prior spec %v", model.Spec, prior)
+	}
+	if !model.Status.IsNull() {
+		t.Errorf("status = %v, want null", model.Status)
+	}
+}
+
+func TestIndexResourceModelRead_importWithoutSpec(t *testing.T) {
+	ctx := t.Context()
+	var model IndexResourceModel
+	if diags := model.Read(ctx, indexWithoutSpecOrStatus()); diags.HasError() {
+		t.Fatalf("Read returned errors: %v", diags)
+	}
+	var spec IndexSpecModel
+	if d := model.Spec.As(ctx, &spec, basetypes.ObjectAsOptions{}); d.HasError() {
+		t.Fatalf("decoding spec: %v", d)
+	}
+	if spec.Pod != nil || spec.Serverless != nil || spec.BYOC != nil {
+		t.Errorf("spec = %+v, want no deployment", spec)
+	}
+}

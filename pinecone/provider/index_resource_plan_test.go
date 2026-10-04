@@ -14,6 +14,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
@@ -117,9 +119,14 @@ func withPod(t *testing.T, s schema.Schema, model models.IndexResourceModel, pod
 
 func withServerlessMetadataSchema(t *testing.T, s schema.Schema, model models.IndexResourceModel) models.IndexResourceModel {
 	t.Helper()
+	return withServerlessMetadataSchemaField(t, s, model, "genre")
+}
+
+func withServerlessMetadataSchemaField(t *testing.T, s schema.Schema, model models.IndexResourceModel, field string) models.IndexResourceModel {
+	t.Helper()
 	ctx := context.Background()
 	fields, d := types.MapValueFrom(ctx, types.ObjectType{AttrTypes: models.IndexMetadataSchemaFieldModel{}.AttrTypes()},
-		map[string]models.IndexMetadataSchemaFieldModel{"genre": {Filterable: types.BoolValue(true)}})
+		map[string]models.IndexMetadataSchemaFieldModel{field: {Filterable: types.BoolValue(true)}})
 	if d.HasError() {
 		t.Fatalf("building schema fields: %v", d)
 	}
@@ -201,6 +208,8 @@ func TestIndexResourceModifyPlan(t *testing.T) {
 		{name: "create serverless with metadata schema", config: withMetadataSchema, wantErr: "Metadata schema isn't supported"},
 		{name: "update with no changes", config: base, state: &base},
 		{name: "keep existing metadata schema", config: withMetadataSchema, state: &withMetadataSchema},
+		{name: "remove metadata schema", config: base, state: &withMetadataSchema},
+		{name: "change metadata schema", config: withServerlessMetadataSchemaField(t, s, base, "year"), state: &withMetadataSchema, wantErr: "Metadata schema isn't supported"},
 		{name: "add embed", config: integrated, state: &base, wantErr: "embed can't be added to an existing index"},
 		{name: "add embed while replacing", config: renamed(integrated), state: &base},
 		{name: "remove embed", config: base, state: &integrated, wantErr: "embed can't be removed from an existing index"},
@@ -290,6 +299,71 @@ func TestIndexResourceModifyPlan_effectiveEmbedParameters(t *testing.T) {
 			}
 			if plannedWrite.IsUnknown() {
 				t.Error("effective_write_parameters is unknown, but write_parameters didn't change")
+			}
+		})
+	}
+}
+
+func TestPlansIndexReplacement(t *testing.T) {
+	ctx := context.Background()
+	s := indexResourceSchema(t)
+	base := testIndexModel(t, s)
+	withMetadataSchema := withServerlessMetadataSchema(t, s, base)
+	renamed := base
+	renamed.Name = types.StringValue("my-renamed-index")
+
+	tests := []struct {
+		name   string
+		config models.IndexResourceModel
+		state  models.IndexResourceModel
+		want   bool
+	}{
+		{"no changes", base, base, false},
+		{"rename", renamed, base, true},
+		{"add metadata schema", withMetadataSchema, base, true},
+		{"change metadata schema", withServerlessMetadataSchemaField(t, s, base, "year"), withMetadataSchema, true},
+		{"remove metadata schema", base, withMetadataSchema, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			schemaType := s.Type().TerraformType(ctx)
+			plan := tfsdk.Plan{Schema: s, Raw: tftypes.NewValue(schemaType, nil)}
+			state := tfsdk.State{Schema: s, Raw: tftypes.NewValue(schemaType, nil)}
+			if d := plan.Set(ctx, &tt.config); d.HasError() {
+				t.Fatalf("setting plan: %v", d)
+			}
+			if d := state.Set(ctx, &tt.state); d.HasError() {
+				t.Fatalf("setting state: %v", d)
+			}
+			got, d := plansIndexReplacement(ctx, resource.ModifyPlanRequest{Plan: plan, State: state})
+			if d.HasError() {
+				t.Fatalf("unexpected errors: %v", d)
+			}
+			if got != tt.want {
+				t.Errorf("plansIndexReplacement() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRequiresReplaceUnlessRemoved(t *testing.T) {
+	attrTypes := models.IndexMetadataSchemaModel{}.AttrTypes()
+	tests := []struct {
+		name string
+		plan types.Object
+		want bool
+	}{
+		{"removed", types.ObjectNull(attrTypes), false},
+		{"set or changed", types.ObjectValueMust(attrTypes, map[string]attr.Value{
+			"fields": types.MapNull(types.ObjectType{AttrTypes: models.IndexMetadataSchemaFieldModel{}.AttrTypes()}),
+		}), true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var resp objectplanmodifier.RequiresReplaceIfFuncResponse
+			requiresReplaceUnlessRemoved(context.Background(), planmodifier.ObjectRequest{PlanValue: tt.plan}, &resp)
+			if resp.RequiresReplace != tt.want {
+				t.Errorf("RequiresReplace = %v, want %v", resp.RequiresReplace, tt.want)
 			}
 		})
 	}
