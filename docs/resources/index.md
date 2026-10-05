@@ -105,12 +105,16 @@ resource "pinecone_index" "pod" {
 
 ### Optional
 
+- `cmek_id` (String) The ID of a customer-managed encryption key (CMEK) to encrypt the index with. Only with `schema` and a managed `deployment`, and only when the index is created; changing it replaces the index.
 - `deletion_protection` (String) Whether deletion protection for the index is enabled. You can use 'enabled', or 'disabled'.
+- `deployment` (Attributes) Where the index runs. Required with `schema`. Set exactly one of `managed` or `byoc`. Changing it replaces the index. (see [below for nested schema](#nestedatt--deployment))
 - `dimension` (Number) The dimensions of the vectors to be inserted in the index. Required for pod-based and non-integrated serverless indexes. For integrated indexes with an embed model, this is optional and will default to the model's dimension if not specified.
 - `embed` (Attributes) Specify the integrated inference embedding configuration for the index. It can only be set when the index is created: `model` and `field_map` can't be changed afterwards, and `embed` can't be added to or removed from an existing index. `read_parameters` and `write_parameters` can be updated in place.
 
 Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details. (see [below for nested schema](#nestedatt--embed))
-- `metric` (String) The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'. With embed, it defaults to the model's metric. The metric can't be changed after the index is created; changing it replaces the index.
+- `metric` (String) The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'. With embed, it defaults to the model's metric. Not used with `schema`, where each dense vector field sets its own metric. The metric can't be changed after the index is created; changing it replaces the index.
+- `read_capacity` (Attributes) Read capacity configuration for the index. Set exactly one of `dedicated` or `on_demand` to select the mode. Omitting `read_capacity` entirely on create defaults to OnDemand. To switch modes after creation, explicitly set the desired sub-block — removing `read_capacity` from config will not change the mode already recorded in state. (see [below for nested schema](#nestedatt--read_capacity))
+- `schema` (Attributes) The index's schema: the typed fields its records contain. Use it with `deployment` instead of `dimension`, `metric`, `vector_type`, `spec`, and `embed`. A schema of named fields creates a document index, used with the documents API. A schema made only of the reserved fields `_values` (dense) and `_sparse_values` (sparse) creates a vector index, used with the vectors API. Metadata fields don't need to be declared: they're indexed automatically when you upsert data. The schema can't be changed after the index is created; changing it replaces the index. (see [below for nested schema](#nestedatt--schema))
 - `spec` (Attributes) Spec (see [below for nested schema](#nestedatt--spec))
 - `tags` (Map of String) Custom user tags added to an index. Keys must be 80 characters or less. Values must be 120 characters or less. Keys must be alphanumeric, '', or '-'. Values must be alphanumeric, ';', '@', '', '-', '.', '+', or ' '. To unset a key, set the value to be an empty string.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
@@ -121,6 +125,36 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 - `host` (String) The URL address where the index is hosted.
 - `id` (String) Index identifier
 - `status` (Attributes) Status (see [below for nested schema](#nestedatt--status))
+
+<a id="nestedatt--deployment"></a>
+### Nested Schema for `deployment`
+
+Optional:
+
+- `byoc` (Attributes) A BYOC (Bring Your Own Cloud) index. Only vector indexes, whose schema is made of the reserved fields, can run on BYOC. (see [below for nested schema](#nestedatt--deployment--byoc))
+- `managed` (Attributes) A serverless index. (see [below for nested schema](#nestedatt--deployment--managed))
+
+<a id="nestedatt--deployment--byoc"></a>
+### Nested Schema for `deployment.byoc`
+
+Required:
+
+- `environment` (String) The BYOC environment where the index is hosted.
+
+
+<a id="nestedatt--deployment--managed"></a>
+### Nested Schema for `deployment.managed`
+
+Required:
+
+- `cloud` (String) The public cloud where the index is hosted: `aws`, `gcp`, or `azure`.
+- `region` (String) The region where the index is hosted.
+
+Read-Only:
+
+- `environment` (String) The Pinecone environment hosting the index.
+
+
 
 <a id="nestedatt--embed"></a>
 ### Nested Schema for `embed`
@@ -139,6 +173,104 @@ Read-Only:
 - `effective_write_parameters` (Map of String) The effective write parameters as returned by the API after apply, including any server-injected defaults not present in `write_parameters`.
 - `metric` (String) The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'.
 - `vector_type` (String) The index vector type associated with the model. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension will be nil.
+
+
+<a id="nestedatt--read_capacity"></a>
+### Nested Schema for `read_capacity`
+
+Optional:
+
+- `dedicated` (Attributes) Dedicated read capacity mode. Set `node_type`, `replicas`, and `shards` to provision fixed compute for this index. All three fields are required when first switching to dedicated mode. (see [below for nested schema](#nestedatt--read_capacity--dedicated))
+- `on_demand` (Attributes) OnDemand read capacity mode (the default). Specify this block (even empty) to explicitly select OnDemand or to switch back from dedicated mode. (see [below for nested schema](#nestedatt--read_capacity--on_demand))
+
+<a id="nestedatt--read_capacity--dedicated"></a>
+### Nested Schema for `read_capacity.dedicated`
+
+Optional:
+
+- `node_type` (String) The type of machines to use. Available options: 'b1' and 't1'.
+- `replicas` (Number) The desired number of replicas.
+- `shards` (Number) The desired number of shards.
+
+
+<a id="nestedatt--read_capacity--on_demand"></a>
+### Nested Schema for `read_capacity.on_demand`
+
+
+
+<a id="nestedatt--schema"></a>
+### Nested Schema for `schema`
+
+Required:
+
+- `fields` (Attributes Map) The schema's fields, keyed by field name. Set exactly one of `dense_vector`, `sparse_vector`, or `string` on each. Field names are at most 64 bytes and can't start with `$` or `_`, except for the reserved fields. (see [below for nested schema](#nestedatt--schema--fields))
+
+<a id="nestedatt--schema--fields"></a>
+### Nested Schema for `schema.fields`
+
+Optional:
+
+- `dense_vector` (Attributes) A dense vector field. An index can have at most one. (see [below for nested schema](#nestedatt--schema--fields--dense_vector))
+- `sparse_vector` (Attributes) A sparse vector field, which takes no dimension or metric. An index can have at most one. (see [below for nested schema](#nestedatt--schema--fields--sparse_vector))
+- `string` (Attributes) A string field indexed for full-text search. An index can have at most 100. (see [below for nested schema](#nestedatt--schema--fields--string))
+
+<a id="nestedatt--schema--fields--dense_vector"></a>
+### Nested Schema for `schema.fields.dense_vector`
+
+Required:
+
+- `dimension` (Number) The number of dimensions in the field's vectors.
+- `metric` (String) The distance metric used for similarity search: `cosine`, `dotproduct`, or `euclidean`.
+
+Optional:
+
+- `description` (String) A description of the field, at most 256 bytes.
+
+
+<a id="nestedatt--schema--fields--sparse_vector"></a>
+### Nested Schema for `schema.fields.sparse_vector`
+
+Optional:
+
+- `description` (String) A description of the field, at most 256 bytes.
+
+
+<a id="nestedatt--schema--fields--string"></a>
+### Nested Schema for `schema.fields.string`
+
+Required:
+
+- `full_text_search` (Attributes) How the field's text is analyzed. Set it to `{}` for the defaults. (see [below for nested schema](#nestedatt--schema--fields--string--full_text_search))
+
+Optional:
+
+- `description` (String) A description of the field, at most 256 bytes.
+
+<a id="nestedatt--schema--fields--string--full_text_search"></a>
+### Nested Schema for `schema.fields.string.full_text_search`
+
+Optional:
+
+- `language` (String) The language for text analysis. Defaults to `en`.
+- `ngram` (Attributes) Splits the field into character n-grams for substring or prefix matching. Can't be combined with `stemming` or `stop_words`. (see [below for nested schema](#nestedatt--schema--fields--string--full_text_search--ngram))
+- `stemming` (Boolean) Whether words are reduced to their root form, so "moths" matches "moth". Defaults to `false`.
+- `stop_words` (Boolean) Whether common words such as "the" are filtered out. Requires `stemming`. Defaults to `false`.
+
+<a id="nestedatt--schema--fields--string--full_text_search--ngram"></a>
+### Nested Schema for `schema.fields.string.full_text_search.ngram`
+
+Required:
+
+- `max_gram` (Number) The maximum n-gram length, at most 10.
+- `min_gram` (Number) The minimum n-gram length.
+
+Optional:
+
+- `prefix_only` (Boolean) Whether only n-grams anchored at the start of each token are generated, as for autocomplete. Defaults to `false`.
+
+
+
+
 
 
 <a id="nestedatt--spec"></a>

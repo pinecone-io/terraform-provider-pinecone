@@ -152,6 +152,10 @@ type IndexResourceModel struct {
 	Spec               types.Object   `tfsdk:"spec"`
 	Status             types.Object   `tfsdk:"status"`
 	Embed              types.Object   `tfsdk:"embed"`
+	Schema             types.Object   `tfsdk:"schema"`
+	Deployment         types.Object   `tfsdk:"deployment"`
+	ReadCapacity       types.Object   `tfsdk:"read_capacity"`
+	CmekId             types.String   `tfsdk:"cmek_id"`
 	Timeouts           timeouts.Value `tfsdk:"timeouts"`
 }
 
@@ -166,16 +170,101 @@ func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index
 		return diags
 	}
 
+	model.Id = types.StringValue(index.Name)
+	model.Name = types.StringValue(index.Name)
+	model.Host = types.StringValue(index.Host)
+	model.DeletionProtection = types.StringValue(string(index.DeletionProtection))
+	model.CmekId = types.StringPointerValue(index.CmekId)
+
+	if model.UsesSchemaMode(index) {
+		diags = model.readSchemaMode(ctx, index)
+	} else {
+		diags = model.readLegacyMode(ctx, index)
+	}
+	if diags.HasError() {
+		return diags
+	}
+
+	if index.Status != nil {
+		model.Status, diags = types.ObjectValueFrom(ctx, IndexStatusModel{}.AttrTypes(), IndexStatusModel{
+			Ready: types.BoolValue(index.Status.Ready),
+			State: types.StringValue(string(index.Status.State)),
+		})
+		if diags.HasError() {
+			return diags
+		}
+	} else {
+		model.Status = types.ObjectNull(IndexStatusModel{}.AttrTypes())
+	}
+
+	if index.Tags != nil {
+		model.Tags, diags = types.MapValueFrom(ctx, types.StringType, index.Tags)
+		if diags.HasError() {
+			return diags
+		}
+	} else {
+		// API returned no tags - set to empty map with explicit type
+		// This handles the case where config has tags = {} and API returns nothing
+		model.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{})
+	}
+
+	return diags
+}
+
+// UsesSchemaMode reports whether the model describes the index with schema and deployment rather
+// than with dimension, metric, and spec. The model's prior value decides. Without one, as on
+// import, document indexes use schema mode, since spec can't describe them, and vector indexes use
+// legacy mode, which every configuration written before schema mode uses.
+func (model *IndexResourceModel) UsesSchemaMode(index *pinecone.Index) bool {
+	if !model.Schema.IsNull() {
+		return true
+	}
+	if !model.Spec.IsNull() {
+		return false
+	}
+	return IsDocumentIndexSchema(index.Schema)
+}
+
+func (model *IndexResourceModel) readSchemaMode(ctx context.Context, index *pinecone.Index) diag.Diagnostics {
+	var diags diag.Diagnostics
+
+	model.Schema, diags = NewIndexResourceSchemaObject(ctx, index.Schema, model.Schema)
+	if diags.HasError() {
+		return diags
+	}
+	model.Deployment, diags = NewIndexResourceDeploymentObject(ctx, index.Deployment, model.Deployment)
+	if diags.HasError() {
+		return diags
+	}
+
+	readCapacity, diags := NewIndexReadCapacityResourceModel(ctx, index.ReadCapacity)
+	if diags.HasError() {
+		return diags
+	}
+	if readCapacity != nil {
+		model.ReadCapacity, diags = types.ObjectValueFrom(ctx, IndexReadCapacityResourceModel{}.AttrTypes(), readCapacity)
+		if diags.HasError() {
+			return diags
+		}
+	} else {
+		model.ReadCapacity = types.ObjectNull(IndexReadCapacityResourceModel{}.AttrTypes())
+	}
+
+	model.Dimension = types.Int32Null()
+	model.Metric = types.StringNull()
+	model.VectorType = types.StringNull()
+	model.Spec = types.ObjectNull(indexSpecResourceAttrTypes())
+	model.Embed = types.ObjectNull(IndexEmbedResourceModel{}.AttrTypes())
+	return diags
+}
+
+func (model *IndexResourceModel) readLegacyMode(ctx context.Context, index *pinecone.Index) diag.Diagnostics {
 	priorSpec, diags := priorIndexSpec(ctx, model.Spec)
 	if diags.HasError() {
 		return diags
 	}
 
-	model.Id = types.StringValue(index.Name)
-	model.Name = types.StringValue(index.Name)
 	model.Metric = types.StringValue(string(index.Metric))
-	model.Host = types.StringValue(index.Host)
-	model.DeletionProtection = types.StringValue(string(index.DeletionProtection))
 	model.VectorType = types.StringValue(index.VectorType)
 
 	if index.Dimension != nil {
@@ -225,29 +314,9 @@ func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index
 		}
 	}
 
-	if index.Status != nil {
-		model.Status, diags = types.ObjectValueFrom(ctx, IndexStatusModel{}.AttrTypes(), IndexStatusModel{
-			Ready: types.BoolValue(index.Status.Ready),
-			State: types.StringValue(string(index.Status.State)),
-		})
-		if diags.HasError() {
-			return diags
-		}
-	} else {
-		model.Status = types.ObjectNull(IndexStatusModel{}.AttrTypes())
-	}
-
-	if index.Tags != nil {
-		model.Tags, diags = types.MapValueFrom(ctx, types.StringType, index.Tags)
-		if diags.HasError() {
-			return diags
-		}
-	} else {
-		// API returned no tags - set to empty map with explicit type
-		// This handles the case where config has tags = {} and API returns nothing
-		model.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{})
-	}
-
+	model.Schema = types.ObjectNull(IndexResourceSchemaModel{}.AttrTypes())
+	model.Deployment = types.ObjectNull(IndexResourceDeploymentModel{}.AttrTypes())
+	model.ReadCapacity = types.ObjectNull(IndexReadCapacityResourceModel{}.AttrTypes())
 	return diags
 }
 
