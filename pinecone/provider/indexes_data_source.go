@@ -41,7 +41,7 @@ func (d *IndexesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 				MarkdownDescription: "List of the indexes in your project",
 				Computed:            true,
 				NestedObject: schema.NestedAttributeObject{
-					Attributes: map[string]schema.Attribute{
+					Attributes: withSharedIndexDSAttributes(map[string]schema.Attribute{
 						"name": schema.StringAttribute{
 							MarkdownDescription: "Index name",
 							Computed:            true,
@@ -211,7 +211,7 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 								},
 							},
 						},
-					},
+					}),
 				},
 			},
 			"id": schema.StringAttribute{

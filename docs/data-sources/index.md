@@ -57,11 +57,18 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 
 ### Read-Only
 
+- `cmek_id` (String) The ID of the customer-managed encryption key used to encrypt the index, if any.
 - `deletion_protection` (String) Index deletion protection can be one of 'enabled' or 'disabled'.
+- `deployment` (Attributes) Where the index runs. Exactly one of `managed`, `pod`, or `byoc` is set. (see [below for nested schema](#nestedatt--deployment))
 - `dimension` (Number) Index dimension
 - `host` (String) The URL address where the index is hosted.
 - `id` (String) Index identifier
 - `metric` (String) Index metric can be one of 'cosine', 'dotproduct', or 'euclidean'.
+- `private_host` (String) The private endpoint URL of the index, if any.
+- `read_capacity` (Attributes) Read capacity configuration for the index. (see [below for nested schema](#nestedatt--read_capacity))
+- `schema` (Attributes) The index's schema: the typed fields its records can contain. (see [below for nested schema](#nestedatt--schema))
+- `source_backup_id` (String) The ID of the backup the index was restored from, if any.
+- `source_collection` (String) The name of the collection the index was created from, if any.
 - `tags` (Map of String) Custom user tags added to an index. Keys must be 80 characters or less. Values must be 120 characters or less. Keys must be alphanumeric, '', or '-'. Values must be alphanumeric, ';', '@', '', '-', '.', '+', or ' '. To unset a key, set the value to be an empty string.
 - `vector_type` (String) Index vector type, for example 'dense' or 'sprase'.
 
@@ -242,3 +249,204 @@ Read-Only:
 
 - `ready` (Boolean) Ready.
 - `state` (String) Initializing InitializationFailed ScalingUp ScalingDown ScalingUpPodSize ScalingDownPodSize Upgrading Terminating Ready
+
+
+<a id="nestedatt--deployment"></a>
+### Nested Schema for `deployment`
+
+Read-Only:
+
+- `byoc` (Attributes) A BYOC (Bring Your Own Cloud) index. (see [below for nested schema](#nestedatt--deployment--byoc))
+- `managed` (Attributes) A serverless index. (see [below for nested schema](#nestedatt--deployment--managed))
+- `pod` (Attributes) A pod-based index. (see [below for nested schema](#nestedatt--deployment--pod))
+
+<a id="nestedatt--deployment--byoc"></a>
+### Nested Schema for `deployment.byoc`
+
+Read-Only:
+
+- `environment` (String) The BYOC environment where the index is hosted.
+
+
+<a id="nestedatt--deployment--managed"></a>
+### Nested Schema for `deployment.managed`
+
+Read-Only:
+
+- `cloud` (String) The public cloud where the index is hosted.
+- `environment` (String) The Pinecone environment hosting the index.
+- `region` (String) The region where the index is hosted.
+
+
+<a id="nestedatt--deployment--pod"></a>
+### Nested Schema for `deployment.pod`
+
+Read-Only:
+
+- `environment` (String) The environment where the index is hosted.
+- `pod_type` (String) The pod type, such as `p1.x1`.
+- `replicas` (Number) The number of replicas.
+- `shards` (Number) The number of shards.
+
+
+
+<a id="nestedatt--read_capacity"></a>
+### Nested Schema for `read_capacity`
+
+Read-Only:
+
+- `dedicated` (Attributes) Dedicated read capacity configuration. (see [below for nested schema](#nestedatt--read_capacity--dedicated))
+- `on_demand` (Attributes) OnDemand read capacity configuration. (see [below for nested schema](#nestedatt--read_capacity--on_demand))
+
+<a id="nestedatt--read_capacity--dedicated"></a>
+### Nested Schema for `read_capacity.dedicated`
+
+Read-Only:
+
+- `current_replicas` (Number) The current number of replicas.
+- `current_shards` (Number) The current number of shards.
+- `error_message` (String) An optional error message if there are issues with the read capacity configuration.
+- `node_type` (String) The type of machines in use.
+- `replicas` (Number) The desired number of replicas.
+- `shards` (Number) The desired number of shards.
+- `state` (String) The overall status of the read capacity configuration.
+
+
+<a id="nestedatt--read_capacity--on_demand"></a>
+### Nested Schema for `read_capacity.on_demand`
+
+Read-Only:
+
+- `current_replicas` (Number) The current number of replicas.
+- `current_shards` (Number) The current number of shards.
+- `error_message` (String) An optional error message if there are issues with the read capacity configuration.
+- `state` (String) The overall status of the read capacity configuration.
+
+
+
+<a id="nestedatt--schema"></a>
+### Nested Schema for `schema`
+
+Read-Only:
+
+- `fields` (Attributes Map) The schema's fields, keyed by field name. Exactly one attribute of each field is set, naming its type. Vector indexes report their vectors as `_values` (dense) and `_sparse_values` (sparse); indexes that store dense vectors report both. (see [below for nested schema](#nestedatt--schema--fields))
+
+<a id="nestedatt--schema--fields"></a>
+### Nested Schema for `schema.fields`
+
+Read-Only:
+
+- `boolean` (Attributes) A boolean metadata field. The API adds these fields as data is upserted. (see [below for nested schema](#nestedatt--schema--fields--boolean))
+- `dense_vector` (Attributes) A dense vector field. (see [below for nested schema](#nestedatt--schema--fields--dense_vector))
+- `float` (Attributes) A floating-point metadata field. The API adds these fields as data is upserted. (see [below for nested schema](#nestedatt--schema--fields--float))
+- `integer` (Attributes) An integer metadata field. The API adds these fields as data is upserted. (see [below for nested schema](#nestedatt--schema--fields--integer))
+- `legacy_metadata` (Attributes) A metadata field on an index created with a metadata schema before API version 2026-07. (see [below for nested schema](#nestedatt--schema--fields--legacy_metadata))
+- `semantic_text` (Attributes) A text field embedded by an integrated embedding model, as on an index created with `embed`. (see [below for nested schema](#nestedatt--schema--fields--semantic_text))
+- `sparse_vector` (Attributes) A sparse vector field. (see [below for nested schema](#nestedatt--schema--fields--sparse_vector))
+- `string` (Attributes) A string field, either declared for full-text search or added by the API as data is upserted. (see [below for nested schema](#nestedatt--schema--fields--string))
+- `string_list` (Attributes) A string list metadata field. The API adds these fields as data is upserted. (see [below for nested schema](#nestedatt--schema--fields--string_list))
+
+<a id="nestedatt--schema--fields--boolean"></a>
+### Nested Schema for `schema.fields.boolean`
+
+Read-Only:
+
+- `description` (String) The field's description, if one was set.
+- `filterable` (Boolean) Whether the field is indexed for metadata filtering.
+
+
+<a id="nestedatt--schema--fields--dense_vector"></a>
+### Nested Schema for `schema.fields.dense_vector`
+
+Read-Only:
+
+- `description` (String) The field's description, if one was set.
+- `dimension` (Number) The number of dimensions in the field's vectors.
+- `metric` (String) The distance metric used for similarity search: `cosine`, `dotproduct`, or `euclidean`.
+
+
+<a id="nestedatt--schema--fields--float"></a>
+### Nested Schema for `schema.fields.float`
+
+Read-Only:
+
+- `description` (String) The field's description, if one was set.
+- `filterable` (Boolean) Whether the field is indexed for metadata filtering.
+
+
+<a id="nestedatt--schema--fields--integer"></a>
+### Nested Schema for `schema.fields.integer`
+
+Read-Only:
+
+- `description` (String) The field's description, if one was set.
+- `filterable` (Boolean) Whether the field is indexed for metadata filtering.
+
+
+<a id="nestedatt--schema--fields--legacy_metadata"></a>
+### Nested Schema for `schema.fields.legacy_metadata`
+
+Read-Only:
+
+- `filterable` (Boolean) Whether the field is indexed for metadata filtering.
+
+
+<a id="nestedatt--schema--fields--semantic_text"></a>
+### Nested Schema for `schema.fields.semantic_text`
+
+Read-Only:
+
+- `description` (String) The field's description, if one was set.
+- `dimension` (Number) The dimension of the vectors the model produces. Null for models that produce sparse vectors.
+- `metric` (String) The distance metric used for similarity search.
+- `model` (String) The embedding model.
+- `read_parameters` (Map of String) The model parameters applied at query time.
+- `write_parameters` (Map of String) The model parameters applied at write time.
+
+
+<a id="nestedatt--schema--fields--sparse_vector"></a>
+### Nested Schema for `schema.fields.sparse_vector`
+
+Read-Only:
+
+- `description` (String) The field's description, if one was set.
+
+
+<a id="nestedatt--schema--fields--string"></a>
+### Nested Schema for `schema.fields.string`
+
+Read-Only:
+
+- `description` (String) The field's description, if one was set.
+- `filterable` (Boolean) Whether the field is indexed for metadata filtering.
+- `full_text_search` (Attributes) The field's full-text search configuration. Null unless the field was declared for full-text search. (see [below for nested schema](#nestedatt--schema--fields--string--full_text_search))
+
+<a id="nestedatt--schema--fields--string--full_text_search"></a>
+### Nested Schema for `schema.fields.string.full_text_search`
+
+Read-Only:
+
+- `language` (String) The language used for text analysis.
+- `ngram` (Attributes) Character n-gram tokenization for substring or prefix matching. (see [below for nested schema](#nestedatt--schema--fields--string--full_text_search--ngram))
+- `stemming` (Boolean) Whether words are reduced to their root form.
+- `stop_words` (Boolean) Whether common words such as "the" are filtered out.
+
+<a id="nestedatt--schema--fields--string--full_text_search--ngram"></a>
+### Nested Schema for `schema.fields.string.full_text_search.ngram`
+
+Read-Only:
+
+- `max_gram` (Number) The maximum n-gram length.
+- `min_gram` (Number) The minimum n-gram length.
+- `prefix_only` (Boolean) Whether only n-grams anchored at the start of each token are generated.
+
+
+
+
+<a id="nestedatt--schema--fields--string_list"></a>
+### Nested Schema for `schema.fields.string_list`
+
+Read-Only:
+
+- `description` (String) The field's description, if one was set.
+- `filterable` (Boolean) Whether the field is indexed for metadata filtering.
