@@ -23,20 +23,28 @@ terraform {
 
 provider "pinecone" {}
 
-resource "pinecone_index" "test" {
-  name      = "tftestindex"
-  metric    = "cosine"
-  dimension = 1536
-  spec = {
-    serverless = {
-      cloud  = "aws"
-      region = "us-west-2"
-    }
+data "pinecone_index" "products" {
+  name = "products"
+}
+
+output "products_vectors" {
+  value = {
+    dimension = data.pinecone_index.products.schema.fields["_values"].dense_vector.dimension
+    metric    = data.pinecone_index.products.schema.fields["_values"].dense_vector.metric
+    region    = data.pinecone_index.products.deployment.managed.region
   }
 }
 
-data "pinecone_index" "test" {
-  name = pinecone_index.test.name
+data "pinecone_index" "articles" {
+  name = "articles"
+}
+
+output "articles_full_text_search_fields" {
+  value = {
+    for name, field in data.pinecone_index.articles.schema.fields :
+    name => field.string.full_text_search
+    if try(field.string.full_text_search, null) != null
+  }
 }
 ```
 

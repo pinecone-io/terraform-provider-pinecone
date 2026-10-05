@@ -8,7 +8,7 @@ terraform {
 
 provider "pinecone" {}
 
-# Basic serverless index
+# Serverless vector index
 resource "pinecone_index" "serverless" {
   name      = "tftestindex"
   dimension = 1536
@@ -20,7 +20,7 @@ resource "pinecone_index" "serverless" {
   }
 }
 
-# Serverless index with dedicated read capacity
+# Serverless vector index with dedicated read capacity
 resource "pinecone_index" "serverless_dedicated" {
   name      = "tftestindex-dedicated"
   dimension = 1536
@@ -39,25 +39,24 @@ resource "pinecone_index" "serverless_dedicated" {
   }
 }
 
-# Serverless index with metadata schema (selective field indexing)
-resource "pinecone_index" "serverless_schema" {
-  name      = "tftestindex-schema"
-  dimension = 1536
+# Index with integrated embedding
+resource "pinecone_index" "integrated" {
+  name = "tftestindex-integrated"
   spec = {
     serverless = {
       cloud  = "aws"
       region = "us-east-1"
-      schema = {
-        fields = {
-          "category" = { filterable = true }
-          "language" = { filterable = true }
-        }
-      }
+    }
+  }
+  embed = {
+    model = "multilingual-e5-large"
+    field_map = {
+      text = "chunk_text"
     }
   }
 }
 
-# BYOC (Bring Your Own Cloud) index
+# BYOC (Bring Your Own Cloud) vector index
 resource "pinecone_index" "byoc" {
   name      = "tftestindex-byoc"
   dimension = 1536
@@ -68,14 +67,41 @@ resource "pinecone_index" "byoc" {
   }
 }
 
-# Pod-based index
-resource "pinecone_index" "pod" {
-  name      = "tftestindex-pod"
-  dimension = 1536
-  spec = {
-    pod = {
-      environment = "us-west4-gcp"
-      pod_type    = "s1.x1"
+# Document index with dense vector, sparse vector, and full-text search fields
+resource "pinecone_index" "document" {
+  name = "tftestindex-documents"
+  deployment = {
+    managed = {
+      cloud  = "aws"
+      region = "us-east-1"
+    }
+  }
+  schema = {
+    fields = {
+      embedding = { dense_vector = { dimension = 1536, metric = "dotproduct" } }
+      terms     = { sparse_vector = {} }
+      body      = { string = { full_text_search = { stemming = true, stop_words = true } } }
+      title     = { string = { full_text_search = { ngram = { min_gram = 2, max_gram = 4, prefix_only = true } } } }
+    }
+  }
+  read_capacity = {
+    on_demand = {}
+  }
+}
+
+# Vector index defined by schema, using the reserved _values and _sparse_values fields
+resource "pinecone_index" "schema_vectors" {
+  name = "tftestindex-schema-vectors"
+  deployment = {
+    managed = {
+      cloud  = "aws"
+      region = "us-east-1"
+    }
+  }
+  schema = {
+    fields = {
+      _values        = { dense_vector = { dimension = 1536, metric = "dotproduct" } }
+      _sparse_values = { sparse_vector = {} }
     }
   }
 }

@@ -8,17 +8,18 @@ terraform {
 
 provider "pinecone" {}
 
-resource "pinecone_index" "test" {
-  name      = "tftestindex"
-  metric    = "cosine"
-  dimension = 1536
-  spec = {
-    serverless = {
-      cloud  = "aws"
-      region = "us-west-2"
-    }
-  }
+data "pinecone_indexes" "all" {}
+
+output "protected_indexes" {
+  value = [
+    for index in data.pinecone_indexes.all.indexes : index.name
+    if index.deletion_protection == "enabled"
+  ]
 }
 
-data "pinecone_indexes" "test" {
+output "dedicated_indexes" {
+  value = [
+    for index in data.pinecone_indexes.all.indexes : index.name
+    if try(index.read_capacity.dedicated, null) != null
+  ]
 }

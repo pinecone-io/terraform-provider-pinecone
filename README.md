@@ -177,13 +177,60 @@ The Terraform Provider for Pinecone supports creating and managing Pinecone proj
 
 **Note**: Project management requires admin credentials (Client ID and Client Secret). Regular API keys cannot be used to manage projects.
 
-### Index Types
+### Indexes
 
-The provider supports three index deployment types:
+An index is described in one of two ways:
 
-#### Serverless Indexes
+- **With `schema` and `deployment`**, the way Pinecone API version `2026-07` describes indexes. Use this for document
+  indexes, which combine dense vector, sparse vector, and full-text-search fields.
+- **With `dimension`, `metric`, and `spec`**, for vector indexes and indexes with integrated embedding.
 
-Serverless indexes automatically scale based on usage. Specify `cloud` and `region`:
+A configuration uses one style or the other, and an existing index keeps the style it was created with. Upgrading
+from version 4? See the [version 5 upgrade guide](docs/guides/version-5-upgrade.md).
+
+#### Document indexes
+
+```terraform
+resource "pinecone_index" "articles" {
+  name = "articles"
+  deployment = {
+    managed = { cloud = "aws", region = "us-east-1" }
+  }
+  schema = {
+    fields = {
+      embedding = { dense_vector = { dimension = 1536, metric = "dotproduct" } }
+      terms     = { sparse_vector = {} }
+      body      = { string = { full_text_search = { stemming = true } } }
+    }
+  }
+}
+```
+
+Field names are at most 64 bytes and can't start with `$` or `_`. An index can have at most one dense vector field,
+one sparse vector field, and 100 full-text-search fields. Metadata fields don't need to be declared: they're indexed
+automatically when you upsert data. The schema can't be changed after the index is created; changing it replaces the
+index. Document indexes run only on managed (serverless) deployments.
+
+A schema made only of the reserved fields `_values` (dense) and `_sparse_values` (sparse) creates a vector index
+instead, used with the vectors API:
+
+```terraform
+resource "pinecone_index" "products" {
+  name = "products"
+  deployment = {
+    managed = { cloud = "aws", region = "us-east-1" }
+  }
+  schema = {
+    fields = {
+      _values = { dense_vector = { dimension = 1024, metric = "dotproduct" } }
+    }
+  }
+}
+```
+
+#### Vector indexes
+
+Serverless vector indexes take a `cloud` and `region`:
 
 ```terraform
 resource "pinecone_index" "serverless" {
@@ -198,9 +245,8 @@ resource "pinecone_index" "serverless" {
 }
 ```
 
-#### BYOC Indexes (Bring Your Own Cloud)
-
-BYOC indexes are deployed into your own cloud environment. Specify the `environment` identifier provided by Pinecone:
+BYOC (Bring Your Own Cloud) indexes are deployed into your own cloud environment, identified by the `environment`
+Pinecone provides:
 
 ```terraform
 resource "pinecone_index" "byoc" {
@@ -214,46 +260,61 @@ resource "pinecone_index" "byoc" {
 }
 ```
 
-#### Pod-based Indexes
+#### Integrated embedding
 
-Pod-based indexes use dedicated infrastructure. Specify `environment` and `pod_type`:
+An index with `embed` embeds text with a model hosted by Pinecone. The model and `field_map` are fixed when the
+index is created; `read_parameters` and `write_parameters` can be updated in place.
 
 ```terraform
-resource "pinecone_index" "pod" {
-  name      = "my-pod-index"
-  dimension = 1536
+resource "pinecone_index" "integrated" {
+  name = "my-integrated-index"
   spec = {
-    pod = {
-      environment = "us-west4-gcp"
-      pod_type    = "p1.x1"
+    serverless = {
+      cloud  = "aws"
+      region = "us-east-1"
+    }
+  }
+  embed = {
+    model = "multilingual-e5-large"
+    field_map = {
+      text = "chunk_text"
     }
   }
 }
 ```
 
+#### Pod-based indexes
+
+Pod-based indexes can't be created with Pinecone API version `2026-07`. Existing pod-based indexes can be imported,
+scaled in place with `spec.pod.replicas` and `spec.pod.pod_type`, and deleted.
+
 ### Read Capacity
 
-Serverless and BYOC indexes support configurable read capacity. Set `read_capacity` inside the `serverless` or `byoc` spec block.
-
-There are two modes — omitting `read_capacity` entirely defaults to `on_demand`:
+Serverless and BYOC indexes support configurable read capacity. With `schema`, set `read_capacity` at the top level;
+with `spec`, set it inside the `serverless` or `byoc` block. Omitting `read_capacity` defaults to `on_demand`:
 
 ```terraform
-# On-demand (default) — explicit form
-resource "pinecone_index" "on_demand" {
-  name      = "my-index"
-  dimension = 1536
-  spec = {
-    serverless = {
-      cloud  = "aws"
-      region = "us-east-1"
-      read_capacity = {
-        on_demand = {}
-      }
+# Dedicated read capacity on a document index
+resource "pinecone_index" "dedicated_documents" {
+  name = "my-documents"
+  deployment = {
+    managed = { cloud = "aws", region = "us-east-1" }
+  }
+  schema = {
+    fields = {
+      body = { string = { full_text_search = {} } }
+    }
+  }
+  read_capacity = {
+    dedicated = {
+      node_type = "b1"
+      replicas  = 1
+      shards    = 1
     }
   }
 }
 
-# Dedicated — provision fixed compute
+# Dedicated read capacity on a vector index
 resource "pinecone_index" "dedicated" {
   name      = "my-index"
   dimension = 1536
@@ -273,32 +334,13 @@ resource "pinecone_index" "dedicated" {
 }
 ```
 
-**Note**: To switch from `dedicated` back to `on_demand` after creation, explicitly set the `on_demand = {}` sub-block. Removing the `read_capacity` block entirely will not change the mode already recorded in state.
+**Note**: To switch from `dedicated` back to `on_demand` after creation, explicitly set the `on_demand = {}` sub-block. Removing the `read_capacity` block entirely will not change the mode already recorded in state. Document indexes can't switch from `dedicated` back to `on_demand`.
 
-### Metadata Schema
+### Metadata Schema (deprecated)
 
-Serverless and BYOC indexes support a `schema` block that controls which metadata fields are indexed for filtering. By default (no `schema`), all metadata is indexed. When `schema` is present, only fields listed with `filterable: true` are indexed.
-
-**Important**: `schema` can only be set at index creation time. Changing it requires replacing the index.
-
-```terraform
-resource "pinecone_index" "with_schema" {
-  name      = "my-index"
-  dimension = 1536
-  spec = {
-    serverless = {
-      cloud  = "aws"
-      region = "us-east-1"
-      schema = {
-        fields = {
-          "category" = { filterable = true }
-          "language"  = { filterable = true }
-        }
-      }
-    }
-  }
-}
-```
+`spec.serverless.schema` and `spec.byoc.schema` are deprecated: metadata fields are indexed automatically when you
+upsert data. New indexes accept them only together with `embed`. Existing indexes keep the value, and it can be
+removed from the configuration without replacing the index.
 
 ## Documentation
 

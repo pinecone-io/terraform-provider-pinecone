@@ -23,20 +23,15 @@ terraform {
 
 provider "pinecone" {}
 
-resource "pinecone_index" "test" {
-  name      = "tftestindex"
-  dimension = 10
-  spec = {
-    pod = {
-      environment = "us-west4-gcp"
-      pod_type    = "s1.x1"
-    }
-  }
+# Collections are created from pod-based indexes, which can no longer be created, so the source
+# is an existing pod-based index.
+variable "pod_index_name" {
+  type = string
 }
 
 resource "pinecone_collection" "test" {
   name   = "tftestcollection"
-  source = pinecone_index.test.name
+  source = var.pod_index_name
 }
 ```
 
