@@ -4,8 +4,10 @@
 package models
 
 import (
+	"context"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
@@ -340,5 +342,45 @@ func TestIndexResourceModelRead_importWithoutSpec(t *testing.T) {
 	}
 	if spec.Pod != nil || spec.Serverless != nil || spec.BYOC != nil {
 		t.Errorf("spec = %+v, want no deployment", spec)
+	}
+}
+
+// TestToReadCapacityParams_dedicatedLeavesOutUnknownValues covers dedicated values that aren't
+// configured, which plan as unknown. Their pointers would be to zero values, scaling the index to
+// zero replicas or shards, so they're left out and the API keeps the current values.
+func TestToReadCapacityParams_dedicatedLeavesOutUnknownValues(t *testing.T) {
+	ctx := context.Background()
+	dedicated, d := types.ObjectValueFrom(ctx, IndexReadCapacityDedicatedResourceModel{}.AttrTypes(), IndexReadCapacityDedicatedResourceModel{
+		NodeType: types.StringUnknown(),
+		Replicas: types.Int32Unknown(),
+		Shards:   types.Int32Value(2),
+	})
+	if d.HasError() {
+		t.Fatalf("building dedicated: %v", d)
+	}
+	readCapacity, d := types.ObjectValueFrom(ctx, IndexReadCapacityResourceModel{}.AttrTypes(), IndexReadCapacityResourceModel{
+		Dedicated: dedicated,
+		OnDemand:  types.ObjectNull(map[string]attr.Type{}),
+	})
+	if d.HasError() {
+		t.Fatalf("building read capacity: %v", d)
+	}
+
+	params, d := ToReadCapacityParams(ctx, readCapacity)
+	if d.HasError() {
+		t.Fatalf("ToReadCapacityParams: %v", d)
+	}
+	got := params.Dedicated
+	if got.NodeType != nil {
+		t.Errorf("NodeType = %q, want nil", *got.NodeType)
+	}
+	if got.Scaling == nil || got.Scaling.Manual == nil {
+		t.Fatal("Scaling.Manual = nil, want shards")
+	}
+	if got.Scaling.Manual.Replicas != nil {
+		t.Errorf("Replicas = %d, want nil", *got.Scaling.Manual.Replicas)
+	}
+	if got.Scaling.Manual.Shards == nil || *got.Scaling.Manual.Shards != 2 {
+		t.Errorf("Shards = %v, want 2", got.Scaling.Manual.Shards)
 	}
 }

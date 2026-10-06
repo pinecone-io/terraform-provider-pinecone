@@ -460,3 +460,60 @@ func TestPodDeploymentMatches(t *testing.T) {
 		})
 	}
 }
+
+func TestMetricDefault(t *testing.T) {
+	s := indexResourceSchema(t)
+	base := testIndexModel(t, s)
+	base.Metric = types.StringNull()
+	sparse := base
+	sparse.Dimension = types.Int32Null()
+	sparse.VectorType = types.StringValue("sparse")
+	unknownVectorType := base
+	unknownVectorType.VectorType = types.StringUnknown()
+	integrated := withEmbed(t, s, base, "pinecone-sparse-english-v0", "chunk_text")
+	configured := base
+	configured.Metric = types.StringValue("euclidean")
+
+	tests := []struct {
+		name   string
+		config models.IndexResourceModel
+		want   types.String
+	}{
+		{"dense", base, types.StringValue("cosine")},
+		{"sparse", sparse, types.StringValue("dotproduct")},
+		{"unknown vector_type", unknownVectorType, types.StringUnknown()},
+		{"embed uses the model's metric", integrated, types.StringUnknown()},
+		{"configured", configured, types.StringValue("euclidean")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			config := tfsdk.Config{Schema: s, Raw: tftypes.NewValue(s.Type().TerraformType(ctx), nil)}
+			plan := tfsdk.Plan(config)
+			if d := plan.Set(ctx, &tt.config); d.HasError() {
+				t.Fatalf("setting config: %v", d)
+			}
+			config.Raw = plan.Raw
+			planValue := tt.config.Metric
+			if planValue.IsNull() {
+				planValue = types.StringUnknown()
+			}
+			req := planmodifier.StringRequest{
+				Path:        path.Root("metric"),
+				Config:      config,
+				ConfigValue: tt.config.Metric,
+				PlanValue:   planValue,
+				State:       tfsdk.State{Schema: s, Raw: tftypes.NewValue(s.Type().TerraformType(ctx), nil)},
+				StateValue:  types.StringNull(),
+			}
+			resp := planmodifier.StringResponse{PlanValue: req.PlanValue}
+			metricDefault{}.PlanModifyString(ctx, req, &resp)
+			if resp.Diagnostics.HasError() {
+				t.Fatalf("diagnostics: %v", resp.Diagnostics)
+			}
+			if !resp.PlanValue.Equal(tt.want) {
+				t.Errorf("plan = %v, want %v", resp.PlanValue, tt.want)
+			}
+		})
+	}
+}

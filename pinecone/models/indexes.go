@@ -1181,15 +1181,25 @@ func ToReadCapacityParams(ctx context.Context, rcObj types.Object) (*pinecone.Re
 			return nil, diags
 		}
 
-		cfg := &pinecone.ReadCapacityDedicatedConfig{
-			NodeType: dedicated.NodeType.ValueStringPointer(),
+		// Values that aren't configured are left out, so the API keeps the current ones. An unknown
+		// value's pointer is to its zero value, not nil.
+		cfg := &pinecone.ReadCapacityDedicatedConfig{}
+		if !dedicated.NodeType.IsNull() && !dedicated.NodeType.IsUnknown() {
+			cfg.NodeType = dedicated.NodeType.ValueStringPointer()
 		}
 
-		if !dedicated.Replicas.IsNull() || !dedicated.Shards.IsNull() {
+		var replicas, shards *int32
+		if !dedicated.Replicas.IsNull() && !dedicated.Replicas.IsUnknown() {
+			replicas = dedicated.Replicas.ValueInt32Pointer()
+		}
+		if !dedicated.Shards.IsNull() && !dedicated.Shards.IsUnknown() {
+			shards = dedicated.Shards.ValueInt32Pointer()
+		}
+		if replicas != nil || shards != nil {
 			cfg.Scaling = &pinecone.ReadCapacityScaling{
 				Manual: &pinecone.ReadCapacityManualScaling{
-					Replicas: dedicated.Replicas.ValueInt32Pointer(),
-					Shards:   dedicated.Shards.ValueInt32Pointer(),
+					Replicas: replicas,
+					Shards:   shards,
 				},
 			}
 		}

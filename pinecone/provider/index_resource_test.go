@@ -101,7 +101,6 @@ provider "pinecone" {
 
 resource "pinecone_index" "%s" {
   name        = %q
-  metric      = "dotproduct"
   vector_type = "sparse"
   spec = {
     serverless = {
@@ -239,6 +238,23 @@ resource "pinecone_index" "test" {
   }
 }`,
 			expectError: regexp.MustCompile("Metadata schema isn't supported"),
+		},
+		{
+			name: "embed without field_map",
+			config: `
+resource "pinecone_index" "test" {
+  name = "test"
+  spec = {
+    serverless = {
+      cloud  = "aws"
+      region = "us-west-2"
+    }
+  }
+  embed = {
+    model = "multilingual-e5-large"
+  }
+}`,
+			expectError: regexp.MustCompile(`(?s)Attribute "embed.field_map" must be specified`),
 		},
 	}
 

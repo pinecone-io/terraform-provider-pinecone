@@ -21,6 +21,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int32validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/objectvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -95,14 +96,14 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				},
 			},
 			"metric": schema.StringAttribute{
-				MarkdownDescription: "The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'.",
+				MarkdownDescription: "The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'. With embed, it defaults to the model's metric.",
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString("cosine"),
 				Validators: []validator.String{
 					stringvalidator.OneOf([]string{"euclidean", "cosine", "dotproduct"}...),
 				},
 				PlanModifiers: []planmodifier.String{
+					metricDefault{},
 					stringplanmodifier.UseStateForUnknown(),
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -253,6 +254,12 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details.`,
 				Optional: true,
 				Computed: true,
+				Validators: []validator.Object{
+					objectvalidator.AlsoRequires(
+						path.MatchRelative().AtName("model"),
+						path.MatchRelative().AtName("field_map"),
+					),
+				},
 				PlanModifiers: []planmodifier.Object{
 					embedNullForNullConfig{},
 					objectplanmodifier.UseStateForUnknown(),
@@ -436,7 +443,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 	if spec.Serverless != nil {
-		metric := pinecone.IndexMetric(data.Metric.ValueString())
+		metric := knownMetricPointer(data.Metric)
 		deletionProtection := pinecone.DeletionProtection(data.DeletionProtection.ValueString())
 
 		readCapacityParams, diags := models.ToReadCapacityParams(ctx, spec.Serverless.ReadCapacity)
@@ -457,7 +464,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 			embedConfig := pinecone.CreateIndexForModelEmbed{
 				Model:           embed.Model.ValueString(),
 				FieldMap:        *fieldMap,
-				Metric:          &metric,
+				Metric:          metric,
 				ReadParameters:  mapAttrToInterfacePtr(embed.ReadParameters),
 				WriteParameters: mapAttrToInterfacePtr(embed.WriteParameters),
 			}
@@ -492,7 +499,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 			serverlessReq := pinecone.CreateServerlessIndexRequest{
 				Name:               data.Name.ValueString(),
 				Dimension:          knownInt32Pointer(data.Dimension),
-				Metric:             &metric,
+				Metric:             metric,
 				DeletionProtection: &deletionProtection,
 				Cloud:              pinecone.Cloud(spec.Serverless.Cloud.ValueString()),
 				Region:             spec.Serverless.Region.ValueString(),
@@ -515,7 +522,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 			}
 		}
 	} else if spec.BYOC != nil {
-		metric := pinecone.IndexMetric(data.Metric.ValueString())
+		metric := knownMetricPointer(data.Metric)
 		deletionProtection := pinecone.DeletionProtection(data.DeletionProtection.ValueString())
 
 		if embed != nil {
@@ -539,7 +546,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 			Name:               data.Name.ValueString(),
 			Environment:        spec.BYOC.Environment.ValueString(),
 			Dimension:          knownInt32Pointer(data.Dimension),
-			Metric:             &metric,
+			Metric:             metric,
 			DeletionProtection: &deletionProtection,
 			ReadCapacity:       readCapacityParams,
 			Schema:             byocSchemaParams,
@@ -1142,6 +1149,15 @@ func semanticTextFieldName(fieldMap types.Map) (string, bool) {
 	return name.ValueString(), true
 }
 
+// knownMetricPointer returns nil for a null or unknown metric, so the SDK and API pick the default.
+func knownMetricPointer(v types.String) *pinecone.IndexMetric {
+	if v.IsNull() || v.IsUnknown() {
+		return nil
+	}
+	metric := pinecone.IndexMetric(v.ValueString())
+	return &metric
+}
+
 // knownInt32Pointer returns nil for a null or unknown value. An unknown value reaches Create when
 // an Optional+Computed attribute isn't configured, and ValueInt32Pointer would turn it into 0.
 func knownInt32Pointer(v types.Int32) *int32 {
@@ -1288,16 +1304,25 @@ func readCapacitySchema() schema.Attribute {
 						MarkdownDescription: "The type of machines to use. Available options: 'b1' and 't1'.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseNonNullStateForUnknown(),
+						},
 					},
 					"replicas": schema.Int32Attribute{
 						MarkdownDescription: "The desired number of replicas.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Int32{
+							int32planmodifier.UseNonNullStateForUnknown(),
+						},
 					},
 					"shards": schema.Int32Attribute{
 						MarkdownDescription: "The desired number of shards.",
 						Optional:            true,
 						Computed:            true,
+						PlanModifiers: []planmodifier.Int32{
+							int32planmodifier.UseNonNullStateForUnknown(),
+						},
 					},
 				},
 			},
@@ -1403,6 +1428,37 @@ func (embedComputedStringModifier) PlanModifyString(_ context.Context, req planm
 	}
 	if resp.PlanValue.IsUnknown() {
 		resp.PlanValue = req.StateValue
+	}
+}
+
+// metricDefault plans the metric an index gets when metric isn't configured: "dotproduct" for a
+// sparse index and "cosine" otherwise. With embed, or with a vector_type that isn't known yet, it
+// leaves the plan alone, so the metric is computed on create and kept from state afterwards.
+type metricDefault struct{}
+
+func (metricDefault) Description(_ context.Context) string {
+	return `Defaults to "dotproduct" for sparse indexes, the model's metric with embed, and "cosine" otherwise.`
+}
+
+func (m metricDefault) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (metricDefault) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	if !req.ConfigValue.IsNull() {
+		return
+	}
+	var embed types.Object
+	var vectorType types.String
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("embed"), &embed)...)
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("vector_type"), &vectorType)...)
+	if resp.Diagnostics.HasError() || !embed.IsNull() || vectorType.IsUnknown() {
+		return
+	}
+	if vectorType.ValueString() == "sparse" {
+		resp.PlanValue = types.StringValue(string(pinecone.IndexMetricDotproduct))
+	} else {
+		resp.PlanValue = types.StringValue(string(pinecone.IndexMetricCosine))
 	}
 }
 
