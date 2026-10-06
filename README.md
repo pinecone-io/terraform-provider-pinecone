@@ -246,7 +246,7 @@ resource "pinecone_index" "serverless" {
 ```
 
 BYOC (Bring Your Own Cloud) indexes are deployed into your own cloud environment, identified by the `environment`
-Pinecone provides:
+Pinecone provides. They need dedicated read capacity:
 
 ```terraform
 resource "pinecone_index" "byoc" {
@@ -255,6 +255,13 @@ resource "pinecone_index" "byoc" {
   spec = {
     byoc = {
       environment = "my-byoc-env-id"
+      read_capacity = {
+        dedicated = {
+          node_type = "b1"
+          replicas  = 1
+          shards    = 1
+        }
+      }
     }
   }
 }
@@ -291,7 +298,8 @@ scaled in place with `spec.pod.replicas` and `spec.pod.pod_type`, and deleted.
 ### Read Capacity
 
 Serverless and BYOC indexes support configurable read capacity. With `schema`, set `read_capacity` at the top level;
-with `spec`, set it inside the `serverless` or `byoc` block. Omitting `read_capacity` defaults to `on_demand`:
+with `spec`, set it inside the `serverless` or `byoc` block. Omitting `read_capacity` defaults to `on_demand`, which
+BYOC indexes don't support, so BYOC indexes must set `dedicated`:
 
 ```terraform
 # Dedicated read capacity on a document index

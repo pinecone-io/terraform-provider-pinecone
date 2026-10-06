@@ -71,13 +71,20 @@ resource "pinecone_index" "integrated" {
   }
 }
 
-# BYOC (Bring Your Own Cloud) vector index
+# BYOC (Bring Your Own Cloud) vector index. BYOC indexes need dedicated read capacity.
 resource "pinecone_index" "byoc" {
   name      = "tftestindex-byoc"
   dimension = 1536
   spec = {
     byoc = {
       environment = "my-byoc-env-id"
+      read_capacity = {
+        dedicated = {
+          node_type = "b1"
+          replicas  = 1
+          shards    = 1
+        }
+      }
     }
   }
 }
