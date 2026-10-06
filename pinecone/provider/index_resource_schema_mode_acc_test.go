@@ -102,6 +102,69 @@ func TestAccIndexResource_documentIndex(t *testing.T) {
 	})
 }
 
+// TestAccIndexResource_documentIndexExplicitValues sets the values the API defaults, such as false
+// full-text-search options, explicitly. If the API leaves a false value or a description out of its
+// response, state wouldn't match the configuration and the schema would plan a replacement.
+func TestAccIndexResource_documentIndexExplicitValues(t *testing.T) {
+	t.Parallel()
+	rName := acctest.RandomWithPrefix("tftest")
+	config := fmt.Sprintf(`
+provider "pinecone" {
+}
+
+resource "pinecone_index" "test" {
+  name = %q
+  deployment = {
+    managed = { cloud = "aws", region = "us-west-2" }
+  }
+  schema = {
+    fields = {
+      embedding = { dense_vector = { dimension = 8, metric = "cosine", description = "Article embedding" } }
+      terms     = { sparse_vector = { description = "Article keywords" } }
+      body = {
+        string = {
+          description      = "Article body"
+          full_text_search = { language = "en", stemming = false, stop_words = false }
+        }
+      }
+      title = { string = { full_text_search = { ngram = { min_gram = 2, max_gram = 3, prefix_only = false } } } }
+    }
+  }
+}
+`, rName)
+	fts := "schema.fields.body.string.full_text_search."
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckIndexDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckIndexExists(),
+					resource.TestCheckResourceAttr("pinecone_index.test", fts+"language", "en"),
+					resource.TestCheckResourceAttr("pinecone_index.test", fts+"stemming", "false"),
+					resource.TestCheckResourceAttr("pinecone_index.test", fts+"stop_words", "false"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "schema.fields.title.string.full_text_search.ngram.prefix_only", "false"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "schema.fields.body.string.description", "Article body"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "schema.fields.embedding.dense_vector.description", "Article embedding"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "schema.fields.terms.sparse_vector.description", "Article keywords"),
+				),
+			},
+			{
+				Config:   config,
+				PlanOnly: true,
+			},
+			{
+				ResourceName:      "pinecone_index.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
 func TestAccIndexResource_reservedVectorIndex(t *testing.T) {
 	t.Parallel()
 	rName := acctest.RandomWithPrefix("tftest")
