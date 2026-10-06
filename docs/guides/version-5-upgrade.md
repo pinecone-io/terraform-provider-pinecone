@@ -69,6 +69,30 @@ terraform taint pinecone_index.example
 terraform apply
 ```
 
+### BYOC indexes need dedicated read capacity
+
+API version `2026-07` doesn't support on-demand read capacity on BYOC indexes, and leaving out `read_capacity`
+selects on-demand. A new `spec.byoc` index needs `read_capacity.dedicated`, or the apply fails:
+
+```terraform
+resource "pinecone_index" "byoc" {
+  name      = "my-byoc-index"
+  dimension = 1536
+  spec = {
+    byoc = {
+      environment = "my-byoc-env-id"
+      read_capacity = {
+        dedicated = {
+          node_type = "b1"
+          replicas  = 1
+          shards    = 1
+        }
+      }
+    }
+  }
+}
+```
+
 ## New: indexes defined by schema and deployment
 
 `pinecone_index` can describe an index with `schema` and `deployment`, the way API version `2026-07` does, instead
@@ -138,8 +162,12 @@ output "products_dimension" {
 
 ## Fixes
 
-- Sparse indexes (`vector_type = "sparse"`) can be created. Earlier versions always failed with
-  `Dimension should not be specified when VectorType is 'sparse'`.
+- Sparse indexes (`vector_type = "sparse"`) can be created, and `metric` can be left out: it defaults to
+  `dotproduct`. Earlier versions always failed with `Dimension should not be specified when VectorType is 'sparse'`.
+- Integrated indexes (`embed`) without `metric` use the model's metric. Earlier versions always sent `cosine`.
+- `embed` without `field_map` fails at plan time. Earlier versions crashed the provider during apply.
+- Values left out of `read_capacity.dedicated` keep their current setting. Earlier versions could send `0` replicas
+  or shards, or an empty node type, when the index was updated for an unrelated change.
 - `pinecone_indexes` reports `deletion_protection`. Earlier versions always reported it as null.
 - Updating `embed.read_parameters` or `embed.write_parameters` no longer fails with
   `Provider produced inconsistent result after apply`.
