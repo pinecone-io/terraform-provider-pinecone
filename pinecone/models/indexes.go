@@ -15,6 +15,7 @@ import (
 	"github.com/pinecone-io/go-pinecone/v7/pinecone"
 )
 
+// IndexModel is an index as the index data sources report it.
 type IndexModel struct {
 	Name               types.String `tfsdk:"name"`
 	Dimension          types.Int32  `tfsdk:"dimension"`
@@ -26,6 +27,13 @@ type IndexModel struct {
 	Spec               types.Object `tfsdk:"spec"`
 	Status             types.Object `tfsdk:"status"`
 	Embed              types.Object `tfsdk:"embed"`
+	Schema             types.Object `tfsdk:"schema"`
+	Deployment         types.Object `tfsdk:"deployment"`
+	ReadCapacity       types.Object `tfsdk:"read_capacity"`
+	PrivateHost        types.String `tfsdk:"private_host"`
+	CmekId             types.String `tfsdk:"cmek_id"`
+	SourceBackupId     types.String `tfsdk:"source_backup_id"`
+	SourceCollection   types.String `tfsdk:"source_collection"`
 }
 
 func (model *IndexModel) Read(ctx context.Context, index *pinecone.Index) diag.Diagnostics {
@@ -33,8 +41,35 @@ func (model *IndexModel) Read(ctx context.Context, index *pinecone.Index) diag.D
 
 	model.Name = types.StringValue(index.Name)
 	model.Metric = types.StringValue(string(index.Metric))
+	model.DeletionProtection = types.StringValue(string(index.DeletionProtection))
 	model.VectorType = types.StringValue(index.VectorType)
 	model.Host = types.StringValue(index.Host)
+	model.PrivateHost = types.StringPointerValue(index.PrivateHost)
+	model.CmekId = types.StringPointerValue(index.CmekId)
+	model.SourceBackupId = types.StringPointerValue(index.SourceBackupId)
+	model.SourceCollection = types.StringPointerValue(index.SourceCollection)
+
+	model.Schema, diags = NewIndexSchemaObject(ctx, index.Schema)
+	if diags.HasError() {
+		return diags
+	}
+	model.Deployment, diags = NewIndexDeploymentObject(ctx, index.Deployment)
+	if diags.HasError() {
+		return diags
+	}
+
+	readCapacity, diags := NewIndexReadCapacityModel(ctx, index.ReadCapacity)
+	if diags.HasError() {
+		return diags
+	}
+	if readCapacity != nil {
+		model.ReadCapacity, diags = types.ObjectValueFrom(ctx, IndexReadCapacityModel{}.AttrTypes(), readCapacity)
+		if diags.HasError() {
+			return diags
+		}
+	} else {
+		model.ReadCapacity = types.ObjectNull(IndexReadCapacityModel{}.AttrTypes())
+	}
 
 	if index.Dimension != nil {
 		model.Dimension = types.Int32Value(*index.Dimension)
@@ -216,97 +251,15 @@ func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index
 	return diags
 }
 
-// IndexDatasourceeModel defined the Index model for the datasource.
+// IndexDatasourceModel is the index data source's model: an IndexModel plus the data source's id.
 type IndexDatasourceModel struct {
-	Id                 types.String `tfsdk:"id"`
-	Name               types.String `tfsdk:"name"`
-	Dimension          types.Int32  `tfsdk:"dimension"`
-	Metric             types.String `tfsdk:"metric"`
-	DeletionProtection types.String `tfsdk:"deletion_protection"`
-	VectorType         types.String `tfsdk:"vector_type"`
-	Tags               types.Map    `tfsdk:"tags"`
-	Host               types.String `tfsdk:"host"`
-	Spec               types.Object `tfsdk:"spec"`
-	Status             types.Object `tfsdk:"status"`
-	Embed              types.Object `tfsdk:"embed"`
+	IndexModel
+	Id types.String `tfsdk:"id"`
 }
 
 func (model *IndexDatasourceModel) Read(ctx context.Context, index *pinecone.Index) diag.Diagnostics {
-	var diags diag.Diagnostics
-
 	model.Id = types.StringValue(index.Name)
-	model.Name = types.StringValue(index.Name)
-	model.Metric = types.StringValue(string(index.Metric))
-	model.Host = types.StringValue(index.Host)
-	model.DeletionProtection = types.StringValue(string(index.DeletionProtection))
-	model.VectorType = types.StringValue(index.VectorType)
-
-	if index.Dimension != nil {
-		model.Dimension = types.Int32Value(*index.Dimension)
-	} else {
-		model.Dimension = types.Int32Null()
-	}
-
-	pod, diags := NewIndexPodSpecModel(ctx, indexSpec(index).Pod)
-	if diags.HasError() {
-		return diags
-	}
-	serverless, diags := NewIndexServerlessSpecModel(ctx, indexSpec(index).Serverless, index.Schema)
-	if diags.HasError() {
-		return diags
-	}
-	byoc, diags := NewIndexBYOCSpecModel(ctx, indexSpec(index).BYOC, index.Schema)
-	if diags.HasError() {
-		return diags
-	}
-	spec := IndexSpecModel{
-		Pod:        pod,
-		Serverless: serverless,
-		BYOC:       byoc,
-	}
-
-	embed, diags := NewIndexEmbedModel(ctx, indexEmbed(index))
-	if diags.HasError() {
-		return diags
-	}
-	if embed != nil {
-		model.Embed, diags = types.ObjectValueFrom(ctx, IndexEmbedModel{}.AttrTypes(), embed)
-		if diags.HasError() {
-			return diags
-		}
-	} else {
-		model.Embed = types.ObjectNull(IndexEmbedModel{}.AttrTypes())
-	}
-
-	model.Spec, diags = types.ObjectValueFrom(ctx, IndexSpecModel{}.AttrTypes(), spec)
-	if diags.HasError() {
-		return diags
-	}
-
-	if index.Status != nil {
-		model.Status, diags = types.ObjectValueFrom(ctx, IndexStatusModel{}.AttrTypes(), IndexStatusModel{
-			Ready: types.BoolValue(index.Status.Ready),
-			State: types.StringValue(string(index.Status.State)),
-		})
-		if diags.HasError() {
-			return diags
-		}
-	} else {
-		model.Status = types.ObjectNull(IndexStatusModel{}.AttrTypes())
-	}
-
-	if index.Tags != nil {
-		model.Tags, diags = types.MapValueFrom(ctx, types.StringType, index.Tags)
-		if diags.HasError() {
-			return diags
-		}
-	} else {
-		// API returned no tags - set to empty map with explicit type
-		// This handles the case where config has tags = {} and API returns nothing
-		model.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{})
-	}
-
-	return diags
+	return model.IndexModel.Read(ctx, index)
 }
 
 type IndexSpecModel struct {
