@@ -357,6 +357,8 @@ func NewIndexDeploymentObject(ctx context.Context, deployment *pinecone.IndexDep
 		model.Byoc = &ByocDeploymentModel{
 			Environment: types.StringValue(deployment.Byoc.Environment),
 		}
+	default:
+		return types.ObjectNull(IndexDeploymentModel{}.AttrTypes()), nil
 	}
 	return types.ObjectValueFrom(ctx, IndexDeploymentModel{}.AttrTypes(), model)
 }

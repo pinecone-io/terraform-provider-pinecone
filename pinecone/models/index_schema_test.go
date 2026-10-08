@@ -163,6 +163,9 @@ func TestNewIndexDeploymentObject(t *testing.T) {
 	if obj, diags := NewIndexDeploymentObject(t.Context(), nil); diags.HasError() || !obj.IsNull() {
 		t.Errorf("NewIndexDeploymentObject(nil) = %v, %v; want null object", obj, diags)
 	}
+	if obj, diags := NewIndexDeploymentObject(t.Context(), &pinecone.IndexDeployment{}); diags.HasError() || !obj.IsNull() {
+		t.Errorf("NewIndexDeploymentObject(empty) = %v, %v; want null object", obj, diags)
+	}
 }
 
 func TestIndexModelRead(t *testing.T) {
