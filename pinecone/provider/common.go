@@ -11,7 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
-	"github.com/pinecone-io/go-pinecone/v6/pinecone"
+	"github.com/pinecone-io/go-pinecone/v7/pinecone"
 )
 
 // roleBindingScopeError checks a role binding's resource_type against its

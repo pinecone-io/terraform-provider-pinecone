@@ -12,7 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
-	"github.com/pinecone-io/go-pinecone/v6/pinecone"
+	"github.com/pinecone-io/go-pinecone/v7/pinecone"
 )
 
 type IndexModel struct {
@@ -42,15 +42,15 @@ func (model *IndexModel) Read(ctx context.Context, index *pinecone.Index) diag.D
 		model.Dimension = types.Int32Null()
 	}
 
-	pod, diags := NewIndexPodSpecModel(ctx, index.Spec.Pod)
+	pod, diags := NewIndexPodSpecModel(ctx, indexSpec(index).Pod)
 	if diags.HasError() {
 		return diags
 	}
-	serverless, diags := NewIndexServerlessSpecModel(ctx, index.Spec.Serverless)
+	serverless, diags := NewIndexServerlessSpecModel(ctx, indexSpec(index).Serverless, index.Schema)
 	if diags.HasError() {
 		return diags
 	}
-	byoc, diags := NewIndexBYOCSpecModel(ctx, index.Spec.BYOC)
+	byoc, diags := NewIndexBYOCSpecModel(ctx, indexSpec(index).BYOC, index.Schema)
 	if diags.HasError() {
 		return diags
 	}
@@ -60,7 +60,7 @@ func (model *IndexModel) Read(ctx context.Context, index *pinecone.Index) diag.D
 		BYOC:       byoc,
 	}
 
-	embed, diags := NewIndexEmbedModel(ctx, index.Embed)
+	embed, diags := NewIndexEmbedModel(ctx, indexEmbed(index))
 	if diags.HasError() {
 		return diags
 	}
@@ -78,12 +78,16 @@ func (model *IndexModel) Read(ctx context.Context, index *pinecone.Index) diag.D
 		return diags
 	}
 
-	model.Status, diags = types.ObjectValueFrom(ctx, IndexStatusModel{}.AttrTypes(), IndexStatusModel{
-		Ready: types.BoolValue(index.Status.Ready),
-		State: types.StringValue(string(index.Status.State)),
-	})
-	if diags.HasError() {
-		return diags
+	if index.Status != nil {
+		model.Status, diags = types.ObjectValueFrom(ctx, IndexStatusModel{}.AttrTypes(), IndexStatusModel{
+			Ready: types.BoolValue(index.Status.Ready),
+			State: types.StringValue(string(index.Status.State)),
+		})
+		if diags.HasError() {
+			return diags
+		}
+	} else {
+		model.Status = types.ObjectNull(IndexStatusModel{}.AttrTypes())
 	}
 
 	if index.Tags != nil {
@@ -127,6 +131,11 @@ func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index
 		return diags
 	}
 
+	priorSpec, diags := priorIndexSpec(ctx, model.Spec)
+	if diags.HasError() {
+		return diags
+	}
+
 	model.Id = types.StringValue(index.Name)
 	model.Name = types.StringValue(index.Name)
 	model.Metric = types.StringValue(string(index.Metric))
@@ -140,15 +149,15 @@ func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index
 		model.Dimension = types.Int32Null()
 	}
 
-	pod, diags := NewIndexPodSpecModel(ctx, index.Spec.Pod)
+	pod, diags := NewIndexPodSpecModel(ctx, indexSpec(index).Pod)
 	if diags.HasError() {
 		return diags
 	}
-	serverless, diags := NewIndexServerlessSpecResourceModel(ctx, index.Spec.Serverless)
+	serverless, diags := NewIndexServerlessSpecResourceModel(ctx, indexSpec(index).Serverless, index.Schema)
 	if diags.HasError() {
 		return diags
 	}
-	byoc, diags := NewIndexBYOCSpecResourceModel(ctx, index.Spec.BYOC)
+	byoc, diags := NewIndexBYOCSpecResourceModel(ctx, indexSpec(index).BYOC, index.Schema)
 	if diags.HasError() {
 		return diags
 	}
@@ -157,8 +166,9 @@ func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index
 		Serverless: serverless,
 		BYOC:       byoc,
 	}
+	carryOverSpecState(priorSpec, &spec)
 
-	embed, diags := NewIndexEmbedResourceModel(ctx, index.Embed)
+	embed, diags := NewIndexEmbedResourceModel(ctx, indexEmbed(index))
 	if diags.HasError() {
 		return diags
 	}
@@ -171,9 +181,13 @@ func (model *IndexResourceModel) Read(ctx context.Context, index *pinecone.Index
 		model.Embed = types.ObjectNull(IndexEmbedResourceModel{}.AttrTypes())
 	}
 
-	model.Spec, diags = types.ObjectValueFrom(ctx, indexSpecResourceAttrTypes(), spec)
-	if diags.HasError() {
-		return diags
+	// Without a spec in the response, keep the prior one: a null spec would plan a replacement
+	// through spec.*.cloud, region, and environment.
+	if index.Spec != nil || priorSpec == nil {
+		model.Spec, diags = types.ObjectValueFrom(ctx, indexSpecResourceAttrTypes(), spec)
+		if diags.HasError() {
+			return diags
+		}
 	}
 
 	if index.Status != nil {
@@ -233,15 +247,15 @@ func (model *IndexDatasourceModel) Read(ctx context.Context, index *pinecone.Ind
 		model.Dimension = types.Int32Null()
 	}
 
-	pod, diags := NewIndexPodSpecModel(ctx, index.Spec.Pod)
+	pod, diags := NewIndexPodSpecModel(ctx, indexSpec(index).Pod)
 	if diags.HasError() {
 		return diags
 	}
-	serverless, diags := NewIndexServerlessSpecModel(ctx, index.Spec.Serverless)
+	serverless, diags := NewIndexServerlessSpecModel(ctx, indexSpec(index).Serverless, index.Schema)
 	if diags.HasError() {
 		return diags
 	}
-	byoc, diags := NewIndexBYOCSpecModel(ctx, index.Spec.BYOC)
+	byoc, diags := NewIndexBYOCSpecModel(ctx, indexSpec(index).BYOC, index.Schema)
 	if diags.HasError() {
 		return diags
 	}
@@ -251,7 +265,7 @@ func (model *IndexDatasourceModel) Read(ctx context.Context, index *pinecone.Ind
 		BYOC:       byoc,
 	}
 
-	embed, diags := NewIndexEmbedModel(ctx, index.Embed)
+	embed, diags := NewIndexEmbedModel(ctx, indexEmbed(index))
 	if diags.HasError() {
 		return diags
 	}
@@ -389,6 +403,28 @@ func (model IndexPodSpecModel) AttrTypes() map[string]attr.Type {
 		"metadata_config":   types.ObjectType{AttrTypes: IndexMetadataConfigModel{}.AttrTypes()},
 		"source_collection": types.StringType,
 	}
+}
+
+// indexSpec returns the index's spec, or an empty one when the SDK couldn't derive it from the
+// index's deployment, as for a deployment type it doesn't recognize.
+func indexSpec(index *pinecone.Index) *pinecone.IndexSpec {
+	if index.Spec == nil {
+		return &pinecone.IndexSpec{}
+	}
+	return index.Spec
+}
+
+// indexEmbed returns the index's embed configuration with its vector type filled in. 2026-07
+// derives embed from the index's semantic text field and leaves its vector type unset, but reports
+// the same value as the index's vector type.
+func indexEmbed(index *pinecone.Index) *pinecone.IndexEmbed {
+	if index.Embed == nil || index.Embed.VectorType != nil || index.VectorType == "" {
+		return index.Embed
+	}
+	embed := *index.Embed
+	vectorType := index.VectorType
+	embed.VectorType = &vectorType
+	return &embed
 }
 
 func NewIndexEmbedModel(ctx context.Context, model *pinecone.IndexEmbed) (*IndexEmbedModel, diag.Diagnostics) {
@@ -590,18 +626,26 @@ func (m IndexMetadataSchemaModel) AttrTypes() map[string]attr.Type {
 	}
 }
 
-// NewIndexMetadataSchemaModel converts a *pinecone.MetadataSchema (API response) to the Terraform model.
-// Returns nil when schema is nil.
-func NewIndexMetadataSchemaModel(ctx context.Context, schema *pinecone.MetadataSchema) (*IndexMetadataSchemaModel, diag.Diagnostics) {
+// NewIndexMetadataSchemaModel rebuilds the deprecated spec metadata schema from an index's
+// schema. Indexes created with a metadata schema on earlier API versions report those fields as
+// legacy metadata fields. Typed metadata fields are skipped: the API adds them as data is upserted,
+// so they were never declared. Returns nil when the index has no legacy metadata fields.
+func NewIndexMetadataSchemaModel(ctx context.Context, schema *pinecone.IndexSchema) (*IndexMetadataSchemaModel, diag.Diagnostics) {
 	if schema == nil {
 		return nil, nil
 	}
 
-	fieldModels := make(map[string]IndexMetadataSchemaFieldModel, len(schema.Fields))
+	fieldModels := make(map[string]IndexMetadataSchemaFieldModel)
 	for name, field := range schema.Fields {
-		fieldModels[name] = IndexMetadataSchemaFieldModel{
-			Filterable: types.BoolValue(field.Filterable),
+		if field.LegacyMetadata == nil {
+			continue
 		}
+		fieldModels[name] = IndexMetadataSchemaFieldModel{
+			Filterable: types.BoolValue(field.LegacyMetadata.Filterable),
+		}
+	}
+	if len(fieldModels) == 0 {
+		return nil, nil
 	}
 
 	fieldsMap, diags := types.MapValueFrom(ctx, types.ObjectType{AttrTypes: IndexMetadataSchemaFieldModel{}.AttrTypes()}, fieldModels)
@@ -652,7 +696,7 @@ type IndexServerlessSpecModel struct {
 	Schema       types.Object `tfsdk:"schema"`
 }
 
-func NewIndexServerlessSpecModel(ctx context.Context, spec *pinecone.ServerlessSpec) (*IndexServerlessSpecModel, diag.Diagnostics) {
+func NewIndexServerlessSpecModel(ctx context.Context, spec *pinecone.ServerlessSpec, indexSchema *pinecone.IndexSchema) (*IndexServerlessSpecModel, diag.Diagnostics) {
 	if spec == nil {
 		return nil, nil
 	}
@@ -670,7 +714,7 @@ func NewIndexServerlessSpecModel(ctx context.Context, spec *pinecone.ServerlessS
 		rcObj = types.ObjectNull(IndexReadCapacityModel{}.AttrTypes())
 	}
 
-	schemaModel, diags := NewIndexMetadataSchemaModel(ctx, spec.Schema)
+	schemaModel, diags := NewIndexMetadataSchemaModel(ctx, indexSchema)
 	if diags.HasError() {
 		return nil, diags
 	}
@@ -709,7 +753,7 @@ type IndexBYOCSpecModel struct {
 	Schema       types.Object `tfsdk:"schema"`
 }
 
-func NewIndexBYOCSpecModel(ctx context.Context, spec *pinecone.BYOCSpec) (*IndexBYOCSpecModel, diag.Diagnostics) {
+func NewIndexBYOCSpecModel(ctx context.Context, spec *pinecone.BYOCSpec, indexSchema *pinecone.IndexSchema) (*IndexBYOCSpecModel, diag.Diagnostics) {
 	if spec == nil {
 		return nil, nil
 	}
@@ -727,7 +771,7 @@ func NewIndexBYOCSpecModel(ctx context.Context, spec *pinecone.BYOCSpec) (*Index
 		rcObj = types.ObjectNull(IndexReadCapacityModel{}.AttrTypes())
 	}
 
-	schemaModel, diags := NewIndexMetadataSchemaModel(ctx, spec.Schema)
+	schemaModel, diags := NewIndexMetadataSchemaModel(ctx, indexSchema)
 	if diags.HasError() {
 		return nil, diags
 	}
@@ -913,7 +957,7 @@ func indexServerlessSpecResourceAttrTypes() map[string]attr.Type {
 
 // NewIndexServerlessSpecResourceModel is like NewIndexServerlessSpecModel but uses the
 // resource-specific read capacity model (without status fields).
-func NewIndexServerlessSpecResourceModel(ctx context.Context, spec *pinecone.ServerlessSpec) (*IndexServerlessSpecModel, diag.Diagnostics) {
+func NewIndexServerlessSpecResourceModel(ctx context.Context, spec *pinecone.ServerlessSpec, indexSchema *pinecone.IndexSchema) (*IndexServerlessSpecModel, diag.Diagnostics) {
 	if spec == nil {
 		return nil, nil
 	}
@@ -931,7 +975,7 @@ func NewIndexServerlessSpecResourceModel(ctx context.Context, spec *pinecone.Ser
 		rcObj = types.ObjectNull(IndexReadCapacityResourceModel{}.AttrTypes())
 	}
 
-	schemaModel, diags := NewIndexMetadataSchemaModel(ctx, spec.Schema)
+	schemaModel, diags := NewIndexMetadataSchemaModel(ctx, indexSchema)
 	if diags.HasError() {
 		return nil, diags
 	}
@@ -965,7 +1009,7 @@ func indexBYOCSpecResourceAttrTypes() map[string]attr.Type {
 
 // NewIndexBYOCSpecResourceModel is like NewIndexBYOCSpecModel but uses the
 // resource-specific read capacity model (without status fields).
-func NewIndexBYOCSpecResourceModel(ctx context.Context, spec *pinecone.BYOCSpec) (*IndexBYOCSpecModel, diag.Diagnostics) {
+func NewIndexBYOCSpecResourceModel(ctx context.Context, spec *pinecone.BYOCSpec, indexSchema *pinecone.IndexSchema) (*IndexBYOCSpecModel, diag.Diagnostics) {
 	if spec == nil {
 		return nil, nil
 	}
@@ -983,7 +1027,7 @@ func NewIndexBYOCSpecResourceModel(ctx context.Context, spec *pinecone.BYOCSpec)
 		rcObj = types.ObjectNull(IndexReadCapacityResourceModel{}.AttrTypes())
 	}
 
-	schemaModel, diags := NewIndexMetadataSchemaModel(ctx, spec.Schema)
+	schemaModel, diags := NewIndexMetadataSchemaModel(ctx, indexSchema)
 	if diags.HasError() {
 		return nil, diags
 	}
@@ -1002,6 +1046,39 @@ func NewIndexBYOCSpecResourceModel(ctx context.Context, spec *pinecone.BYOCSpec)
 		ReadCapacity: rcObj,
 		Schema:       schemaObj,
 	}, nil
+}
+
+// priorIndexSpec decodes the spec already held by a resource model, from prior state or the plan,
+// before Read overwrites it. Returns nil when there is none, as on import.
+func priorIndexSpec(ctx context.Context, specObj types.Object) (*IndexSpecModel, diag.Diagnostics) {
+	if specObj.IsNull() || specObj.IsUnknown() {
+		return nil, nil
+	}
+	var spec IndexSpecModel
+	diags := specObj.As(ctx, &spec, basetypes.ObjectAsOptions{})
+	if diags.HasError() {
+		return nil, diags
+	}
+	return &spec, nil
+}
+
+// carryOverSpecState keeps the parts of spec that describe responses no longer report. The
+// serverless and BYOC metadata schema and the pod metadata config are fixed when the index is
+// created, so the prior value stays accurate. Without a prior spec (import) the values built from
+// the response are kept.
+func carryOverSpecState(prior *IndexSpecModel, spec *IndexSpecModel) {
+	if prior == nil {
+		return
+	}
+	if spec.Serverless != nil && prior.Serverless != nil && !prior.Serverless.Schema.IsUnknown() {
+		spec.Serverless.Schema = prior.Serverless.Schema
+	}
+	if spec.BYOC != nil && prior.BYOC != nil && !prior.BYOC.Schema.IsUnknown() {
+		spec.BYOC.Schema = prior.BYOC.Schema
+	}
+	if spec.Pod != nil && prior.Pod != nil && !prior.Pod.MetadataConfig.IsNull() && !prior.Pod.MetadataConfig.IsUnknown() {
+		spec.Pod.MetadataConfig = prior.Pod.MetadataConfig
+	}
 }
 
 // indexSpecResourceAttrTypes returns the attr.Type map for IndexSpecModel in the resource context.
@@ -1104,15 +1181,25 @@ func ToReadCapacityParams(ctx context.Context, rcObj types.Object) (*pinecone.Re
 			return nil, diags
 		}
 
-		cfg := &pinecone.ReadCapacityDedicatedConfig{
-			NodeType: dedicated.NodeType.ValueStringPointer(),
+		// Values that aren't configured are left out, so the API keeps the current ones. An unknown
+		// value's pointer is to its zero value, not nil.
+		cfg := &pinecone.ReadCapacityDedicatedConfig{}
+		if !dedicated.NodeType.IsNull() && !dedicated.NodeType.IsUnknown() {
+			cfg.NodeType = dedicated.NodeType.ValueStringPointer()
 		}
 
-		if !dedicated.Replicas.IsNull() || !dedicated.Shards.IsNull() {
+		var replicas, shards *int32
+		if !dedicated.Replicas.IsNull() && !dedicated.Replicas.IsUnknown() {
+			replicas = dedicated.Replicas.ValueInt32Pointer()
+		}
+		if !dedicated.Shards.IsNull() && !dedicated.Shards.IsUnknown() {
+			shards = dedicated.Shards.ValueInt32Pointer()
+		}
+		if replicas != nil || shards != nil {
 			cfg.Scaling = &pinecone.ReadCapacityScaling{
 				Manual: &pinecone.ReadCapacityManualScaling{
-					Replicas: dedicated.Replicas.ValueInt32Pointer(),
-					Shards:   dedicated.Shards.ValueInt32Pointer(),
+					Replicas: replicas,
+					Shards:   shards,
 				},
 			}
 		}

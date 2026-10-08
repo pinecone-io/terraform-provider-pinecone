@@ -21,6 +21,13 @@ linters:
     - unparam
     - unused
     - govet
+  exclusions:
+    rules:
+      # The legacy index attributes map one-to-one onto the Index fields go-pinecone v7 deprecates.
+      - path: pinecone/models/indexes(_test)?\.go
+        linters:
+          - staticcheck
+        text: 'SA1019: index\.(Metric|VectorType|Dimension|Spec|Embed) is deprecated'
 
 formatters:
   enable:

@@ -12,6 +12,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
@@ -29,6 +30,7 @@ func TestAccIndexResource_serverless_basic(t *testing.T) {
 	  text = "chunk_text"
 	}
   }`
+	tags := map[string]string{"test": "testval", "remove": "testremove", "update": "testupdate"}
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -37,69 +39,41 @@ func TestAccIndexResource_serverless_basic(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create and Read testing
 			{
-				Config: testAccIndexResourceConfig_serverless(rName, "enabled", "", map[string]string{"test": "testval", "remove": "testremove", "update": "testupdate"}, []string{"genre", "year"}),
+				Config: testAccIndexResourceConfig_serverless(rName, "enabled", "", tags, nil),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckIndexExists(),
 					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
 					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
 					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1024"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "vector_type", "dense"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.cloud", "aws"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.region", "us-west-2"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.schema.fields.%", "2"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.schema.fields.genre.filterable", "true"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.schema.fields.year.filterable", "true"),
+					resource.TestCheckNoResourceAttr("pinecone_index.test", "spec.serverless.schema"),
+					resource.TestCheckNoResourceAttr("pinecone_index.test", "embed"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "tags.%", "3"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "tags.test", "testval"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "tags.remove", "testremove"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "tags.update", "testupdate"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "tags.test", "testval"),
 				),
 			},
-			// Upgrade to integrated index
+			// Integrated embedding can't be added to an existing index
 			{
-				Config: testAccIndexResourceConfig_serverless(rName, "enabled", embed, map[string]string{"test": "testval", "remove": "testremove", "update": "testupdate"}, []string{"genre", "year"}),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					testAccCheckIndexExists(),
-					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
-					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
-					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1024"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.cloud", "aws"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.region", "us-west-2"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.schema.fields.%", "2"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.schema.fields.genre.filterable", "true"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.schema.fields.year.filterable", "true"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "embed.model", "multilingual-e5-large"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "embed.field_map.%", "1"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "embed.field_map.text", "chunk_text"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "tags.%", "3"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "tags.test", "testval"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "tags.remove", "testremove"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "tags.update", "testupdate"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "tags.test", "testval"),
-				),
+				Config:      testAccIndexResourceConfig_serverless(rName, "enabled", embed, tags, nil),
+				ExpectError: regexp.MustCompile("embed can't be added to an existing index"),
 			},
 			// Disable deletion_protection, update tags
 			{
-				Config: testAccIndexResourceConfig_serverless(rName, "disabled", embed, map[string]string{"test": "testval", "update": "testupdatenew"}, []string{"genre", "year"}),
+				Config: testAccIndexResourceConfig_serverless(rName, "disabled", "", map[string]string{"test": "testval", "update": "testupdatenew"}, nil),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckIndexExists(),
 					resource.TestCheckResourceAttr("pinecone_index.test", "id", rName),
-					resource.TestCheckResourceAttr("pinecone_index.test", "name", rName),
-					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1024"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.cloud", "aws"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "spec.serverless.region", "us-west-2"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "embed.model", "multilingual-e5-large"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "embed.field_map.%", "1"),
-					resource.TestCheckResourceAttr("pinecone_index.test", "embed.field_map.text", "chunk_text"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "deletion_protection", "disabled"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "tags.%", "2"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "tags.test", "testval"),
 					resource.TestCheckResourceAttr("pinecone_index.test", "tags.update", "testupdatenew"),
 				),
 			},
-			// Convert to integrated inference
 			// ImportState testing
 			{
 				ResourceName:      "pinecone_index.test",
@@ -107,6 +81,47 @@ func TestAccIndexResource_serverless_basic(t *testing.T) {
 				ImportStateVerify: true,
 			},
 			// Delete testing automatically occurs in TestCase
+		},
+	})
+}
+
+func TestAccIndexResource_serverless_sparse(t *testing.T) {
+	t.Parallel()
+	rName := acctest.RandomWithPrefix("tftest")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckIndexDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+provider "pinecone" {
+}
+
+resource "pinecone_index" "%s" {
+  name        = %q
+  vector_type = "sparse"
+  spec = {
+    serverless = {
+      cloud  = "aws"
+      region = "us-west-2"
+    }
+  }
+}
+`, resourceName, rName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckIndexExists(),
+					resource.TestCheckResourceAttr("pinecone_index.test", "vector_type", "sparse"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "dotproduct"),
+					resource.TestCheckNoResourceAttr("pinecone_index.test", "dimension"),
+				),
+			},
+			{
+				ResourceName:      "pinecone_index.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
 		},
 	})
 }
@@ -160,81 +175,144 @@ func TestAccIndexResource_serverless_readCapacity(t *testing.T) {
 	})
 }
 
-func TestAccIndexResource_pod_invalidEmbedConfig(t *testing.T) {
+// TestAccIndexResource_createValidation covers configurations API version 2026-07 can't create.
+// They fail at plan time, so the provider needs no real credentials.
+func TestAccIndexResource_createValidation(t *testing.T) {
 	t.Parallel()
-	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckIndexDestroy(),
-		Steps: []resource.TestStep{{
-			Config: `
+
+	tests := []struct {
+		name        string
+		config      string
+		expectError *regexp.Regexp
+	}{
+		{
+			name: "pod-based index",
+			config: `
+resource "pinecone_index" "test" {
+  name      = "test"
+  dimension = 1024
+  spec = {
+    pod = {
+      environment = "us-west4-gcp"
+      pod_type    = "s1.x1"
+    }
+  }
+}`,
+			expectError: regexp.MustCompile("Pod-based indexes can't be created"),
+		},
+		{
+			name: "serverless metadata schema without embed",
+			config: `
+resource "pinecone_index" "test" {
+  name      = "test"
+  dimension = 1024
+  spec = {
+    serverless = {
+      cloud  = "aws"
+      region = "us-west-2"
+      schema = {
+        fields = {
+          genre = { filterable = true }
+        }
+      }
+    }
+  }
+}`,
+			expectError: regexp.MustCompile("Metadata schema isn't supported"),
+		},
+		{
+			name: "BYOC metadata schema",
+			config: `
+resource "pinecone_index" "test" {
+  name      = "test"
+  dimension = 1024
+  spec = {
+    byoc = {
+      environment = "aws-us-east-1-b921"
+      schema = {
+        fields = {
+          genre = { filterable = true }
+        }
+      }
+    }
+  }
+}`,
+			expectError: regexp.MustCompile("Metadata schema isn't supported"),
+		},
+		{
+			name: "embed without field_map",
+			config: `
 resource "pinecone_index" "test" {
   name = "test"
-  dimension = 1024
-  metric = "cosine"
   spec = {
-	pod = {
-		environment = "us-west4-gcp"
-		pod_type = "s1.x1"
-	}
+    serverless = {
+      cloud  = "aws"
+      region = "us-west-2"
+    }
   }
   embed = {
     model = "multilingual-e5-large"
-	field_map = {
-		text = "chunk_text"
-	}
   }
 }`,
-			ExpectError: regexp.MustCompile("Pod-based indexes cannot have an embed configuration."),
-		}},
-	})
+			expectError: regexp.MustCompile(`(?s)Attribute "embed.field_map" must be specified`),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			resource.Test(t, resource.TestCase{
+				ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+				Steps: []resource.TestStep{
+					{
+						Config:      testAccDummyApiKeyProviderConfig + tt.config,
+						ExpectError: tt.expectError,
+					},
+				},
+			})
+		})
+	}
 }
 
-func TestAccIndexResource_pod_invalidDimension(t *testing.T) {
+func TestAccIndexResource_serverless_integratedParameters(t *testing.T) {
 	t.Parallel()
+	rName := acctest.RandomWithPrefix("tftest")
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckIndexDestroy(),
-		Steps: []resource.TestStep{{
-			Config: `
-resource "pinecone_index" "test" {
-  name = "test"
-  metric = "cosine"
-  spec = {
-	pod = {
-		environment = "us-west4-gcp"
-		pod_type = "s1.x1"
-	}
-  }
-}`,
-			ExpectError: regexp.MustCompile("Pod-based indexes must have a dimension."),
-		}},
-	})
-}
-
-func TestAccIndexResource_pod_invalidVectorType(t *testing.T) {
-	t.Parallel()
-	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckIndexDestroy(),
-		Steps: []resource.TestStep{{
-			Config: `
-resource "pinecone_index" "test" {
-  name = "test"
-  dimension = 1024
-  metric = "cosine"
-  spec = {
-	pod = {
-		environment = "us-west4-gcp"
-		pod_type = "s1.x1"
-	}
-  }
-  vector_type = "sparse"
-}`,
-			ExpectError: regexp.MustCompile("Pod-based indexes cannot have a sparse vector_type."),
-		}},
+		Steps: []resource.TestStep{
+			{
+				Config: testAccIndexResourceConfig_serverlessIntegratedWithParameters(rName, "chunk_text", "END"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckIndexExists(),
+					resource.TestCheckResourceAttr("pinecone_index.test", "embed.model", "multilingual-e5-large"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "embed.vector_type", "dense"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "embed.read_parameters.%", "2"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "embed.read_parameters.input_type", "query"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "embed.read_parameters.truncate", "END"),
+				),
+			},
+			// Read parameters update in place
+			{
+				Config: testAccIndexResourceConfig_serverlessIntegratedWithParameters(rName, "chunk_text", "NONE"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("pinecone_index.test", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("pinecone_index.test", "embed.read_parameters.truncate", "NONE"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "embed.effective_read_parameters.truncate", "NONE"),
+				),
+			},
+			// The embedded field can't be changed
+			{
+				Config:      testAccIndexResourceConfig_serverlessIntegratedWithParameters(rName, "body", "NONE"),
+				ExpectError: regexp.MustCompile("embed.field_map can't be changed"),
+			},
+		},
 	})
 }
 
@@ -428,6 +506,34 @@ resource "pinecone_index" "%s" {
   tags = {}
 }
 `, resourceName, name, dimension)
+}
+
+func testAccIndexResourceConfig_serverlessIntegratedWithParameters(name, textField, truncate string) string {
+	return fmt.Sprintf(`
+provider "pinecone" {
+}
+
+resource "pinecone_index" "%s" {
+  name = %q
+  spec = {
+	serverless = {
+		cloud = "aws"
+		region = "us-west-2"
+	}
+  }
+  embed = {
+	model = "multilingual-e5-large"
+	field_map = {
+	  text = %q
+	}
+	read_parameters = {
+	  input_type = "query"
+	  truncate   = %q
+	}
+  }
+  tags = {}
+}
+`, resourceName, name, textField, truncate)
 }
 
 func testAccIndexResourceConfig_serverlessIntegratedWithoutDimension(name string) string {

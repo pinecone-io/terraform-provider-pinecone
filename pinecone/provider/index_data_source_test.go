@@ -178,8 +178,7 @@ provider "pinecone" {
 }
 
 resource "pinecone_index" "test" {
-  name      = %q
-  dimension = 1024
+  name = %q
   spec = {
     serverless = {
       cloud  = "aws"
@@ -190,6 +189,12 @@ resource "pinecone_index" "test" {
           "year"  = { filterable = true }
         }
       }
+    }
+  }
+  embed = {
+    model = "multilingual-e5-large"
+    field_map = {
+      text = "chunk_text"
     }
   }
   deletion_protection = "disabled"

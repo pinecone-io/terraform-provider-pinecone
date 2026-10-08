@@ -4,10 +4,14 @@
 package models
 
 import (
+	"context"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
-	"github.com/pinecone-io/go-pinecone/v6/pinecone"
+	"github.com/pinecone-io/go-pinecone/v7/pinecone"
 )
 
 // TestIndexResourceModelRead_pod covers the pod-based state mapping. Pod indexes
@@ -21,7 +25,7 @@ func TestIndexResourceModelRead_pod(t *testing.T) {
 	index := &pinecone.Index{
 		Name:               "my-pod-index",
 		Host:               "https://my-pod-index.example.com",
-		Metric:             pinecone.Cosine,
+		Metric:             pinecone.IndexMetricCosine,
 		VectorType:         "dense",
 		DeletionProtection: pinecone.DeletionProtectionEnabled,
 		Dimension:          &dim,
@@ -34,7 +38,7 @@ func TestIndexResourceModelRead_pod(t *testing.T) {
 				ShardCount:  1,
 			},
 		},
-		Status: &pinecone.IndexStatus{Ready: true, State: pinecone.Ready},
+		Status: &pinecone.IndexStatus{Ready: true, State: pinecone.IndexStatusStateReady},
 		Tags:   &tags,
 	}
 
@@ -96,5 +100,287 @@ func TestIndexResourceModelRead_nil(t *testing.T) {
 	var model IndexResourceModel
 	if diags := model.Read(t.Context(), nil); !diags.HasError() {
 		t.Fatal("expected an error diagnostic for a nil index, got none")
+	}
+}
+
+// serverlessIndexWithMetadata returns a dense serverless index as 2026-07 describes it: the
+// reserved vector fields, a legacy metadata field from a metadata schema set at creation, and a
+// typed metadata field the API added when data was upserted.
+func serverlessIndexWithMetadata() *pinecone.Index {
+	dim := int32(1024)
+	filterable := true
+	return &pinecone.Index{
+		Name:       "my-index",
+		Host:       "https://my-index.example.com",
+		Metric:     pinecone.IndexMetricCosine,
+		VectorType: "dense",
+		Dimension:  &dim,
+		Schema: &pinecone.IndexSchema{Fields: map[string]pinecone.IndexSchemaField{
+			"_values":        {DenseVector: &pinecone.DenseVectorField{Dimension: dim, Metric: pinecone.IndexMetricCosine}},
+			"_sparse_values": {SparseVector: &pinecone.SparseVectorField{}},
+			"genre":          {LegacyMetadata: &pinecone.LegacyMetadataField{Filterable: true}},
+			"year":           {Float: &pinecone.FloatField{Filterable: &filterable}},
+		}},
+		Spec:   &pinecone.IndexSpec{Serverless: &pinecone.ServerlessSpec{Cloud: pinecone.CloudAWS, Region: "us-west-2"}},
+		Status: &pinecone.IndexStatus{Ready: true, State: pinecone.IndexStatusStateReady},
+	}
+}
+
+func serverlessSchemaFields(t *testing.T, model IndexResourceModel) map[string]IndexMetadataSchemaFieldModel {
+	t.Helper()
+	ctx := t.Context()
+	var spec IndexSpecModel
+	if d := model.Spec.As(ctx, &spec, basetypes.ObjectAsOptions{}); d.HasError() {
+		t.Fatalf("decoding spec: %v", d)
+	}
+	if spec.Serverless == nil {
+		t.Fatal("expected a serverless spec, got nil")
+	}
+	if spec.Serverless.Schema.IsNull() {
+		return nil
+	}
+	var schema IndexMetadataSchemaModel
+	if d := spec.Serverless.Schema.As(ctx, &schema, basetypes.ObjectAsOptions{}); d.HasError() {
+		t.Fatalf("decoding schema: %v", d)
+	}
+	var fields map[string]IndexMetadataSchemaFieldModel
+	if d := schema.Fields.ElementsAs(ctx, &fields, false); d.HasError() {
+		t.Fatalf("decoding schema fields: %v", d)
+	}
+	return fields
+}
+
+// TestIndexResourceModelRead_importRebuildsMetadataSchema covers import, where there's no prior
+// state: the metadata schema comes from the legacy metadata fields alone, not from vector fields
+// or metadata fields the API indexed on upsert.
+func TestIndexResourceModelRead_importRebuildsMetadataSchema(t *testing.T) {
+	var model IndexResourceModel
+	if diags := model.Read(t.Context(), serverlessIndexWithMetadata()); diags.HasError() {
+		t.Fatalf("Read returned errors: %v", diags)
+	}
+
+	fields := serverlessSchemaFields(t, model)
+	if len(fields) != 1 || !fields["genre"].Filterable.ValueBool() {
+		t.Errorf("schema fields = %v, want only genre (filterable)", fields)
+	}
+}
+
+// TestIndexResourceModelRead_keepsPriorMetadataSchema covers refresh: describe responses no longer
+// report the metadata schema, so the value in prior state is kept as is.
+func TestIndexResourceModelRead_keepsPriorMetadataSchema(t *testing.T) {
+	ctx := t.Context()
+	var model IndexResourceModel
+	if diags := model.Read(ctx, serverlessIndexWithMetadata()); diags.HasError() {
+		t.Fatalf("first Read returned errors: %v", diags)
+	}
+
+	// Simulate an index created without a metadata schema: prior state has none.
+	var spec IndexSpecModel
+	if d := model.Spec.As(ctx, &spec, basetypes.ObjectAsOptions{}); d.HasError() {
+		t.Fatalf("decoding spec: %v", d)
+	}
+	spec.Serverless.Schema = types.ObjectNull(IndexMetadataSchemaModel{}.AttrTypes())
+	var d diag.Diagnostics
+	model.Spec, d = types.ObjectValueFrom(ctx, model.Spec.AttributeTypes(ctx), spec)
+	if d.HasError() {
+		t.Fatalf("encoding spec: %v", d)
+	}
+
+	if diags := model.Read(ctx, serverlessIndexWithMetadata()); diags.HasError() {
+		t.Fatalf("second Read returned errors: %v", diags)
+	}
+	if fields := serverlessSchemaFields(t, model); fields != nil {
+		t.Errorf("schema fields = %v, want null schema kept from prior state", fields)
+	}
+}
+
+// TestIndexResourceModelRead_keepsPodMetadataConfig covers the pod metadata config, which describe
+// responses no longer report.
+func TestIndexResourceModelRead_keepsPodMetadataConfig(t *testing.T) {
+	ctx := t.Context()
+	index := &pinecone.Index{
+		Name:   "my-pod-index",
+		Spec:   &pinecone.IndexSpec{Pod: &pinecone.PodSpec{Environment: "us-west4-gcp", PodType: "s1.x1", Replicas: 1, ShardCount: 1, PodCount: 1}},
+		Status: &pinecone.IndexStatus{Ready: true, State: pinecone.IndexStatusStateReady},
+	}
+
+	indexed := []string{"genre"}
+	priorPod, d := NewIndexPodSpecModel(ctx, &pinecone.PodSpec{
+		Environment: "us-west4-gcp", PodType: "s1.x1", Replicas: 1, ShardCount: 1, PodCount: 1,
+		MetadataConfig: &pinecone.PodSpecMetadataConfig{Indexed: &indexed},
+	})
+	if d.HasError() {
+		t.Fatalf("building prior pod spec: %v", d)
+	}
+	var model IndexResourceModel
+	model.Spec, d = types.ObjectValueFrom(ctx, indexSpecResourceAttrTypes(), IndexSpecModel{Pod: priorPod})
+	if d.HasError() {
+		t.Fatalf("encoding prior spec: %v", d)
+	}
+
+	if diags := model.Read(ctx, index); diags.HasError() {
+		t.Fatalf("Read returned errors: %v", diags)
+	}
+
+	var spec IndexSpecModel
+	if d := model.Spec.As(ctx, &spec, basetypes.ObjectAsOptions{}); d.HasError() {
+		t.Fatalf("decoding spec: %v", d)
+	}
+	var metadataConfig IndexMetadataConfigModel
+	if d := spec.Pod.MetadataConfig.As(ctx, &metadataConfig, basetypes.ObjectAsOptions{}); d.HasError() {
+		t.Fatalf("decoding metadata_config: %v", d)
+	}
+	var got []string
+	if d := metadataConfig.Indexed.ElementsAs(ctx, &got, false); d.HasError() {
+		t.Fatalf("decoding indexed: %v", d)
+	}
+	if len(got) != 1 || got[0] != "genre" {
+		t.Errorf("metadata_config.indexed = %v, want [genre]", got)
+	}
+}
+
+// TestIndexResourceModelRead_embedVectorType covers integrated indexes: 2026-07 derives embed from
+// the semantic text field without a vector type, so it's taken from the index.
+func TestIndexResourceModelRead_embedVectorType(t *testing.T) {
+	ctx := t.Context()
+	dim := int32(1024)
+	metric := pinecone.IndexMetricCosine
+	index := &pinecone.Index{
+		Name:       "my-integrated-index",
+		Metric:     metric,
+		VectorType: "dense",
+		Dimension:  &dim,
+		Embed: &pinecone.IndexEmbed{
+			Model:     "multilingual-e5-large",
+			Dimension: &dim,
+			Metric:    &metric,
+			FieldMap:  &map[string]interface{}{"text": "chunk_text"},
+		},
+		Spec:   &pinecone.IndexSpec{Serverless: &pinecone.ServerlessSpec{Cloud: pinecone.CloudAWS, Region: "us-west-2"}},
+		Status: &pinecone.IndexStatus{Ready: true, State: pinecone.IndexStatusStateReady},
+	}
+
+	var model IndexResourceModel
+	if diags := model.Read(ctx, index); diags.HasError() {
+		t.Fatalf("Read returned errors: %v", diags)
+	}
+	var embed IndexEmbedResourceModel
+	if d := model.Embed.As(ctx, &embed, basetypes.ObjectAsOptions{}); d.HasError() {
+		t.Fatalf("decoding embed: %v", d)
+	}
+	if got := embed.VectorType.ValueString(); got != "dense" {
+		t.Errorf("embed.vector_type = %q, want %q", got, "dense")
+	}
+	if index.Embed.VectorType != nil {
+		t.Error("Read modified the SDK's embed in place")
+	}
+}
+
+// indexWithoutSpecOrStatus is an index whose deployment type the SDK doesn't recognize, so it
+// derives no spec, described before the API reports a status.
+func indexWithoutSpecOrStatus() *pinecone.Index {
+	return &pinecone.Index{Name: "my-index", Host: "https://my-index.example.com", VectorType: "dense"}
+}
+
+func TestIndexModelRead_noSpecOrStatus(t *testing.T) {
+	ctx := t.Context()
+
+	var listModel IndexModel
+	if diags := listModel.Read(ctx, indexWithoutSpecOrStatus()); diags.HasError() {
+		t.Fatalf("IndexModel.Read returned errors: %v", diags)
+	}
+	var dataSourceModel IndexDatasourceModel
+	if diags := dataSourceModel.Read(ctx, indexWithoutSpecOrStatus()); diags.HasError() {
+		t.Fatalf("IndexDatasourceModel.Read returned errors: %v", diags)
+	}
+
+	for name, m := range map[string]struct{ spec, status types.Object }{
+		"IndexModel":           {listModel.Spec, listModel.Status},
+		"IndexDatasourceModel": {dataSourceModel.Spec, dataSourceModel.Status},
+	} {
+		if !m.status.IsNull() {
+			t.Errorf("%s: status = %v, want null", name, m.status)
+		}
+		var spec IndexSpecModel
+		if d := m.spec.As(ctx, &spec, basetypes.ObjectAsOptions{}); d.HasError() {
+			t.Fatalf("%s: decoding spec: %v", name, d)
+		}
+		if spec.Pod != nil || spec.Serverless != nil || spec.BYOC != nil {
+			t.Errorf("%s: spec = %+v, want no deployment", name, spec)
+		}
+	}
+}
+
+func TestIndexResourceModelRead_noSpecKeepsPriorSpec(t *testing.T) {
+	ctx := t.Context()
+	var model IndexResourceModel
+	if diags := model.Read(ctx, serverlessIndexWithMetadata()); diags.HasError() {
+		t.Fatalf("first Read returned errors: %v", diags)
+	}
+	prior := model.Spec
+
+	if diags := model.Read(ctx, indexWithoutSpecOrStatus()); diags.HasError() {
+		t.Fatalf("second Read returned errors: %v", diags)
+	}
+	if !model.Spec.Equal(prior) {
+		t.Errorf("spec = %v, want prior spec %v", model.Spec, prior)
+	}
+	if !model.Status.IsNull() {
+		t.Errorf("status = %v, want null", model.Status)
+	}
+}
+
+func TestIndexResourceModelRead_importWithoutSpec(t *testing.T) {
+	ctx := t.Context()
+	var model IndexResourceModel
+	if diags := model.Read(ctx, indexWithoutSpecOrStatus()); diags.HasError() {
+		t.Fatalf("Read returned errors: %v", diags)
+	}
+	var spec IndexSpecModel
+	if d := model.Spec.As(ctx, &spec, basetypes.ObjectAsOptions{}); d.HasError() {
+		t.Fatalf("decoding spec: %v", d)
+	}
+	if spec.Pod != nil || spec.Serverless != nil || spec.BYOC != nil {
+		t.Errorf("spec = %+v, want no deployment", spec)
+	}
+}
+
+// TestToReadCapacityParams_dedicatedLeavesOutUnknownValues covers dedicated values that aren't
+// configured, which plan as unknown. Their pointers would be to zero values, scaling the index to
+// zero replicas or shards, so they're left out and the API keeps the current values.
+func TestToReadCapacityParams_dedicatedLeavesOutUnknownValues(t *testing.T) {
+	ctx := context.Background()
+	dedicated, d := types.ObjectValueFrom(ctx, IndexReadCapacityDedicatedResourceModel{}.AttrTypes(), IndexReadCapacityDedicatedResourceModel{
+		NodeType: types.StringUnknown(),
+		Replicas: types.Int32Unknown(),
+		Shards:   types.Int32Value(2),
+	})
+	if d.HasError() {
+		t.Fatalf("building dedicated: %v", d)
+	}
+	readCapacity, d := types.ObjectValueFrom(ctx, IndexReadCapacityResourceModel{}.AttrTypes(), IndexReadCapacityResourceModel{
+		Dedicated: dedicated,
+		OnDemand:  types.ObjectNull(map[string]attr.Type{}),
+	})
+	if d.HasError() {
+		t.Fatalf("building read capacity: %v", d)
+	}
+
+	params, d := ToReadCapacityParams(ctx, readCapacity)
+	if d.HasError() {
+		t.Fatalf("ToReadCapacityParams: %v", d)
+	}
+	got := params.Dedicated
+	if got.NodeType != nil {
+		t.Errorf("NodeType = %q, want nil", *got.NodeType)
+	}
+	if got.Scaling == nil || got.Scaling.Manual == nil {
+		t.Fatal("Scaling.Manual = nil, want shards")
+	}
+	if got.Scaling.Manual.Replicas != nil {
+		t.Errorf("Replicas = %d, want nil", *got.Scaling.Manual.Replicas)
+	}
+	if got.Scaling.Manual.Shards == nil || *got.Scaling.Manual.Shards != 2 {
+		t.Errorf("Shards = %v, want 2", got.Scaling.Manual.Shards)
 	}
 }

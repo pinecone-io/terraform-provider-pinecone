@@ -2,7 +2,7 @@ package models
 
 import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/pinecone-io/go-pinecone/v6/pinecone"
+	"github.com/pinecone-io/go-pinecone/v7/pinecone"
 )
 
 // UserResourceModel defines the user model for the (delete-only) resource.
