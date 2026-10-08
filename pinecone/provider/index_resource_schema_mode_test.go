@@ -94,7 +94,11 @@ func withReadCapacity(t *testing.T, s schema.Schema, model models.IndexResourceM
 func withUnknownField(t *testing.T, s schema.Schema, model models.IndexResourceModel, name string, value types.Object) models.IndexResourceModel {
 	t.Helper()
 	schemaAttrs := model.Schema.Attributes()
-	fields := schemaAttrs["fields"].(types.Map).Elements()
+	fieldsMap, ok := schemaAttrs["fields"].(types.Map)
+	if !ok {
+		t.Fatalf("schema.fields is %T, want types.Map", schemaAttrs["fields"])
+	}
+	fields := fieldsMap.Elements()
 	fields[name] = value
 	schemaAttrs["fields"] = types.MapValueMust(types.ObjectType{AttrTypes: models.IndexResourceSchemaFieldModel{}.AttrTypes()}, fields)
 	model.Schema = types.ObjectValueMust(attrTypesOf(t, s, "schema"), schemaAttrs)
@@ -106,7 +110,11 @@ func withUnknownField(t *testing.T, s schema.Schema, model models.IndexResourceM
 func withUnknownDeployment(t *testing.T, s schema.Schema, model models.IndexResourceModel, name string) models.IndexResourceModel {
 	t.Helper()
 	attrs := model.Deployment.Attributes()
-	attrs[name] = types.ObjectUnknown(attrs[name].Type(context.Background()).(types.ObjectType).AttrTypes)
+	kindType, ok := attrs[name].Type(context.Background()).(types.ObjectType)
+	if !ok {
+		t.Fatalf("deployment.%s is %T, want types.ObjectType", name, attrs[name].Type(context.Background()))
+	}
+	attrs[name] = types.ObjectUnknown(kindType.AttrTypes)
 	model.Deployment = types.ObjectValueMust(attrTypesOf(t, s, "deployment"), attrs)
 	return model
 }
