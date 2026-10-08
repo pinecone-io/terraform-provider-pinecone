@@ -286,7 +286,7 @@ func validateIndexStyleConfig(config models.IndexResourceModel) diag.Diagnostics
 // validateIndexSchemaConfig checks the schema and deployment against the rules the API enforces at
 // creation, so they fail at plan time. Unknown values are skipped.
 func validateIndexSchemaConfig(ctx context.Context, config models.IndexResourceModel) diag.Diagnostics {
-	fields, diags := models.ResourceSchemaFields(ctx, config.Schema)
+	fields, pending, diags := configSchemaFields(ctx, config.Schema)
 	if diags.HasError() || fields == nil {
 		return diags
 	}
@@ -306,7 +306,7 @@ func validateIndexSchemaConfig(ctx context.Context, config models.IndexResourceM
 				kinds++
 			}
 		}
-		if kinds != 1 {
+		if kinds != 1 && !pending[name] {
 			diags.AddAttributeError(fieldPath, "Invalid schema field",
 				fmt.Sprintf("Set exactly one of dense_vector, sparse_vector, or string on field %q.", name))
 		}
@@ -321,6 +321,7 @@ func validateIndexSchemaConfig(ctx context.Context, config models.IndexResourceM
 		}
 
 		switch {
+		case pending[name]:
 		case name == models.ReservedDenseFieldName && field.DenseVector == nil:
 			diags.AddAttributeError(fieldPath, "Invalid reserved field", fmt.Sprintf("%s must be a dense_vector field.", name))
 		case name == models.ReservedSparseFieldName && field.SparseVector == nil:
@@ -360,6 +361,38 @@ func validateIndexSchemaConfig(ctx context.Context, config models.IndexResourceM
 	return diags
 }
 
+// configSchemaFields decodes the configured schema fields for validation. The map holds every
+// field name. A field whose value or type isn't known yet decodes empty and is marked pending.
+func configSchemaFields(ctx context.Context, obj types.Object) (map[string]models.IndexResourceSchemaFieldModel, map[string]bool, diag.Diagnostics) {
+	if obj.IsNull() || obj.IsUnknown() {
+		return nil, nil, nil
+	}
+	fieldsMap, ok := obj.Attributes()["fields"].(types.Map)
+	if !ok || fieldsMap.IsNull() || fieldsMap.IsUnknown() {
+		return nil, nil, nil
+	}
+
+	var diags diag.Diagnostics
+	fields := make(map[string]models.IndexResourceSchemaFieldModel, len(fieldsMap.Elements()))
+	pending := make(map[string]bool)
+	for name, value := range fieldsMap.Elements() {
+		fieldObj, ok := value.(types.Object)
+		if !ok || fieldObj.IsNull() || fieldObj.IsUnknown() {
+			fields[name], pending[name] = models.IndexResourceSchemaFieldModel{}, true
+			continue
+		}
+		var field models.IndexResourceSchemaFieldModel
+		diags.Append(fieldObj.As(ctx, &field, lenientObjectAs)...)
+		fields[name] = field
+		for _, kind := range fieldObj.Attributes() {
+			if kind.IsUnknown() {
+				pending[name] = true
+			}
+		}
+	}
+	return fields, pending, diags
+}
+
 func validateFullTextSearch(config *models.FullTextSearchModel, p path.Path) diag.Diagnostics {
 	var diags diag.Diagnostics
 	if config == nil {
@@ -389,6 +422,11 @@ func validateIndexDeploymentConfig(ctx context.Context, config models.IndexResou
 	var diags diag.Diagnostics
 	if config.Deployment.IsNull() || config.Deployment.IsUnknown() {
 		return diags
+	}
+	for _, kind := range config.Deployment.Attributes() {
+		if kind.IsUnknown() {
+			return diags
+		}
 	}
 	var deployment models.IndexResourceDeploymentModel
 	diags.Append(config.Deployment.As(ctx, &deployment, lenientObjectAs)...)

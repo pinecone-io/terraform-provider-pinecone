@@ -90,6 +90,27 @@ func withReadCapacity(t *testing.T, s schema.Schema, model models.IndexResourceM
 	return model
 }
 
+// withUnknownField replaces one schema field with value, which is unknown or has an unknown type.
+func withUnknownField(t *testing.T, s schema.Schema, model models.IndexResourceModel, name string, value types.Object) models.IndexResourceModel {
+	t.Helper()
+	schemaAttrs := model.Schema.Attributes()
+	fields := schemaAttrs["fields"].(types.Map).Elements()
+	fields[name] = value
+	schemaAttrs["fields"] = types.MapValueMust(types.ObjectType{AttrTypes: models.IndexResourceSchemaFieldModel{}.AttrTypes()}, fields)
+	model.Schema = types.ObjectValueMust(attrTypesOf(t, s, "schema"), schemaAttrs)
+	return model
+}
+
+// withUnknownDeployment makes the named deployment type unknown, as when it's set from another
+// resource's attribute.
+func withUnknownDeployment(t *testing.T, s schema.Schema, model models.IndexResourceModel, name string) models.IndexResourceModel {
+	t.Helper()
+	attrs := model.Deployment.Attributes()
+	attrs[name] = types.ObjectUnknown(attrs[name].Type(context.Background()).(types.ObjectType).AttrTypes)
+	model.Deployment = types.ObjectValueMust(attrTypesOf(t, s, "deployment"), attrs)
+	return model
+}
+
 func runValidateConfig(t *testing.T, s schema.Schema, config models.IndexResourceModel) []string {
 	t.Helper()
 	ctx := context.Background()
@@ -128,6 +149,15 @@ func TestIndexResourceValidateConfig(t *testing.T) {
 	byocCmek.CmekId = types.StringValue("cmek-123")
 	bothDeployments := managedDeployment()
 	bothDeployments.Byoc = byocDeployment().Byoc
+	fieldType := types.ObjectType{AttrTypes: models.IndexResourceSchemaFieldModel{}.AttrTypes()}
+	unknownField := withUnknownField(t, s, document(documentFields), "embedding", types.ObjectUnknown(fieldType.AttrTypes))
+	unknownDense := withUnknownField(t, s, document(documentFields), "embedding", types.ObjectValueMust(fieldType.AttrTypes, map[string]attr.Value{
+		"dense_vector":  types.ObjectUnknown(models.DenseVectorFieldModel{}.AttrTypes()),
+		"sparse_vector": types.ObjectNull(models.SparseVectorFieldModel{}.AttrTypes()),
+		"string":        types.ObjectNull(models.StringResourceFieldModel{}.AttrTypes()),
+	}))
+	unknownManaged := withUnknownDeployment(t, s, document(documentFields), "managed")
+	unknownByoc := withUnknownDeployment(t, s, withSchemaMode(t, s, base, schemaFields{"_values": denseField(1024, "cosine")}, byocDeployment()), "byoc")
 
 	tests := []struct {
 		name    string
@@ -162,6 +192,10 @@ func TestIndexResourceValidateConfig(t *testing.T) {
 		{name: "document index on BYOC", config: withSchemaMode(t, s, base, documentFields, byocDeployment()), wantErr: "Document indexes require a managed deployment"},
 		{name: "both deployment types", config: withSchemaMode(t, s, base, documentFields, bothDeployments), wantErr: "Conflicting deployment types"},
 		{name: "no deployment type", config: withSchemaMode(t, s, base, documentFields, models.IndexResourceDeploymentModel{}), wantErr: "Missing deployment type"},
+		{name: "unknown field", config: unknownField},
+		{name: "unknown field type", config: unknownDense},
+		{name: "unknown managed deployment", config: unknownManaged},
+		{name: "unknown byoc deployment", config: unknownByoc},
 	}
 
 	for _, tt := range tests {
