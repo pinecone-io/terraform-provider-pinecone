@@ -96,7 +96,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				},
 			},
 			"metric": schema.StringAttribute{
-				MarkdownDescription: "The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'. With embed, it defaults to the model's metric.",
+				MarkdownDescription: "The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'. With embed, it defaults to the model's metric. The metric can't be changed after the index is created; changing it replaces the index.",
 				Optional:            true,
 				Computed:            true,
 				Validators: []validator.String{
@@ -1431,13 +1431,15 @@ func (embedComputedStringModifier) PlanModifyString(_ context.Context, req planm
 	}
 }
 
-// metricDefault plans the metric an index gets when metric isn't configured: "dotproduct" for a
+// metricDefault plans the metric a new index gets when metric isn't configured: "dotproduct" for a
 // sparse index and "cosine" otherwise. With embed, or with a vector_type that isn't known yet, it
-// leaves the plan alone, so the metric is computed on create and kept from state afterwards.
+// leaves the plan alone, so the metric is computed on create. On an existing index it also leaves
+// the plan alone, so UseStateForUnknown keeps the index's metric: a metric can't change after
+// creation, and a default that differs from it would plan a replacement.
 type metricDefault struct{}
 
 func (metricDefault) Description(_ context.Context) string {
-	return `Defaults to "dotproduct" for sparse indexes, the model's metric with embed, and "cosine" otherwise.`
+	return `Defaults to "dotproduct" for new sparse indexes, the model's metric with embed, and "cosine" otherwise.`
 }
 
 func (m metricDefault) MarkdownDescription(ctx context.Context) string {
@@ -1445,7 +1447,7 @@ func (m metricDefault) MarkdownDescription(ctx context.Context) string {
 }
 
 func (metricDefault) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
-	if !req.ConfigValue.IsNull() {
+	if !req.ConfigValue.IsNull() || !req.State.Raw.IsNull() {
 		return
 	}
 	var embed types.Object

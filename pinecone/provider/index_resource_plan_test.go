@@ -473,17 +473,23 @@ func TestMetricDefault(t *testing.T) {
 	integrated := withEmbed(t, s, base, "pinecone-sparse-english-v0", "chunk_text")
 	configured := base
 	configured.Metric = types.StringValue("euclidean")
+	// An existing integrated index whose model's metric isn't the default.
+	existingIntegrated := integrated
+	existingIntegrated.Metric = types.StringValue("dotproduct")
 
 	tests := []struct {
 		name   string
 		config models.IndexResourceModel
+		state  *models.IndexResourceModel
 		want   types.String
 	}{
-		{"dense", base, types.StringValue("cosine")},
-		{"sparse", sparse, types.StringValue("dotproduct")},
-		{"unknown vector_type", unknownVectorType, types.StringUnknown()},
-		{"embed uses the model's metric", integrated, types.StringUnknown()},
-		{"configured", configured, types.StringValue("euclidean")},
+		{name: "dense", config: base, want: types.StringValue("cosine")},
+		{name: "sparse", config: sparse, want: types.StringValue("dotproduct")},
+		{name: "unknown vector_type", config: unknownVectorType, want: types.StringUnknown()},
+		{name: "embed uses the model's metric", config: integrated, want: types.StringUnknown()},
+		{name: "configured", config: configured, want: types.StringValue("euclidean")},
+		// Left unknown, so UseStateForUnknown keeps "dotproduct" instead of planning a replacement.
+		{name: "existing index keeps its metric", config: base, state: &existingIntegrated, want: types.StringUnknown()},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -505,6 +511,12 @@ func TestMetricDefault(t *testing.T) {
 				PlanValue:   planValue,
 				State:       tfsdk.State{Schema: s, Raw: tftypes.NewValue(s.Type().TerraformType(ctx), nil)},
 				StateValue:  types.StringNull(),
+			}
+			if tt.state != nil {
+				if d := req.State.Set(ctx, tt.state); d.HasError() {
+					t.Fatalf("setting state: %v", d)
+				}
+				req.StateValue = tt.state.Metric
 			}
 			resp := planmodifier.StringResponse{PlanValue: req.PlanValue}
 			metricDefault{}.PlanModifyString(ctx, req, &resp)
