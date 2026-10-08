@@ -96,14 +96,14 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				},
 			},
 			"metric": schema.StringAttribute{
-				MarkdownDescription: "The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'. With embed, it defaults to the model's metric. The metric can't be changed after the index is created; changing it replaces the index.",
+				MarkdownDescription: "The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'. With embed, it defaults to the model's metric. Not used with `schema`, where each dense vector field sets its own metric. The metric can't be changed after the index is created; changing it replaces the index.",
 				Optional:            true,
 				Computed:            true,
 				Validators: []validator.String{
 					stringvalidator.OneOf([]string{"euclidean", "cosine", "dotproduct"}...),
 				},
 				PlanModifiers: []planmodifier.String{
-					metricDefault{},
+					specMetricDefault{},
 					stringplanmodifier.UseStateForUnknown(),
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -142,6 +142,19 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"schema":        indexSchemaResourceAttribute(),
+			"deployment":    indexDeploymentResourceAttribute(),
+			"read_capacity": readCapacitySchema(),
+			"cmek_id": schema.StringAttribute{
+				MarkdownDescription: "The ID of a customer-managed encryption key (CMEK) to encrypt the index with. Only with `schema` and a managed " +
+					"`deployment`, and only when the index is created; changing it replaces the index.",
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"spec": schema.SingleNestedAttribute{
@@ -389,12 +402,6 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	var spec models.IndexSpecModel
-	resp.Diagnostics.Append(data.Spec.As(ctx, &spec, basetypes.ObjectAsOptions{})...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
 	var embed *models.IndexEmbedResourceModel
 	if !data.Embed.IsUnknown() && !data.Embed.IsNull() {
 		resp.Diagnostics.Append(data.Embed.As(ctx, &embed, basetypes.ObjectAsOptions{})...)
@@ -416,154 +423,167 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 	tags := pinecone.IndexTags(tagsMap)
 
-	// Validate that exactly one spec type is provided.
-	specCount := 0
-	if spec.Pod != nil {
-		specCount++
-	}
-	if spec.Serverless != nil {
-		specCount++
-	}
-	if spec.BYOC != nil {
-		specCount++
-	}
-	if specCount == 0 {
-		resp.Diagnostics.AddError("Invalid configuration", "Exactly one of spec.pod, spec.serverless, or spec.byoc must be specified.")
-		return
-	}
-	if specCount > 1 {
-		resp.Diagnostics.AddError("Invalid configuration", "Only one of spec.pod, spec.serverless, or spec.byoc may be specified.")
-		return
-	}
-
-	// Prepare the payload for the API request. ModifyPlan rejects spec.pod on create; this guards
-	// against a plan that skipped it.
-	if spec.Pod != nil {
-		resp.Diagnostics.AddError(podCreateUnsupportedSummary, podCreateUnsupportedDetail)
-		return
-	}
-	if spec.Serverless != nil {
-		metric := knownMetricPointer(data.Metric)
-		deletionProtection := pinecone.DeletionProtection(data.DeletionProtection.ValueString())
-
-		readCapacityParams, diags := models.ToReadCapacityParams(ctx, spec.Serverless.ReadCapacity)
-		resp.Diagnostics.Append(diags...)
+	if !data.Schema.IsNull() {
+		resp.Diagnostics.Append(r.createSchemaModeIndex(ctx, data, tags)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	} else {
+		var spec models.IndexSpecModel
+		resp.Diagnostics.Append(data.Spec.As(ctx, &spec, basetypes.ObjectAsOptions{})...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
 
-		schemaParams, diags := models.ToMetadataSchema(ctx, spec.Serverless.Schema)
-		resp.Diagnostics.Append(diags...)
-		if resp.Diagnostics.HasError() {
+		// Validate that exactly one spec type is provided.
+		specCount := 0
+		if spec.Pod != nil {
+			specCount++
+		}
+		if spec.Serverless != nil {
+			specCount++
+		}
+		if spec.BYOC != nil {
+			specCount++
+		}
+		if specCount == 0 {
+			resp.Diagnostics.AddError("Invalid configuration", "Exactly one of spec.pod, spec.serverless, or spec.byoc must be specified.")
+			return
+		}
+		if specCount > 1 {
+			resp.Diagnostics.AddError("Invalid configuration", "Only one of spec.pod, spec.serverless, or spec.byoc may be specified.")
 			return
 		}
 
-		if embed != nil {
-			fieldMap := mapAttrToInterfacePtr(embed.FieldMap)
+		// Prepare the payload for the API request. ModifyPlan rejects spec.pod on create; this guards
+		// against a plan that skipped it.
+		if spec.Pod != nil {
+			resp.Diagnostics.AddError(podCreateUnsupportedSummary, podCreateUnsupportedDetail)
+			return
+		}
+		if spec.Serverless != nil {
+			metric := knownMetricPointer(data.Metric)
+			deletionProtection := pinecone.DeletionProtection(data.DeletionProtection.ValueString())
 
-			embedConfig := pinecone.CreateIndexForModelEmbed{
-				Model:           embed.Model.ValueString(),
-				FieldMap:        *fieldMap,
-				Metric:          metric,
-				ReadParameters:  mapAttrToInterfacePtr(embed.ReadParameters),
-				WriteParameters: mapAttrToInterfacePtr(embed.WriteParameters),
-			}
-
-			// If dimension is specified at the top level, pass it through to the embed config
-			// Otherwise, the API will use the model's default dimension
-			if !data.Dimension.IsUnknown() && !data.Dimension.IsNull() {
-				dimension := int(data.Dimension.ValueInt32())
-				embedConfig.Dimension = &dimension
-			}
-
-			indexForModelReq := pinecone.CreateIndexForModelRequest{
-				Name:               data.Name.ValueString(),
-				Cloud:              pinecone.Cloud(spec.Serverless.Cloud.ValueString()),
-				Region:             spec.Serverless.Region.ValueString(),
-				Embed:              embedConfig,
-				DeletionProtection: &deletionProtection,
-				ReadCapacity:       readCapacityParams,
-				Schema:             schemaParams,
-			}
-
-			if tags != nil {
-				indexForModelReq.Tags = &tags
-			}
-
-			_, err := r.client.CreateIndexForModel(ctx, &indexForModelReq)
-			if err != nil {
-				resp.Diagnostics.AddError("Failed to create integrated serverless index", err.Error())
+			readCapacityParams, diags := models.ToReadCapacityParams(ctx, spec.Serverless.ReadCapacity)
+			resp.Diagnostics.Append(diags...)
+			if resp.Diagnostics.HasError() {
 				return
 			}
-		} else {
-			serverlessReq := pinecone.CreateServerlessIndexRequest{
+
+			schemaParams, diags := models.ToMetadataSchema(ctx, spec.Serverless.Schema)
+			resp.Diagnostics.Append(diags...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+
+			if embed != nil {
+				fieldMap := mapAttrToInterfacePtr(embed.FieldMap)
+
+				embedConfig := pinecone.CreateIndexForModelEmbed{
+					Model:           embed.Model.ValueString(),
+					FieldMap:        *fieldMap,
+					Metric:          metric,
+					ReadParameters:  mapAttrToInterfacePtr(embed.ReadParameters),
+					WriteParameters: mapAttrToInterfacePtr(embed.WriteParameters),
+				}
+
+				// If dimension is specified at the top level, pass it through to the embed config
+				// Otherwise, the API will use the model's default dimension
+				if !data.Dimension.IsUnknown() && !data.Dimension.IsNull() {
+					dimension := int(data.Dimension.ValueInt32())
+					embedConfig.Dimension = &dimension
+				}
+
+				indexForModelReq := pinecone.CreateIndexForModelRequest{
+					Name:               data.Name.ValueString(),
+					Cloud:              pinecone.Cloud(spec.Serverless.Cloud.ValueString()),
+					Region:             spec.Serverless.Region.ValueString(),
+					Embed:              embedConfig,
+					DeletionProtection: &deletionProtection,
+					ReadCapacity:       readCapacityParams,
+					Schema:             schemaParams,
+				}
+
+				if tags != nil {
+					indexForModelReq.Tags = &tags
+				}
+
+				_, err := r.client.CreateIndexForModel(ctx, &indexForModelReq)
+				if err != nil {
+					resp.Diagnostics.AddError("Failed to create integrated serverless index", err.Error())
+					return
+				}
+			} else {
+				serverlessReq := pinecone.CreateServerlessIndexRequest{
+					Name:               data.Name.ValueString(),
+					Dimension:          knownInt32Pointer(data.Dimension),
+					Metric:             metric,
+					DeletionProtection: &deletionProtection,
+					Cloud:              pinecone.Cloud(spec.Serverless.Cloud.ValueString()),
+					Region:             spec.Serverless.Region.ValueString(),
+					ReadCapacity:       readCapacityParams,
+					Schema:             schemaParams,
+				}
+
+				if tags != nil {
+					serverlessReq.Tags = &tags
+				}
+
+				if vectorType := data.VectorType.ValueString(); vectorType != "" {
+					serverlessReq.VectorType = &vectorType
+				}
+
+				_, err := r.client.CreateServerlessIndex(ctx, &serverlessReq)
+				if err != nil {
+					resp.Diagnostics.AddError("Failed to create serverless index", err.Error())
+					return
+				}
+			}
+		} else if spec.BYOC != nil {
+			metric := knownMetricPointer(data.Metric)
+			deletionProtection := pinecone.DeletionProtection(data.DeletionProtection.ValueString())
+
+			if embed != nil {
+				resp.Diagnostics.AddError("Invalid configuration", "BYOC indexes cannot have an embed configuration.")
+				return
+			}
+
+			readCapacityParams, diags := models.ToReadCapacityParams(ctx, spec.BYOC.ReadCapacity)
+			resp.Diagnostics.Append(diags...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+
+			byocSchemaParams, diags := models.ToMetadataSchema(ctx, spec.BYOC.Schema)
+			resp.Diagnostics.Append(diags...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+
+			byocReq := pinecone.CreateBYOCIndexRequest{
 				Name:               data.Name.ValueString(),
+				Environment:        spec.BYOC.Environment.ValueString(),
 				Dimension:          knownInt32Pointer(data.Dimension),
 				Metric:             metric,
 				DeletionProtection: &deletionProtection,
-				Cloud:              pinecone.Cloud(spec.Serverless.Cloud.ValueString()),
-				Region:             spec.Serverless.Region.ValueString(),
 				ReadCapacity:       readCapacityParams,
-				Schema:             schemaParams,
+				Schema:             byocSchemaParams,
 			}
 
 			if tags != nil {
-				serverlessReq.Tags = &tags
+				byocReq.Tags = &tags
 			}
 
 			if vectorType := data.VectorType.ValueString(); vectorType != "" {
-				serverlessReq.VectorType = &vectorType
+				byocReq.VectorType = &vectorType
 			}
 
-			_, err := r.client.CreateServerlessIndex(ctx, &serverlessReq)
+			_, err := r.client.CreateBYOCIndex(ctx, &byocReq)
 			if err != nil {
-				resp.Diagnostics.AddError("Failed to create serverless index", err.Error())
+				resp.Diagnostics.AddError("Failed to create BYOC index", err.Error())
 				return
 			}
-		}
-	} else if spec.BYOC != nil {
-		metric := knownMetricPointer(data.Metric)
-		deletionProtection := pinecone.DeletionProtection(data.DeletionProtection.ValueString())
-
-		if embed != nil {
-			resp.Diagnostics.AddError("Invalid configuration", "BYOC indexes cannot have an embed configuration.")
-			return
-		}
-
-		readCapacityParams, diags := models.ToReadCapacityParams(ctx, spec.BYOC.ReadCapacity)
-		resp.Diagnostics.Append(diags...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-
-		byocSchemaParams, diags := models.ToMetadataSchema(ctx, spec.BYOC.Schema)
-		resp.Diagnostics.Append(diags...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-
-		byocReq := pinecone.CreateBYOCIndexRequest{
-			Name:               data.Name.ValueString(),
-			Environment:        spec.BYOC.Environment.ValueString(),
-			Dimension:          knownInt32Pointer(data.Dimension),
-			Metric:             metric,
-			DeletionProtection: &deletionProtection,
-			ReadCapacity:       readCapacityParams,
-			Schema:             byocSchemaParams,
-		}
-
-		if tags != nil {
-			byocReq.Tags = &tags
-		}
-
-		if vectorType := data.VectorType.ValueString(); vectorType != "" {
-			byocReq.VectorType = &vectorType
-		}
-
-		_, err := r.client.CreateBYOCIndex(ctx, &byocReq)
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to create BYOC index", err.Error())
-			return
 		}
 	}
 
@@ -761,18 +781,13 @@ func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	}
 
 	// Update ReadCapacity if it has changed (serverless and BYOC only)
-	oldReadCapacity, newReadCapacity := extractReadCapacityFromSpec(ctx, data.Spec, &resp.Diagnostics), extractReadCapacityFromSpec(ctx, newData.Spec, &resp.Diagnostics)
+	oldReadCapacity, newReadCapacity := indexReadCapacity(ctx, data, &resp.Diagnostics), indexReadCapacity(ctx, newData, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 	if !oldReadCapacity.Equal(newReadCapacity) {
 		// Guard: ReadCapacity is not supported for pod indexes
-		var currentSpec models.IndexSpecModel
-		resp.Diagnostics.Append(data.Spec.As(ctx, &currentSpec, basetypes.ObjectAsOptions{})...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-		if currentSpec.Pod != nil {
+		if extractPodSpec(ctx, data.Spec, &resp.Diagnostics) != nil {
 			resp.Diagnostics.AddError("Invalid configuration", "ReadCapacity is not supported for pod-based indexes.")
 			return
 		}
@@ -928,6 +943,9 @@ var indexReplacePaths = []path.Path{
 	path.Root("spec").AtName("serverless").AtName("cloud"),
 	path.Root("spec").AtName("serverless").AtName("region"),
 	path.Root("spec").AtName("byoc").AtName("environment"),
+	path.Root("schema"),
+	path.Root("deployment"),
+	path.Root("cmek_id"),
 }
 
 // indexReplaceUnlessRemovedPaths lists the attributes that recreate the index when set or changed,
@@ -955,6 +973,19 @@ func (r *IndexResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 		return
 	}
 
+	var state models.IndexResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Switching style changes attributes that require replacement, so it's rejected before the
+	// replacement check would plan it.
+	resp.Diagnostics.Append(validateIndexStyleChange(config, state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	replace, diags := plansIndexReplacement(ctx, req)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -965,12 +996,8 @@ func (r *IndexResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 		return
 	}
 
-	var state models.IndexResourceModel
-	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
 	resp.Diagnostics.Append(validateIndexUpdate(ctx, config, state)...)
+	resp.Diagnostics.Append(validateReadCapacityChange(ctx, config, state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -1428,39 +1455,6 @@ func (embedComputedStringModifier) PlanModifyString(_ context.Context, req planm
 	}
 	if resp.PlanValue.IsUnknown() {
 		resp.PlanValue = req.StateValue
-	}
-}
-
-// metricDefault plans the metric a new index gets when metric isn't configured: "dotproduct" for a
-// sparse index and "cosine" otherwise. With embed, or with a vector_type that isn't known yet, it
-// leaves the plan alone, so the metric is computed on create. On an existing index it also leaves
-// the plan alone, so UseStateForUnknown keeps the index's metric: a metric can't change after
-// creation, and a default that differs from it would plan a replacement.
-type metricDefault struct{}
-
-func (metricDefault) Description(_ context.Context) string {
-	return `Defaults to "dotproduct" for new sparse indexes, the model's metric with embed, and "cosine" otherwise.`
-}
-
-func (m metricDefault) MarkdownDescription(ctx context.Context) string {
-	return m.Description(ctx)
-}
-
-func (metricDefault) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
-	if !req.ConfigValue.IsNull() || !req.State.Raw.IsNull() {
-		return
-	}
-	var embed types.Object
-	var vectorType types.String
-	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("embed"), &embed)...)
-	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("vector_type"), &vectorType)...)
-	if resp.Diagnostics.HasError() || !embed.IsNull() || vectorType.IsUnknown() {
-		return
-	}
-	if vectorType.ValueString() == "sparse" {
-		resp.PlanValue = types.StringValue(string(pinecone.IndexMetricDotproduct))
-	} else {
-		resp.PlanValue = types.StringValue(string(pinecone.IndexMetricCosine))
 	}
 }
 

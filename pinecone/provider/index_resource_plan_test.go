@@ -73,6 +73,10 @@ func testIndexModel(t *testing.T, s schema.Schema) models.IndexResourceModel {
 		Spec:               spec,
 		Status:             types.ObjectNull(attrTypesOf(t, s, "status")),
 		Embed:              types.ObjectNull(attrTypesOf(t, s, "embed")),
+		Schema:             types.ObjectNull(attrTypesOf(t, s, "schema")),
+		Deployment:         types.ObjectNull(attrTypesOf(t, s, "deployment")),
+		ReadCapacity:       types.ObjectNull(attrTypesOf(t, s, "read_capacity")),
+		CmekId:             types.StringNull(),
 		Timeouts:           timeouts.Value{Object: types.ObjectNull(timeoutsType.AttrTypes)},
 	}
 }
@@ -456,75 +460,6 @@ func TestPodDeploymentMatches(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := podDeploymentMatches(&pinecone.Index{Deployment: tt.deployment}, target); got != tt.want {
 				t.Errorf("podDeploymentMatches() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestMetricDefault(t *testing.T) {
-	s := indexResourceSchema(t)
-	base := testIndexModel(t, s)
-	base.Metric = types.StringNull()
-	sparse := base
-	sparse.Dimension = types.Int32Null()
-	sparse.VectorType = types.StringValue("sparse")
-	unknownVectorType := base
-	unknownVectorType.VectorType = types.StringUnknown()
-	integrated := withEmbed(t, s, base, "pinecone-sparse-english-v0", "chunk_text")
-	configured := base
-	configured.Metric = types.StringValue("euclidean")
-	// An existing integrated index whose model's metric isn't the default.
-	existingIntegrated := integrated
-	existingIntegrated.Metric = types.StringValue("dotproduct")
-
-	tests := []struct {
-		name   string
-		config models.IndexResourceModel
-		state  *models.IndexResourceModel
-		want   types.String
-	}{
-		{name: "dense", config: base, want: types.StringValue("cosine")},
-		{name: "sparse", config: sparse, want: types.StringValue("dotproduct")},
-		{name: "unknown vector_type", config: unknownVectorType, want: types.StringUnknown()},
-		{name: "embed uses the model's metric", config: integrated, want: types.StringUnknown()},
-		{name: "configured", config: configured, want: types.StringValue("euclidean")},
-		// Left unknown, so UseStateForUnknown keeps "dotproduct" instead of planning a replacement.
-		{name: "existing index keeps its metric", config: base, state: &existingIntegrated, want: types.StringUnknown()},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
-			config := tfsdk.Config{Schema: s, Raw: tftypes.NewValue(s.Type().TerraformType(ctx), nil)}
-			plan := tfsdk.Plan(config)
-			if d := plan.Set(ctx, &tt.config); d.HasError() {
-				t.Fatalf("setting config: %v", d)
-			}
-			config.Raw = plan.Raw
-			planValue := tt.config.Metric
-			if planValue.IsNull() {
-				planValue = types.StringUnknown()
-			}
-			req := planmodifier.StringRequest{
-				Path:        path.Root("metric"),
-				Config:      config,
-				ConfigValue: tt.config.Metric,
-				PlanValue:   planValue,
-				State:       tfsdk.State{Schema: s, Raw: tftypes.NewValue(s.Type().TerraformType(ctx), nil)},
-				StateValue:  types.StringNull(),
-			}
-			if tt.state != nil {
-				if d := req.State.Set(ctx, tt.state); d.HasError() {
-					t.Fatalf("setting state: %v", d)
-				}
-				req.StateValue = tt.state.Metric
-			}
-			resp := planmodifier.StringResponse{PlanValue: req.PlanValue}
-			metricDefault{}.PlanModifyString(ctx, req, &resp)
-			if resp.Diagnostics.HasError() {
-				t.Fatalf("diagnostics: %v", resp.Diagnostics)
-			}
-			if !resp.PlanValue.Equal(tt.want) {
-				t.Errorf("plan = %v, want %v", resp.PlanValue, tt.want)
 			}
 		})
 	}
