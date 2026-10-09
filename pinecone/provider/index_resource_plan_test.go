@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -513,6 +514,30 @@ func TestRequiresReplaceUnlessRemoved(t *testing.T) {
 			requiresReplaceUnlessRemoved(context.Background(), planmodifier.ObjectRequest{PlanValue: tt.plan}, &resp)
 			if resp.RequiresReplace != tt.want {
 				t.Errorf("RequiresReplace = %v, want %v", resp.RequiresReplace, tt.want)
+			}
+		})
+	}
+}
+
+func TestMergeTags(t *testing.T) {
+	tests := []struct {
+		name     string
+		old, new map[string]string
+		want     map[string]string
+	}{
+		{name: "unchanged", old: map[string]string{"team": "search"}, new: map[string]string{"team": "search"}, want: nil},
+		{name: "both empty", old: map[string]string{}, new: map[string]string{}, want: nil},
+		{name: "no prior tags", old: nil, new: map[string]string{}, want: nil},
+		{name: "add", old: map[string]string{"team": "search"}, new: map[string]string{"team": "search", "env": "prod"}, want: map[string]string{"env": "prod"}},
+		{name: "change", old: map[string]string{"team": "search"}, new: map[string]string{"team": "ranking"}, want: map[string]string{"team": "ranking"}},
+		{name: "remove", old: map[string]string{"team": "search", "env": "prod"}, new: map[string]string{"team": "search"}, want: map[string]string{"env": ""}},
+		{name: "remove all", old: map[string]string{"team": "search"}, new: map[string]string{}, want: map[string]string{"team": ""}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := mergeTags(tt.old, tt.new)
+			if (got == nil) != (tt.want == nil) || !maps.Equal(got, tt.want) {
+				t.Errorf("mergeTags() = %#v, want %#v", got, tt.want)
 			}
 		})
 	}

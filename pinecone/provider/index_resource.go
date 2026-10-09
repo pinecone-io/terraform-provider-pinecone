@@ -1353,6 +1353,9 @@ func mergeTags(oldTags, newTags map[string]string) map[string]string {
 		}
 	}
 
+	if len(mergedTags) == 0 {
+		return nil
+	}
 	return mergedTags
 }
 
