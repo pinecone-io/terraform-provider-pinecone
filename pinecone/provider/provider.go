@@ -47,7 +47,7 @@ func (p *PineconeProvider) Metadata(ctx context.Context, req provider.MetadataRe
 
 func (p *PineconeProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: `You can use the this Terraform provider to manage resources supported 
+		MarkdownDescription: `You can use this Terraform provider to manage resources supported 
 by [Pinecone](https://www.pinecone.io/). The provider must be configured with the proper 
 credentials before use. You can provide credentials via the PINECONE_API_KEY environment variable.`,
 

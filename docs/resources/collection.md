@@ -3,12 +3,12 @@
 page_title: "pinecone_collection Resource - terraform-provider-pinecone"
 subcategory: ""
 description: |-
-  The pinecone_collection resource lets you create and manage collections in Pinecone. Learn more about collections in the docs hhttps://docs.pinecone.io/guides/indexes/understanding-collections.
+  The pinecone_collection resource lets you create and manage collections in Pinecone. Learn more about collections in the docs https://docs.pinecone.io/guides/indexes/pods/understanding-collections.
 ---
 
 # pinecone_collection (Resource)
 
-The `pinecone_collection` resource lets you create and manage collections in Pinecone. Learn more about collections in the [docs](hhttps://docs.pinecone.io/guides/indexes/understanding-collections).
+The `pinecone_collection` resource lets you create and manage collections in Pinecone. Learn more about collections in the [docs](https://docs.pinecone.io/guides/indexes/pods/understanding-collections).
 
 ## Example Usage
 
@@ -23,20 +23,15 @@ terraform {
 
 provider "pinecone" {}
 
-resource "pinecone_index" "test" {
-  name      = "tftestindex"
-  dimension = 10
-  spec = {
-    pod = {
-      environment = "us-west4-gcp"
-      pod_type    = "s1.x1"
-    }
-  }
+# Collections are created from pod-based indexes, which can no longer be created, so the source
+# is an existing pod-based index.
+variable "pod_index_name" {
+  type = string
 }
 
 resource "pinecone_collection" "test" {
   name   = "tftestcollection"
-  source = pinecone_index.test.name
+  source = var.pod_index_name
 }
 ```
 
@@ -50,21 +45,21 @@ resource "pinecone_collection" "test" {
 
 ### Optional
 
-- `dimension` (Number) The dimension of the vectors stored in each record held in the collection.
-- `size` (Number) The size of the collection in bytes.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
-- `vector_count` (Number) The number of records stored in the collection.
 
 ### Read-Only
 
+- `dimension` (Number) The dimension of the vectors stored in each record held in the collection.
 - `environment` (String) The environment where the collection is hosted.
 - `id` (String) Collection identifier
+- `size` (Number) The size of the collection in bytes.
 - `status` (String) The status of the collection.
+- `vector_count` (Number) The number of records stored in the collection.
 
 <a id="nestedblock--timeouts"></a>
 ### Nested Schema for `timeouts`
 
 Optional:
 
-- `create` (String) Timeout defaults to 5 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
-- `delete` (String) Timeout defaults to 5 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
+- `create` (String) Timeout defaults to 10 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
+- `delete` (String) Timeout defaults to 10 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).

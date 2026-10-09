@@ -23,20 +23,28 @@ terraform {
 
 provider "pinecone" {}
 
-resource "pinecone_index" "test" {
-  name      = "tftestindex"
-  metric    = "cosine"
-  dimension = 1536
-  spec = {
-    serverless = {
-      cloud  = "aws"
-      region = "us-west-2"
-    }
+data "pinecone_index" "products" {
+  name = "products"
+}
+
+output "products_vectors" {
+  value = {
+    dimension = data.pinecone_index.products.schema.fields["_values"].dense_vector.dimension
+    metric    = data.pinecone_index.products.schema.fields["_values"].dense_vector.metric
+    region    = data.pinecone_index.products.deployment.managed.region
   }
 }
 
-data "pinecone_index" "test" {
-  name = pinecone_index.test.name
+data "pinecone_index" "articles" {
+  name = "articles"
+}
+
+output "articles_full_text_search_fields" {
+  value = {
+    for name, field in data.pinecone_index.articles.schema.fields :
+    name => field.string.full_text_search
+    if try(field.string.full_text_search, null) != null
+  }
 }
 ```
 
@@ -47,20 +55,15 @@ data "pinecone_index" "test" {
 
 - `name` (String) Index name
 
-### Optional
-
-- `embed` (Attributes) Specify the integrated inference embedding configuration for the index. The model and field map are fixed when the index is created; the read and write parameters can be updated.
-
-Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details. (see [below for nested schema](#nestedatt--embed))
-- `spec` (Attributes) Spec (see [below for nested schema](#nestedatt--spec))
-- `status` (Attributes) Configuration for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when metadata_config is present, only specified metadata fields are indexed. To specify metadata fields to index, provide an array of the following form: [example_metadata_field] (see [below for nested schema](#nestedatt--status))
-
 ### Read-Only
 
 - `cmek_id` (String) The ID of the customer-managed encryption key used to encrypt the index, if any.
 - `deletion_protection` (String) Index deletion protection can be one of 'enabled' or 'disabled'.
 - `deployment` (Attributes) Where the index runs. Exactly one of `managed`, `pod`, or `byoc` is set. (see [below for nested schema](#nestedatt--deployment))
 - `dimension` (Number) Index dimension
+- `embed` (Attributes) Specify the integrated inference embedding configuration for the index. The model and field map are fixed when the index is created; the read and write parameters can be updated.
+
+Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details. (see [below for nested schema](#nestedatt--embed))
 - `host` (String) The URL address where the index is hosted.
 - `id` (String) Index identifier
 - `metric` (String) Index metric can be one of 'cosine', 'dotproduct', or 'euclidean'.
@@ -69,187 +72,10 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 - `schema` (Attributes) The index's schema: the typed fields its records can contain. (see [below for nested schema](#nestedatt--schema))
 - `source_backup_id` (String) The ID of the backup the index was restored from, if any.
 - `source_collection` (String) The name of the collection the index was created from, if any.
-- `tags` (Map of String) Custom user tags added to an index. Keys must be 80 characters or less. Values must be 120 characters or less. Keys must be alphanumeric, '', or '-'. Values must be alphanumeric, ';', '@', '', '-', '.', '+', or ' '. To unset a key, set the value to be an empty string.
-- `vector_type` (String) Index vector type, for example 'dense' or 'sprase'.
-
-<a id="nestedatt--embed"></a>
-### Nested Schema for `embed`
-
-Read-Only:
-
-- `dimension` (Number) The dimension of the embedding model, specifying the size of the output vector.
-- `field_map` (Map of String) Identifies the name of the text field from your document model that will be embedded.
-- `metric` (String) The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'.
-- `model` (String) the name of the embedding model to use for the index.
-- `read_parameters` (Map of String) The read parameters for the embedding model.
-- `vector_type` (String) The index vector type associated with the model. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension will be nil.
-- `write_parameters` (Map of String) The write parameters for the embedding model.
-
-
-<a id="nestedatt--spec"></a>
-### Nested Schema for `spec`
-
-Optional:
-
-- `byoc` (Attributes) Configuration for a BYOC (Bring Your Own Cloud) index. (see [below for nested schema](#nestedatt--spec--byoc))
-- `pod` (Attributes) Configuration needed to deploy a pod-based index. (see [below for nested schema](#nestedatt--spec--pod))
-- `serverless` (Attributes) Configuration needed to deploy a serverless index. (see [below for nested schema](#nestedatt--spec--serverless))
-
-<a id="nestedatt--spec--byoc"></a>
-### Nested Schema for `spec.byoc`
-
-Read-Only:
-
-- `environment` (String) The environment identifier for the BYOC index.
-- `read_capacity` (Attributes) Read capacity configuration for the index. (see [below for nested schema](#nestedatt--spec--byoc--read_capacity))
-- `schema` (Attributes) Schema for the behavior of Pinecone's internal metadata index. When present, only fields listed in `fields` with `filterable: true` are indexed. (see [below for nested schema](#nestedatt--spec--byoc--schema))
-
-<a id="nestedatt--spec--byoc--read_capacity"></a>
-### Nested Schema for `spec.byoc.read_capacity`
-
-Read-Only:
-
-- `dedicated` (Attributes) Dedicated read capacity configuration. (see [below for nested schema](#nestedatt--spec--byoc--read_capacity--dedicated))
-- `on_demand` (Attributes) OnDemand read capacity configuration. (see [below for nested schema](#nestedatt--spec--byoc--read_capacity--on_demand))
-
-<a id="nestedatt--spec--byoc--read_capacity--dedicated"></a>
-### Nested Schema for `spec.byoc.read_capacity.dedicated`
-
-Read-Only:
-
-- `current_replicas` (Number) The current number of replicas.
-- `current_shards` (Number) The current number of shards.
-- `error_message` (String) An optional error message if there are issues with the read capacity configuration.
-- `node_type` (String) The type of machines in use.
-- `replicas` (Number) The desired number of replicas.
-- `shards` (Number) The desired number of shards.
-- `state` (String) The overall status of the read capacity configuration.
-
-
-<a id="nestedatt--spec--byoc--read_capacity--on_demand"></a>
-### Nested Schema for `spec.byoc.read_capacity.on_demand`
-
-Read-Only:
-
-- `current_replicas` (Number) The current number of replicas.
-- `current_shards` (Number) The current number of shards.
-- `error_message` (String) An optional error message if there are issues with the read capacity configuration.
-- `state` (String) The overall status of the read capacity configuration.
-
-
-
-<a id="nestedatt--spec--byoc--schema"></a>
-### Nested Schema for `spec.byoc.schema`
-
-Read-Only:
-
-- `fields` (Attributes Map) Map of metadata field names to their schema configuration. (see [below for nested schema](#nestedatt--spec--byoc--schema--fields))
-
-<a id="nestedatt--spec--byoc--schema--fields"></a>
-### Nested Schema for `spec.byoc.schema.fields`
-
-Read-Only:
-
-- `filterable` (Boolean) Whether the field is filterable.
-
-
-
-
-<a id="nestedatt--spec--pod"></a>
-### Nested Schema for `spec.pod`
-
-Optional:
-
-- `metadata_config` (Attributes) Configuration for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when metadata_config is present, only specified metadata fields are indexed. These configurations are only valid for use with pod-based indexes. (see [below for nested schema](#nestedatt--spec--pod--metadata_config))
-
-Read-Only:
-
-- `environment` (String) The environment where the index is hosted.
-- `pod_type` (String) The type of pod to use. One of s1, p1, or p2 appended with . and one of x1, x2, x4, or x8.
-- `pods` (Number) The number of pods to be used in the index. This should be equal to shards x replicas.'
-- `replicas` (Number) The number of replicas. Replicas duplicate your index. They provide higher availability and throughput. Replicas can be scaled up or down as your needs change.
-- `shards` (Number) The number of shards. Shards split your data across multiple pods so you can fit more data into an index.
-- `source_collection` (String) The name of the collection to create an index from.
-
-<a id="nestedatt--spec--pod--metadata_config"></a>
-### Nested Schema for `spec.pod.metadata_config`
-
-Read-Only:
-
-- `indexed` (List of String) The indexed fields.
-
-
-
-<a id="nestedatt--spec--serverless"></a>
-### Nested Schema for `spec.serverless`
-
-Read-Only:
-
-- `cloud` (String) The public cloud where the index is hosted.
-- `read_capacity` (Attributes) Read capacity configuration for the index. (see [below for nested schema](#nestedatt--spec--serverless--read_capacity))
-- `region` (String) The region where the index is hosted.
-- `schema` (Attributes) Schema for the behavior of Pinecone's internal metadata index. When present, only fields listed in `fields` with `filterable: true` are indexed. (see [below for nested schema](#nestedatt--spec--serverless--schema))
-
-<a id="nestedatt--spec--serverless--read_capacity"></a>
-### Nested Schema for `spec.serverless.read_capacity`
-
-Read-Only:
-
-- `dedicated` (Attributes) Dedicated read capacity configuration. (see [below for nested schema](#nestedatt--spec--serverless--read_capacity--dedicated))
-- `on_demand` (Attributes) OnDemand read capacity configuration. (see [below for nested schema](#nestedatt--spec--serverless--read_capacity--on_demand))
-
-<a id="nestedatt--spec--serverless--read_capacity--dedicated"></a>
-### Nested Schema for `spec.serverless.read_capacity.dedicated`
-
-Read-Only:
-
-- `current_replicas` (Number) The current number of replicas.
-- `current_shards` (Number) The current number of shards.
-- `error_message` (String) An optional error message if there are issues with the read capacity configuration.
-- `node_type` (String) The type of machines in use.
-- `replicas` (Number) The desired number of replicas.
-- `shards` (Number) The desired number of shards.
-- `state` (String) The overall status of the read capacity configuration.
-
-
-<a id="nestedatt--spec--serverless--read_capacity--on_demand"></a>
-### Nested Schema for `spec.serverless.read_capacity.on_demand`
-
-Read-Only:
-
-- `current_replicas` (Number) The current number of replicas.
-- `current_shards` (Number) The current number of shards.
-- `error_message` (String) An optional error message if there are issues with the read capacity configuration.
-- `state` (String) The overall status of the read capacity configuration.
-
-
-
-<a id="nestedatt--spec--serverless--schema"></a>
-### Nested Schema for `spec.serverless.schema`
-
-Read-Only:
-
-- `fields` (Attributes Map) Map of metadata field names to their schema configuration. (see [below for nested schema](#nestedatt--spec--serverless--schema--fields))
-
-<a id="nestedatt--spec--serverless--schema--fields"></a>
-### Nested Schema for `spec.serverless.schema.fields`
-
-Read-Only:
-
-- `filterable` (Boolean) Whether the field is filterable.
-
-
-
-
-
-<a id="nestedatt--status"></a>
-### Nested Schema for `status`
-
-Read-Only:
-
-- `ready` (Boolean) Ready.
-- `state` (String) Initializing InitializationFailed ScalingUp ScalingDown ScalingUpPodSize ScalingDownPodSize Upgrading Terminating Ready
-
+- `spec` (Attributes) Where and how the index runs, in the form used by `spec` on the `pinecone_index` resource. The same information is in `deployment`. (see [below for nested schema](#nestedatt--spec))
+- `status` (Attributes) The index's status. (see [below for nested schema](#nestedatt--status))
+- `tags` (Map of String) Custom user tags added to an index, at most 20 per index. Keys must be 80 characters or less and contain only letters, digits, `_`, or `-`. Values must be 120 characters or less and consist of printable ASCII characters or spaces.
+- `vector_type` (String) Index vector type, for example 'dense' or 'sparse'.
 
 <a id="nestedatt--deployment"></a>
 ### Nested Schema for `deployment`
@@ -288,6 +114,20 @@ Read-Only:
 - `replicas` (Number) The number of replicas.
 - `shards` (Number) The number of shards.
 
+
+
+<a id="nestedatt--embed"></a>
+### Nested Schema for `embed`
+
+Read-Only:
+
+- `dimension` (Number) The dimension of the embedding model, specifying the size of the output vector.
+- `field_map` (Map of String) Identifies the name of the text field from your document model that will be embedded.
+- `metric` (String) The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'.
+- `model` (String) the name of the embedding model to use for the index.
+- `read_parameters` (Map of String) The read parameters for the embedding model.
+- `vector_type` (String) The index vector type associated with the model. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension will be nil.
+- `write_parameters` (Map of String) The write parameters for the embedding model.
 
 
 <a id="nestedatt--read_capacity"></a>
@@ -450,3 +290,167 @@ Read-Only:
 
 - `description` (String) The field's description, if one was set.
 - `filterable` (Boolean) Whether the field is indexed for metadata filtering.
+
+
+
+
+<a id="nestedatt--spec"></a>
+### Nested Schema for `spec`
+
+Read-Only:
+
+- `byoc` (Attributes) Configuration for a BYOC (Bring Your Own Cloud) index. (see [below for nested schema](#nestedatt--spec--byoc))
+- `pod` (Attributes) Configuration needed to deploy a pod-based index. (see [below for nested schema](#nestedatt--spec--pod))
+- `serverless` (Attributes) Configuration needed to deploy a serverless index. (see [below for nested schema](#nestedatt--spec--serverless))
+
+<a id="nestedatt--spec--byoc"></a>
+### Nested Schema for `spec.byoc`
+
+Read-Only:
+
+- `environment` (String) The environment identifier for the BYOC index.
+- `read_capacity` (Attributes) Read capacity configuration for the index. (see [below for nested schema](#nestedatt--spec--byoc--read_capacity))
+- `schema` (Attributes) Schema for the behavior of Pinecone's internal metadata index. When present, only fields listed in `fields` with `filterable: true` are indexed. (see [below for nested schema](#nestedatt--spec--byoc--schema))
+
+<a id="nestedatt--spec--byoc--read_capacity"></a>
+### Nested Schema for `spec.byoc.read_capacity`
+
+Read-Only:
+
+- `dedicated` (Attributes) Dedicated read capacity configuration. (see [below for nested schema](#nestedatt--spec--byoc--read_capacity--dedicated))
+- `on_demand` (Attributes) OnDemand read capacity configuration. (see [below for nested schema](#nestedatt--spec--byoc--read_capacity--on_demand))
+
+<a id="nestedatt--spec--byoc--read_capacity--dedicated"></a>
+### Nested Schema for `spec.byoc.read_capacity.dedicated`
+
+Read-Only:
+
+- `current_replicas` (Number) The current number of replicas.
+- `current_shards` (Number) The current number of shards.
+- `error_message` (String) An optional error message if there are issues with the read capacity configuration.
+- `node_type` (String) The type of machines in use.
+- `replicas` (Number) The desired number of replicas.
+- `shards` (Number) The desired number of shards.
+- `state` (String) The overall status of the read capacity configuration.
+
+
+<a id="nestedatt--spec--byoc--read_capacity--on_demand"></a>
+### Nested Schema for `spec.byoc.read_capacity.on_demand`
+
+Read-Only:
+
+- `current_replicas` (Number) The current number of replicas.
+- `current_shards` (Number) The current number of shards.
+- `error_message` (String) An optional error message if there are issues with the read capacity configuration.
+- `state` (String) The overall status of the read capacity configuration.
+
+
+
+<a id="nestedatt--spec--byoc--schema"></a>
+### Nested Schema for `spec.byoc.schema`
+
+Read-Only:
+
+- `fields` (Attributes Map) Map of metadata field names to their schema configuration. (see [below for nested schema](#nestedatt--spec--byoc--schema--fields))
+
+<a id="nestedatt--spec--byoc--schema--fields"></a>
+### Nested Schema for `spec.byoc.schema.fields`
+
+Read-Only:
+
+- `filterable` (Boolean) Whether the field is filterable.
+
+
+
+
+<a id="nestedatt--spec--pod"></a>
+### Nested Schema for `spec.pod`
+
+Read-Only:
+
+- `environment` (String) The environment where the index is hosted.
+- `metadata_config` (Attributes) Configuration for the behavior of Pinecone's internal metadata index. The API no longer reports this setting, so `indexed` is always null. Indexed metadata fields are listed in the top-level `schema`. (see [below for nested schema](#nestedatt--spec--pod--metadata_config))
+- `pod_type` (String) The type of pod to use. One of s1, p1, or p2 appended with . and one of x1, x2, x4, or x8.
+- `pods` (Number) The number of pods to be used in the index. This should be equal to shards x replicas.'
+- `replicas` (Number) The number of replicas. Replicas duplicate your index. They provide higher availability and throughput. Replicas can be scaled up or down as your needs change.
+- `shards` (Number) The number of shards. Shards split your data across multiple pods so you can fit more data into an index.
+- `source_collection` (String) The name of the collection the index was created from, if any.
+
+<a id="nestedatt--spec--pod--metadata_config"></a>
+### Nested Schema for `spec.pod.metadata_config`
+
+Read-Only:
+
+- `indexed` (List of String) The indexed fields.
+
+
+
+<a id="nestedatt--spec--serverless"></a>
+### Nested Schema for `spec.serverless`
+
+Read-Only:
+
+- `cloud` (String) The public cloud where the index is hosted.
+- `read_capacity` (Attributes) Read capacity configuration for the index. (see [below for nested schema](#nestedatt--spec--serverless--read_capacity))
+- `region` (String) The region where the index is hosted.
+- `schema` (Attributes) Schema for the behavior of Pinecone's internal metadata index. When present, only fields listed in `fields` with `filterable: true` are indexed. (see [below for nested schema](#nestedatt--spec--serverless--schema))
+
+<a id="nestedatt--spec--serverless--read_capacity"></a>
+### Nested Schema for `spec.serverless.read_capacity`
+
+Read-Only:
+
+- `dedicated` (Attributes) Dedicated read capacity configuration. (see [below for nested schema](#nestedatt--spec--serverless--read_capacity--dedicated))
+- `on_demand` (Attributes) OnDemand read capacity configuration. (see [below for nested schema](#nestedatt--spec--serverless--read_capacity--on_demand))
+
+<a id="nestedatt--spec--serverless--read_capacity--dedicated"></a>
+### Nested Schema for `spec.serverless.read_capacity.dedicated`
+
+Read-Only:
+
+- `current_replicas` (Number) The current number of replicas.
+- `current_shards` (Number) The current number of shards.
+- `error_message` (String) An optional error message if there are issues with the read capacity configuration.
+- `node_type` (String) The type of machines in use.
+- `replicas` (Number) The desired number of replicas.
+- `shards` (Number) The desired number of shards.
+- `state` (String) The overall status of the read capacity configuration.
+
+
+<a id="nestedatt--spec--serverless--read_capacity--on_demand"></a>
+### Nested Schema for `spec.serverless.read_capacity.on_demand`
+
+Read-Only:
+
+- `current_replicas` (Number) The current number of replicas.
+- `current_shards` (Number) The current number of shards.
+- `error_message` (String) An optional error message if there are issues with the read capacity configuration.
+- `state` (String) The overall status of the read capacity configuration.
+
+
+
+<a id="nestedatt--spec--serverless--schema"></a>
+### Nested Schema for `spec.serverless.schema`
+
+Read-Only:
+
+- `fields` (Attributes Map) Map of metadata field names to their schema configuration. (see [below for nested schema](#nestedatt--spec--serverless--schema--fields))
+
+<a id="nestedatt--spec--serverless--schema--fields"></a>
+### Nested Schema for `spec.serverless.schema.fields`
+
+Read-Only:
+
+- `filterable` (Boolean) Whether the field is filterable.
+
+
+
+
+
+<a id="nestedatt--status"></a>
+### Nested Schema for `status`
+
+Read-Only:
+
+- `ready` (Boolean) Ready.
+- `state` (String) Initializing InitializationFailed ScalingUp ScalingDown ScalingUpPodSize Terminating Ready Failed Disabled

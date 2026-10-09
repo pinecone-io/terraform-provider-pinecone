@@ -56,12 +56,10 @@ func (d *CollectionsDataSource) Schema(ctx context.Context, req datasource.Schem
 						},
 						"dimension": schema.Int32Attribute{
 							MarkdownDescription: "The dimension of the vectors stored in each record held in the collection.",
-							Optional:            true,
 							Computed:            true,
 						},
 						"vector_count": schema.Int32Attribute{
 							MarkdownDescription: "The number of records stored in the collection.",
-							Optional:            true,
 							Computed:            true,
 						},
 						"environment": schema.StringAttribute{

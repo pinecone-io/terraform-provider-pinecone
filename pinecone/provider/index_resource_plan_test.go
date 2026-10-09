@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -121,6 +122,53 @@ func withPod(t *testing.T, s schema.Schema, model models.IndexResourceModel, pod
 	return model
 }
 
+type readCapacityMode int
+
+const (
+	noReadCapacity readCapacityMode = iota
+	onDemandReadCapacity
+	dedicatedReadCapacity
+)
+
+func readCapacityValue(t *testing.T, attrTypes map[string]attr.Type, mode readCapacityMode) types.Object {
+	t.Helper()
+	if mode == noReadCapacity {
+		return types.ObjectNull(attrTypes)
+	}
+	rc := models.IndexReadCapacityResourceModel{
+		Dedicated: types.ObjectNull(models.IndexReadCapacityDedicatedResourceModel{}.AttrTypes()),
+		OnDemand:  types.ObjectNull(models.IndexReadCapacityOnDemandResourceModel{}.AttrTypes()),
+	}
+	if mode == dedicatedReadCapacity {
+		rc.Dedicated = types.ObjectValueMust(models.IndexReadCapacityDedicatedResourceModel{}.AttrTypes(), map[string]attr.Value{
+			"node_type": types.StringValue("b1"), "replicas": types.Int32Value(1), "shards": types.Int32Value(1),
+		})
+	} else {
+		rc.OnDemand = types.ObjectValueMust(models.IndexReadCapacityOnDemandResourceModel{}.AttrTypes(), map[string]attr.Value{})
+	}
+	obj, d := types.ObjectValueFrom(context.Background(), attrTypes, rc)
+	if d.HasError() {
+		t.Fatalf("building read_capacity: %v", d)
+	}
+	return obj
+}
+
+func withByocSpec(t *testing.T, s schema.Schema, model models.IndexResourceModel, mode readCapacityMode) models.IndexResourceModel {
+	t.Helper()
+	spec, d := types.ObjectValueFrom(context.Background(), attrTypesOf(t, s, "spec"), models.IndexSpecModel{
+		BYOC: &models.IndexBYOCSpecModel{
+			Environment:  types.StringValue("aws-us-east-1-b921"),
+			ReadCapacity: readCapacityValue(t, models.IndexReadCapacityResourceModel{}.AttrTypes(), mode),
+			Schema:       types.ObjectNull(models.IndexMetadataSchemaModel{}.AttrTypes()),
+		},
+	})
+	if d.HasError() {
+		t.Fatalf("building byoc spec: %v", d)
+	}
+	model.Spec = spec
+	return model
+}
+
 func withServerlessMetadataSchema(t *testing.T, s schema.Schema, model models.IndexResourceModel) models.IndexResourceModel {
 	t.Helper()
 	return withServerlessMetadataSchemaField(t, s, model, "genre")
@@ -193,6 +241,9 @@ func TestIndexResourceModifyPlan(t *testing.T) {
 	integrated := withEmbed(t, s, base, "multilingual-e5-large", "chunk_text")
 	pod := withPod(t, s, base, "p1.x2", 1)
 	withMetadataSchema := withServerlessMetadataSchema(t, s, base)
+	byocDedicated := withByocSpec(t, s, base, dedicatedReadCapacity)
+	byocOnDemand := withByocSpec(t, s, base, onDemandReadCapacity)
+	byocNoReadCapacity := withByocSpec(t, s, base, noReadCapacity)
 
 	renamed := func(m models.IndexResourceModel) models.IndexResourceModel {
 		m.Name = types.StringValue("my-renamed-index")
@@ -223,6 +274,15 @@ func TestIndexResourceModifyPlan(t *testing.T) {
 		{name: "scale pod size up", config: withPod(t, s, base, "p1.x4", 1), state: &pod},
 		{name: "scale pod size down", config: withPod(t, s, base, "p1.x1", 1), state: &pod, wantErr: "pod_type can't be changed this way"},
 		{name: "change pod family", config: withPod(t, s, base, "s1.x2", 1), state: &pod, wantErr: "pod_type can't be changed this way"},
+		{name: "create byoc dedicated", config: byocDedicated},
+		{name: "create byoc without read capacity", config: byocNoReadCapacity, wantErr: "BYOC indexes need dedicated read capacity"},
+		{name: "create byoc on-demand", config: byocOnDemand, wantErr: "BYOC indexes need dedicated read capacity"},
+		{name: "update byoc without read capacity", config: byocNoReadCapacity, state: &byocDedicated},
+		{name: "replace byoc without read capacity", config: renamed(byocNoReadCapacity), state: &byocOnDemand, wantErr: "BYOC indexes need dedicated read capacity"},
+		{name: "replace byoc dedicated", config: renamed(byocDedicated), state: &byocOnDemand},
+		{name: "byoc dedicated to on-demand", config: byocOnDemand, state: &byocDedicated, wantErr: "BYOC indexes can't use on-demand read capacity"},
+		{name: "keep byoc on-demand", config: byocOnDemand, state: &byocOnDemand},
+		{name: "byoc on-demand to dedicated", config: byocDedicated, state: &byocOnDemand},
 	}
 
 	for _, tt := range tests {
@@ -305,6 +365,34 @@ func TestIndexResourceModifyPlan_effectiveEmbedParameters(t *testing.T) {
 				t.Error("effective_write_parameters is unknown, but write_parameters didn't change")
 			}
 		})
+	}
+}
+
+func TestIndexResourceModifyPlan_reportsEveryCreateError(t *testing.T) {
+	s := indexResourceSchema(t)
+	ctx := context.Background()
+	fields, d := types.MapValueFrom(ctx, types.ObjectType{AttrTypes: models.IndexMetadataSchemaFieldModel{}.AttrTypes()},
+		map[string]models.IndexMetadataSchemaFieldModel{"genre": {Filterable: types.BoolValue(true)}})
+	if d.HasError() {
+		t.Fatalf("building schema fields: %v", d)
+	}
+	spec, d := types.ObjectValueFrom(ctx, attrTypesOf(t, s, "spec"), models.IndexSpecModel{
+		BYOC: &models.IndexBYOCSpecModel{
+			Environment:  types.StringValue("aws-us-east-1-b921"),
+			ReadCapacity: types.ObjectNull(models.IndexReadCapacityResourceModel{}.AttrTypes()),
+			Schema:       types.ObjectValueMust(models.IndexMetadataSchemaModel{}.AttrTypes(), map[string]attr.Value{"fields": fields}),
+		},
+	})
+	if d.HasError() {
+		t.Fatalf("building byoc spec: %v", d)
+	}
+	config := testIndexModel(t, s)
+	config.Spec = spec
+
+	errs := runModifyPlan(t, s, config, nil)
+	want := []string{"BYOC indexes need dedicated read capacity", "Metadata schema isn't supported"}
+	if !slices.Equal(errs, want) {
+		t.Fatalf("errors = %v, want %v", errs, want)
 	}
 }
 

@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/pinecone-io/go-pinecone/v7/pinecone"
 	"github.com/pinecone-io/terraform-provider-pinecone/pinecone/models"
@@ -71,22 +72,11 @@ func withSchemaMode(t *testing.T, s schema.Schema, model models.IndexResourceMod
 
 func withReadCapacity(t *testing.T, s schema.Schema, model models.IndexResourceModel, dedicated bool) models.IndexResourceModel {
 	t.Helper()
-	rc := models.IndexReadCapacityResourceModel{
-		Dedicated: types.ObjectNull(models.IndexReadCapacityDedicatedResourceModel{}.AttrTypes()),
-		OnDemand:  types.ObjectNull(models.IndexReadCapacityOnDemandResourceModel{}.AttrTypes()),
-	}
+	mode := onDemandReadCapacity
 	if dedicated {
-		rc.Dedicated = types.ObjectValueMust(models.IndexReadCapacityDedicatedResourceModel{}.AttrTypes(), map[string]attr.Value{
-			"node_type": types.StringValue("b1"), "replicas": types.Int32Value(1), "shards": types.Int32Value(1),
-		})
-	} else {
-		rc.OnDemand = types.ObjectValueMust(models.IndexReadCapacityOnDemandResourceModel{}.AttrTypes(), map[string]attr.Value{})
+		mode = dedicatedReadCapacity
 	}
-	obj, d := types.ObjectValueFrom(context.Background(), attrTypesOf(t, s, "read_capacity"), rc)
-	if d.HasError() {
-		t.Fatalf("building read_capacity: %v", d)
-	}
-	model.ReadCapacity = obj
+	model.ReadCapacity = readCapacityValue(t, attrTypesOf(t, s, "read_capacity"), mode)
 	return model
 }
 
@@ -166,6 +156,41 @@ func TestIndexResourceValidateConfig(t *testing.T) {
 	}))
 	unknownManaged := withUnknownDeployment(t, s, document(documentFields), "managed")
 	unknownByoc := withUnknownDeployment(t, s, withSchemaMode(t, s, base, schemaFields{"_values": denseField(1024, "cosine")}, byocDeployment()), "byoc")
+	specTypes := attrTypesOf(t, s, "spec")
+	withSpec := func(spec types.Object) models.IndexResourceModel {
+		m := base
+		m.Spec = spec
+		return m
+	}
+	specOf := func(spec models.IndexSpecModel) types.Object {
+		obj, d := types.ObjectValueFrom(context.Background(), specTypes, spec)
+		if d.HasError() {
+			t.Fatalf("building spec: %v", d)
+		}
+		return obj
+	}
+	var serverless models.IndexSpecModel
+	if d := base.Spec.As(context.Background(), &serverless, basetypes.ObjectAsOptions{}); d.HasError() {
+		t.Fatalf("reading spec: %v", d)
+	}
+	var byoc models.IndexSpecModel
+	if d := withByocSpec(t, s, base, dedicatedReadCapacity).Spec.As(context.Background(), &byoc, basetypes.ObjectAsOptions{}); d.HasError() {
+		t.Fatalf("reading spec: %v", d)
+	}
+	serverlessType, ok := specTypes["serverless"].(types.ObjectType)
+	if !ok {
+		t.Fatalf("spec.serverless is %T, want types.ObjectType", specTypes["serverless"])
+	}
+	withTags := func(tags types.Map) models.IndexResourceModel {
+		m := base
+		m.Tags = tags
+		return m
+	}
+	tagMap := func(tags map[string]attr.Value) types.Map {
+		return types.MapValueMust(types.StringType, tags)
+	}
+	unknownServerless := specOf(models.IndexSpecModel{}).Attributes()
+	unknownServerless["serverless"] = types.ObjectUnknown(serverlessType.AttrTypes)
 
 	tests := []struct {
 		name    string
@@ -204,6 +229,15 @@ func TestIndexResourceValidateConfig(t *testing.T) {
 		{name: "unknown field type", config: unknownDense},
 		{name: "unknown managed deployment", config: unknownManaged},
 		{name: "unknown byoc deployment", config: unknownByoc},
+		{name: "no spec or schema", config: withSpec(types.ObjectNull(specTypes)), wantErr: "Missing index configuration"},
+		{name: "empty spec", config: withSpec(specOf(models.IndexSpecModel{})), wantErr: "Missing spec type"},
+		{name: "two spec types", config: withSpec(specOf(models.IndexSpecModel{Serverless: serverless.Serverless, BYOC: byoc.BYOC})), wantErr: "Conflicting spec types"},
+		{name: "unknown spec", config: withSpec(types.ObjectUnknown(specTypes))},
+		{name: "tags", config: withTags(tagMap(map[string]attr.Value{"team": types.StringValue("search")}))},
+		{name: "empty tag value", config: withTags(tagMap(map[string]attr.Value{"team": types.StringValue("search"), "env": types.StringValue("")})), wantErr: "Empty tag value"},
+		{name: "unknown tag value", config: withTags(tagMap(map[string]attr.Value{"team": types.StringUnknown()}))},
+		{name: "unknown tags", config: withTags(types.MapUnknown(types.StringType))},
+		{name: "unknown spec type", config: withSpec(types.ObjectValueMust(specTypes, unknownServerless))},
 	}
 
 	for _, tt := range tests {
@@ -231,6 +265,8 @@ func TestIndexResourceModifyPlan_schemaMode(t *testing.T) {
 	retagged.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{"team": types.StringValue("search")})
 	renamedVector := vector
 	renamedVector.Name = types.StringValue("my-renamed-index")
+	byocVector := withSchemaMode(t, s, base, schemaFields{"_values": denseField(1024, "cosine")}, byocDeployment())
+	byocDedicated := withReadCapacity(t, s, byocVector, true)
 
 	tests := []struct {
 		name    string
@@ -247,6 +283,12 @@ func TestIndexResourceModifyPlan_schemaMode(t *testing.T) {
 			wantErr: "Document indexes can't return to on-demand read capacity"},
 		{name: "document index on-demand to dedicated", config: withReadCapacity(t, s, document, true), state: pointerTo(withReadCapacity(t, s, document, false))},
 		{name: "vector index dedicated to on-demand", config: withReadCapacity(t, s, vector, false), state: pointerTo(withReadCapacity(t, s, vector, true))},
+		{name: "create byoc dedicated", config: byocDedicated},
+		{name: "create byoc without read capacity", config: byocVector, wantErr: "BYOC indexes need dedicated read capacity"},
+		{name: "create byoc on-demand", config: withReadCapacity(t, s, byocVector, false), wantErr: "BYOC indexes need dedicated read capacity"},
+		{name: "create byoc with unknown deployment", config: withUnknownDeployment(t, s, byocVector, "byoc")},
+		{name: "byoc dedicated to on-demand", config: withReadCapacity(t, s, byocVector, false), state: &byocDedicated,
+			wantErr: "BYOC indexes can't use on-demand read capacity"},
 	}
 
 	for _, tt := range tests {

@@ -68,7 +68,7 @@ func indexSchemaResourceAttribute() schema.Attribute {
 		Attributes: map[string]schema.Attribute{
 			"fields": schema.MapNestedAttribute{
 				MarkdownDescription: "The schema's fields, keyed by field name. Set exactly one of `dense_vector`, `sparse_vector`, or " +
-					"`string` on each. Field names are at most 64 bytes and can't start with `$` or `_`, except for the reserved fields.",
+					"`string` on each. Field names are at most 64 bytes and can't start with `$` or `_`, except for the reserved fields `_values` and `_sparse_values`.",
 				Required: true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
@@ -174,8 +174,9 @@ func indexDeploymentResourceAttribute() schema.Attribute {
 				},
 			},
 			"byoc": schema.SingleNestedAttribute{
-				MarkdownDescription: "A BYOC (Bring Your Own Cloud) index. Only vector indexes, whose schema is made of the reserved fields, can run on BYOC.",
-				Optional:            true,
+				MarkdownDescription: "A BYOC (Bring Your Own Cloud) index. Only vector indexes, whose schema is made of the reserved fields, can run on BYOC. " +
+					"BYOC indexes need `read_capacity.dedicated`: they don't support on-demand read capacity.",
+				Optional: true,
 				Attributes: map[string]schema.Attribute{
 					"environment": schema.StringAttribute{
 						MarkdownDescription: "The BYOC environment where the index is hosted.",
@@ -238,6 +239,7 @@ func (r *IndexResource) ValidateConfig(ctx context.Context, req resource.Validat
 	}
 	resp.Diagnostics.Append(validateIndexStyleConfig(config)...)
 	resp.Diagnostics.Append(validateIndexSchemaConfig(ctx, config)...)
+	resp.Diagnostics.Append(validateIndexTags(config.Tags)...)
 }
 
 // validateIndexStyleConfig checks that a configuration describes the index one way: with schema
@@ -255,6 +257,7 @@ func validateIndexStyleConfig(config models.IndexResourceModel) diag.Diagnostics
 			diags.AddAttributeError(path.Root("cmek_id"), "cmek_id requires schema",
 				"cmek_id can only be set on an index created with schema and deployment.")
 		}
+		diags.Append(validateIndexSpecConfig(config.Spec)...)
 		return diags
 	}
 
@@ -414,6 +417,34 @@ func validateFullTextSearch(config *models.FullTextSearchModel, p path.Path) dia
 			diags.AddAttributeError(p.AtName("ngram"), "Invalid n-gram range",
 				fmt.Sprintf("min_gram (%d) can't be greater than max_gram (%d).", minGram.ValueInt64(), maxGram.ValueInt64()))
 		}
+	}
+	return diags
+}
+
+func validateIndexSpecConfig(spec types.Object) diag.Diagnostics {
+	var diags diag.Diagnostics
+	if spec.IsUnknown() {
+		return diags
+	}
+	if spec.IsNull() {
+		diags.AddAttributeError(path.Root("spec"), "Missing index configuration",
+			"Describe the index with spec, for example spec = { serverless = { cloud = \"aws\", region = \"us-east-1\" } }, or with schema and deployment.")
+		return diags
+	}
+	kinds := 0
+	for _, kind := range spec.Attributes() {
+		if kind.IsUnknown() {
+			return diags
+		}
+		if !kind.IsNull() {
+			kinds++
+		}
+	}
+	switch {
+	case kinds == 0:
+		diags.AddAttributeError(path.Root("spec"), "Missing spec type", "Set one of spec.serverless, spec.byoc, or spec.pod.")
+	case kinds > 1:
+		diags.AddAttributeError(path.Root("spec"), "Conflicting spec types", "Set only one of spec.serverless, spec.byoc, or spec.pod.")
 	}
 	return diags
 }
