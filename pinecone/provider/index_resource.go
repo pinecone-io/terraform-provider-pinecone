@@ -998,6 +998,7 @@ func (r *IndexResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 
 	resp.Diagnostics.Append(validateIndexUpdate(ctx, config, state)...)
 	resp.Diagnostics.Append(validateReadCapacityChange(ctx, config, state)...)
+	resp.Diagnostics.Append(validateByocReadCapacityChange(ctx, config, state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -1059,7 +1060,7 @@ func requiresReplaceUnlessRemoved(_ context.Context, req planmodifier.ObjectRequ
 
 // validateIndexCreate checks a configuration that creates a new index.
 func validateIndexCreate(ctx context.Context, config models.IndexResourceModel) diag.Diagnostics {
-	var diags diag.Diagnostics
+	diags := validateByocReadCapacity(ctx, config)
 	if config.Spec.IsNull() || config.Spec.IsUnknown() {
 		return diags
 	}
@@ -1079,6 +1080,74 @@ func validateIndexCreate(ctx context.Context, config models.IndexResourceModel) 
 	}
 	if spec.BYOC != nil && !spec.BYOC.Schema.IsNull() {
 		diags.AddAttributeError(path.Root("spec").AtName("byoc").AtName("schema"), "Metadata schema isn't supported", metadataSchemaDetail)
+	}
+	return diags
+}
+
+const byocOnDemandDetail = "API version 2026-07 doesn't support on-demand read capacity on BYOC indexes."
+
+// byocReadCapacity returns the read capacity configured for a BYOC index, with spec.byoc or
+// deployment.byoc, and its path. ok is false for other indexes, and when an unknown value hides
+// whether the index is BYOC.
+func byocReadCapacity(ctx context.Context, model models.IndexResourceModel) (readCapacity types.Object, at path.Path, ok bool, diags diag.Diagnostics) {
+	if !model.Schema.IsNull() {
+		if model.Deployment.IsNull() || model.Deployment.IsUnknown() {
+			return readCapacity, at, false, diags
+		}
+		var deployment models.IndexResourceDeploymentModel
+		diags.Append(model.Deployment.As(ctx, &deployment, lenientObjectAs)...)
+		if diags.HasError() || deployment.Byoc == nil {
+			return readCapacity, at, false, diags
+		}
+		return model.ReadCapacity, path.Root("read_capacity"), true, diags
+	}
+	if model.Spec.IsNull() || model.Spec.IsUnknown() {
+		return readCapacity, at, false, diags
+	}
+	var spec models.IndexSpecModel
+	diags.Append(model.Spec.As(ctx, &spec, lenientObjectAs)...)
+	if diags.HasError() || spec.BYOC == nil {
+		return readCapacity, at, false, diags
+	}
+	return spec.BYOC.ReadCapacity, path.Root("spec").AtName("byoc").AtName("read_capacity"), true, diags
+}
+
+// validateByocReadCapacity rejects creating a BYOC index without dedicated read capacity. Leaving
+// read_capacity out selects on-demand, so the create would fail after a replacement had already
+// deleted the existing index.
+func validateByocReadCapacity(ctx context.Context, config models.IndexResourceModel) diag.Diagnostics {
+	readCapacity, at, ok, diags := byocReadCapacity(ctx, config)
+	if !ok || readCapacity.IsUnknown() {
+		return diags
+	}
+	if !readCapacity.IsNull() {
+		var configured models.IndexReadCapacityResourceModel
+		diags.Append(readCapacity.As(ctx, &configured, lenientObjectAs)...)
+		if diags.HasError() || !configured.Dedicated.IsNull() {
+			return diags
+		}
+	}
+	diags.AddAttributeError(at, "BYOC indexes need dedicated read capacity",
+		byocOnDemandDetail+" Leaving out read_capacity selects on-demand. Set read_capacity.dedicated with node_type, replicas, and shards.")
+	return diags
+}
+
+func validateByocReadCapacityChange(ctx context.Context, config, state models.IndexResourceModel) diag.Diagnostics {
+	configuredValue, at, ok, diags := byocReadCapacity(ctx, config)
+	currentValue, _, wasByoc, d := byocReadCapacity(ctx, state)
+	diags.Append(d...)
+	if diags.HasError() || !ok || !wasByoc || configuredValue.IsNull() || configuredValue.IsUnknown() || currentValue.IsNull() {
+		return diags
+	}
+	var configured, current models.IndexReadCapacityResourceModel
+	diags.Append(configuredValue.As(ctx, &configured, lenientObjectAs)...)
+	diags.Append(currentValue.As(ctx, &current, lenientObjectAs)...)
+	if diags.HasError() {
+		return diags
+	}
+	if !current.Dedicated.IsNull() && !configured.OnDemand.IsNull() {
+		diags.AddAttributeError(at.AtName("on_demand"), "BYOC indexes can't use on-demand read capacity",
+			byocOnDemandDetail+" Keep read_capacity.dedicated.")
 	}
 	return diags
 }

@@ -71,22 +71,11 @@ func withSchemaMode(t *testing.T, s schema.Schema, model models.IndexResourceMod
 
 func withReadCapacity(t *testing.T, s schema.Schema, model models.IndexResourceModel, dedicated bool) models.IndexResourceModel {
 	t.Helper()
-	rc := models.IndexReadCapacityResourceModel{
-		Dedicated: types.ObjectNull(models.IndexReadCapacityDedicatedResourceModel{}.AttrTypes()),
-		OnDemand:  types.ObjectNull(models.IndexReadCapacityOnDemandResourceModel{}.AttrTypes()),
-	}
+	mode := onDemandReadCapacity
 	if dedicated {
-		rc.Dedicated = types.ObjectValueMust(models.IndexReadCapacityDedicatedResourceModel{}.AttrTypes(), map[string]attr.Value{
-			"node_type": types.StringValue("b1"), "replicas": types.Int32Value(1), "shards": types.Int32Value(1),
-		})
-	} else {
-		rc.OnDemand = types.ObjectValueMust(models.IndexReadCapacityOnDemandResourceModel{}.AttrTypes(), map[string]attr.Value{})
+		mode = dedicatedReadCapacity
 	}
-	obj, d := types.ObjectValueFrom(context.Background(), attrTypesOf(t, s, "read_capacity"), rc)
-	if d.HasError() {
-		t.Fatalf("building read_capacity: %v", d)
-	}
-	model.ReadCapacity = obj
+	model.ReadCapacity = readCapacityValue(t, attrTypesOf(t, s, "read_capacity"), mode)
 	return model
 }
 
@@ -231,6 +220,8 @@ func TestIndexResourceModifyPlan_schemaMode(t *testing.T) {
 	retagged.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{"team": types.StringValue("search")})
 	renamedVector := vector
 	renamedVector.Name = types.StringValue("my-renamed-index")
+	byocVector := withSchemaMode(t, s, base, schemaFields{"_values": denseField(1024, "cosine")}, byocDeployment())
+	byocDedicated := withReadCapacity(t, s, byocVector, true)
 
 	tests := []struct {
 		name    string
@@ -247,6 +238,12 @@ func TestIndexResourceModifyPlan_schemaMode(t *testing.T) {
 			wantErr: "Document indexes can't return to on-demand read capacity"},
 		{name: "document index on-demand to dedicated", config: withReadCapacity(t, s, document, true), state: pointerTo(withReadCapacity(t, s, document, false))},
 		{name: "vector index dedicated to on-demand", config: withReadCapacity(t, s, vector, false), state: pointerTo(withReadCapacity(t, s, vector, true))},
+		{name: "create byoc dedicated", config: byocDedicated},
+		{name: "create byoc without read capacity", config: byocVector, wantErr: "BYOC indexes need dedicated read capacity"},
+		{name: "create byoc on-demand", config: withReadCapacity(t, s, byocVector, false), wantErr: "BYOC indexes need dedicated read capacity"},
+		{name: "create byoc with unknown deployment", config: withUnknownDeployment(t, s, byocVector, "byoc")},
+		{name: "byoc dedicated to on-demand", config: withReadCapacity(t, s, byocVector, false), state: &byocDedicated,
+			wantErr: "BYOC indexes can't use on-demand read capacity"},
 	}
 
 	for _, tt := range tests {

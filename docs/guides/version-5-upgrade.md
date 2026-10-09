@@ -10,10 +10,8 @@ description: |-
 Version 5.0.0 moves the provider to [go-pinecone v7](https://github.com/pinecone-io/go-pinecone) and Pinecone API
 version `2026-07`, and adds support for creating indexes from an explicit schema.
 
-Most configurations written for version 4 plan with no changes. Most of the exceptions below are reported as errors at
-plan time, before anything is changed. The exception is BYOC read capacity, which the API checks at apply time (see
-[BYOC indexes need dedicated read capacity](#byoc-indexes-need-dedicated-read-capacity)). Pin the new version, run
-`terraform plan`, and work through any errors:
+Most configurations written for version 4 plan with no changes. The exceptions below are reported as errors at plan
+time, before anything is changed. Pin the new version, run `terraform plan`, and work through any errors:
 
 ```terraform
 terraform {
@@ -84,18 +82,18 @@ terraform apply
 ```
 
 Terraform plans the replacement of a tainted index as a new index, so the errors above still apply. A configuration
-that can't be created fails at plan time, before the existing index is deleted. BYOC read capacity is the exception,
-because it's checked at apply time (see below).
+that can't be created fails at plan time, before the existing index is deleted.
 
 ### BYOC indexes need dedicated read capacity
 
 API version `2026-07` doesn't support on-demand read capacity on BYOC indexes, and leaving out `read_capacity`
-selects on-demand. A new BYOC index, with `spec.byoc` or `deployment.byoc`, needs `read_capacity.dedicated`, or the
-apply fails. Switching an existing BYOC index to `on_demand` fails at apply too.
+selects on-demand. A new BYOC index, with `spec.byoc` or `deployment.byoc`, needs `read_capacity.dedicated`, or it
+fails at plan time with `BYOC indexes need dedicated read capacity`. Switching an existing BYOC index from dedicated to
+`on_demand` fails at plan time too.
 
-This is checked at apply time, not plan time. If an existing BYOC index has no `read_capacity`, add
-`read_capacity.dedicated` before tainting it or making any change that replaces it, such as to `name`, `dimension`,
-`metric`, or `spec.byoc.environment`. Otherwise Terraform deletes the index and then fails to create the replacement.
+An existing BYOC index without `read_capacity` in its configuration keeps working. A change that replaces it, such as to
+`name`, `dimension`, `metric`, or `spec.byoc.environment`, or tainting it, fails at plan time until you add
+`read_capacity.dedicated`.
 
 ```terraform
 resource "pinecone_index" "byoc" {
