@@ -652,7 +652,9 @@ func TestReadCapacityRetry(t *testing.T) {
 		{name: "replicas not provisioned", target: dedicatedTarget("b1", 1, 1), readCapacity: dedicated("b1", "Ready", nil, nil), retryable: true},
 		{name: "old node type", target: dedicatedTarget("t1", 1, 1), readCapacity: dedicated("b1", "Ready", int32Ptr(1), int32Ptr(1)), retryable: true},
 		{name: "scaled", target: dedicatedTarget("b1", 2, 3), readCapacity: dedicated("b1", "Ready", int32Ptr(2), int32Ptr(3)), done: true},
-		{name: "paused", target: dedicatedTarget("b1", 0, 1), readCapacity: dedicated("b1", "Ready", nil, int32Ptr(1)), done: true},
+		{name: "paused, no current replicas", target: dedicatedTarget("b1", 0, 1), readCapacity: dedicated("b1", "Ready", nil, int32Ptr(1)), done: true},
+		{name: "paused, zero current replicas", target: dedicatedTarget("b1", 0, 1), readCapacity: dedicated("b1", "Ready", int32Ptr(0), int32Ptr(1)), done: true},
+		{name: "pausing, still at old replicas", target: dedicatedTarget("b1", 0, 1), readCapacity: dedicated("b1", "Ready", int32Ptr(2), int32Ptr(1)), retryable: true},
 		{name: "error", target: dedicatedTarget("b1", 1, 1), readCapacity: failed, errContains: "insufficient capacity for b1"},
 		{name: "partial target", target: &pinecone.ReadCapacityParams{Dedicated: &pinecone.ReadCapacityDedicatedConfig{
 			Scaling: &pinecone.ReadCapacityScaling{Manual: &pinecone.ReadCapacityManualScaling{Replicas: int32Ptr(2)}},

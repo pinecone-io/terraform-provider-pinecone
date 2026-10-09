@@ -1348,8 +1348,8 @@ func (r *IndexResource) waitForReadCapacity(ctx context.Context, name string, ta
 
 // readCapacityRetry reports whether an index's read capacity has settled on target. Right after a
 // change the status can still describe the previous configuration as Ready, so dedicated replica
-// and shard counts are compared too. Replicas of 0 pause the index, which reports no current
-// replicas, so they aren't compared.
+// and shard counts are compared too. Replicas of 0 pause the index, which may report its current
+// replicas as 0 or not at all.
 func readCapacityRetry(index *pinecone.Index, target *pinecone.ReadCapacityParams) *retry.RetryError {
 	if target == nil || (target.Dedicated == nil && target.OnDemand == nil) {
 		return nil
@@ -1395,8 +1395,11 @@ func readCapacityRetry(index *pinecone.Index, target *pinecone.ReadCapacityParam
 		return nil
 	}
 	manual := target.Dedicated.Scaling.Manual
-	if manual.Replicas != nil && *manual.Replicas > 0 && !int32PointerEquals(status.CurrentReplicas, *manual.Replicas) {
-		return retry.RetryableError(fmt.Errorf("read capacity still scaling to %d replicas", *manual.Replicas))
+	if manual.Replicas != nil {
+		paused := *manual.Replicas == 0 && status.CurrentReplicas == nil
+		if !paused && !int32PointerEquals(status.CurrentReplicas, *manual.Replicas) {
+			return retry.RetryableError(fmt.Errorf("read capacity still scaling to %d replicas", *manual.Replicas))
+		}
 	}
 	if manual.Shards != nil && !int32PointerEquals(status.CurrentShards, *manual.Shards) {
 		return retry.RetryableError(fmt.Errorf("read capacity still scaling to %d shards", *manual.Shards))
