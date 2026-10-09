@@ -44,7 +44,7 @@ func (r *CollectionResource) Metadata(ctx context.Context, req resource.Metadata
 
 func (r *CollectionResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "The `pinecone_collection` resource lets you create and manage collections in Pinecone. Learn more about collections in the [docs](hhttps://docs.pinecone.io/guides/indexes/understanding-collections).",
+		MarkdownDescription: "The `pinecone_collection` resource lets you create and manage collections in Pinecone. Learn more about collections in the [docs](https://docs.pinecone.io/guides/indexes/pods/understanding-collections).",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				MarkdownDescription: "Collection identifier",
@@ -86,11 +86,11 @@ func (r *CollectionResource) Schema(ctx context.Context, req resource.SchemaRequ
 			"timeouts": timeouts.Block(ctx,
 				timeouts.Opts{
 					Create: true,
-					CreateDescription: `Timeout defaults to 5 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) ` +
+					CreateDescription: `Timeout defaults to 10 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) ` +
 						`consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are ` +
 						`"s" (seconds), "m" (minutes), "h" (hours).`,
 					Delete: true,
-					DeleteDescription: `Timeout defaults to 5 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) ` +
+					DeleteDescription: `Timeout defaults to 10 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) ` +
 						`consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are ` +
 						`"s" (seconds), "m" (minutes), "h" (hours).`,
 				},

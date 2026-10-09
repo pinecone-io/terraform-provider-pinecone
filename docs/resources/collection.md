@@ -3,12 +3,12 @@
 page_title: "pinecone_collection Resource - terraform-provider-pinecone"
 subcategory: ""
 description: |-
-  The pinecone_collection resource lets you create and manage collections in Pinecone. Learn more about collections in the docs hhttps://docs.pinecone.io/guides/indexes/understanding-collections.
+  The pinecone_collection resource lets you create and manage collections in Pinecone. Learn more about collections in the docs https://docs.pinecone.io/guides/indexes/pods/understanding-collections.
 ---
 
 # pinecone_collection (Resource)
 
-The `pinecone_collection` resource lets you create and manage collections in Pinecone. Learn more about collections in the [docs](hhttps://docs.pinecone.io/guides/indexes/understanding-collections).
+The `pinecone_collection` resource lets you create and manage collections in Pinecone. Learn more about collections in the [docs](https://docs.pinecone.io/guides/indexes/pods/understanding-collections).
 
 ## Example Usage
 
@@ -61,5 +61,5 @@ resource "pinecone_collection" "test" {
 
 Optional:
 
-- `create` (String) Timeout defaults to 5 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
-- `delete` (String) Timeout defaults to 5 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
+- `create` (String) Timeout defaults to 10 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
+- `delete` (String) Timeout defaults to 10 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).

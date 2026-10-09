@@ -10,8 +10,10 @@ description: |-
 Version 5.0.0 moves the provider to [go-pinecone v7](https://github.com/pinecone-io/go-pinecone) and Pinecone API
 version `2026-07`, and adds support for creating indexes from an explicit schema.
 
-Most configurations written for version 4 plan with no changes. The exceptions below are reported as errors at plan
-time, before anything is changed. Pin the new version, run `terraform plan`, and work through any errors:
+Most configurations written for version 4 plan with no changes. Most of the exceptions below are reported as errors at
+plan time, before anything is changed. The exception is BYOC read capacity, which the API checks at apply time (see
+[BYOC indexes need dedicated read capacity](#byoc-indexes-need-dedicated-read-capacity)). Pin the new version, run
+`terraform plan`, and work through any errors:
 
 ```terraform
 terraform {
@@ -36,8 +38,14 @@ Existing pod-based indexes keep working: they can be imported, refreshed, and de
 (set `timeouts.update` to change how long). The pod size can only grow within the same pod family, for example from
 `p1.x1` to `p1.x2`; other `pod_type` changes are rejected at plan time.
 
+A change that would replace an existing pod-based index fails at plan time with the same error, because the
+replacement couldn't be created. These changes are to `name`, `dimension`, `metric`, `spec.pod.environment`,
+`spec.pod.shards`, or `spec.pod.source_collection`. Tainting a pod-based index, or passing it to `-replace`, fails
+the same way.
+
 Creating an index from a collection (`spec.pod.source_collection`) isn't supported either. Pinecone restores data into
-new indexes from backups instead, which the provider doesn't manage yet.
+new indexes from backups instead, which the provider doesn't manage yet. `pinecone_collection` can still create
+collections, but only from an existing pod-based index.
 
 ### Integrated embedding is fixed when an index is created
 
@@ -49,6 +57,10 @@ On an existing index, these changes are now rejected at plan time:
 
 `embed.read_parameters` and `embed.write_parameters` still update in place.
 
+API version `2026-07` calls indexes created this way legacy integrated indexes, read and written through the legacy
+Records API. The API can also declare integrated embedding on the `string` fields of a `schema`, but the provider
+doesn't support that yet. Importing a document index whose fields use it leaves the embedding settings out of state.
+
 ### The metadata schema is deprecated
 
 `spec.serverless.schema` and `spec.byoc.schema` are deprecated: metadata fields are indexed automatically when you
@@ -58,6 +70,8 @@ upsert data, so they no longer need to be declared.
   `Metadata schema isn't supported`.
 - Existing indexes keep the value in state, and you can remove the attribute from your configuration without
   replacing the index.
+- On an index without `embed`, a change that replaces the index fails at plan time with `Metadata schema isn't
+  supported` until you remove the attribute.
 
 ### Recreating an index
 
@@ -69,10 +83,19 @@ terraform taint pinecone_index.example
 terraform apply
 ```
 
+Terraform plans the replacement of a tainted index as a new index, so the errors above still apply. A configuration
+that can't be created fails at plan time, before the existing index is deleted. BYOC read capacity is the exception,
+because it's checked at apply time (see below).
+
 ### BYOC indexes need dedicated read capacity
 
 API version `2026-07` doesn't support on-demand read capacity on BYOC indexes, and leaving out `read_capacity`
-selects on-demand. A new `spec.byoc` index needs `read_capacity.dedicated`, or the apply fails:
+selects on-demand. A new BYOC index, with `spec.byoc` or `deployment.byoc`, needs `read_capacity.dedicated`, or the
+apply fails. Switching an existing BYOC index to `on_demand` fails at apply too.
+
+This is checked at apply time, not plan time. If an existing BYOC index has no `read_capacity`, add
+`read_capacity.dedicated` before tainting it or making any change that replaces it, such as to `name`, `dimension`,
+`metric`, or `spec.byoc.environment`. Otherwise Terraform deletes the index and then fails to create the replacement.
 
 ```terraform
 resource "pinecone_index" "byoc" {
@@ -141,7 +164,9 @@ Things to know:
 - With `schema`, read capacity and encryption are set at the top level: `read_capacity` and `cmek_id`.
 - Changing `schema`, `deployment`, or `cmek_id` replaces the index.
 - Document indexes run only on managed deployments, and can't move from dedicated read capacity back to on-demand.
-- `terraform import` reads document indexes with `schema` and vector indexes with `spec`.
+- `terraform import` reads document indexes with `schema` and vector indexes with `spec`, including vector indexes
+  created with a `schema` of reserved fields. To import a vector index, describe it with `dimension`, `metric`, and
+  `spec`. Otherwise every plan fails with `An index can't change how it's described`.
 - Indexes with integrated embedding (`embed`) are still created with `spec`.
 
 ## New data source attributes
@@ -159,6 +184,21 @@ output "products_dimension" {
   value = data.pinecone_index.products.schema.fields["_values"].dense_vector.dimension
 }
 ```
+
+Some existing data source attributes changed:
+
+- `spec.serverless.schema` and `spec.byoc.schema` list only the fields declared with the deprecated metadata
+  schema, and are null for indexes created without one. Read the top-level `schema` for the full field list.
+- `spec.pod.metadata_config.indexed` is always null, because API version `2026-07` no longer reports it.
+- `status.state` can now be `Failed` or `Disabled`. `ScalingDownPodSize` and `Upgrading` are no longer reported.
+
+## Other changes
+
+- Creating an index, or scaling a pod-based index, now fails as soon as the index reaches `InitializationFailed`,
+  `Failed`, or `Disabled`. Earlier versions kept waiting on a failed index until the timeout, and treated a disabled
+  index as ready. Because setting replicas to 0 disables an index, creating one with
+  `read_capacity.dedicated.replicas = 0` fails.
+- `embed` requires `model`, and `spec.pod.replicas` must be at least 1.
 
 ## Fixes
 

@@ -59,10 +59,10 @@ func (d *IndexesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 							Computed:            true,
 						},
 						"tags": schema.MapAttribute{
-							Description: "Custom user tags added to an index. Keys must be 80 characters or less. Values must be 120 characters or less. Keys must be alphanumeric, '', or '-'. Values must be alphanumeric, ';', '@', '', '-', '.', '+', or ' '. To unset a key, set the value to be an empty string.",
-							Optional:    true,
-							Computed:    true,
-							ElementType: types.StringType,
+							MarkdownDescription: "Custom user tags added to an index, at most 20 per index. Keys must be 80 characters or less and contain only letters, digits, `_`, or `-`. Values must be 120 characters or less and consist of printable ASCII characters or spaces.",
+							Optional:            true,
+							Computed:            true,
+							ElementType:         types.StringType,
 						},
 						"vector_type": schema.StringAttribute{
 							MarkdownDescription: "Index vector type",
@@ -73,7 +73,7 @@ func (d *IndexesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 							Computed:            true,
 						},
 						"spec": schema.SingleNestedAttribute{
-							Description: "Spec",
+							Description: "Where and how the index runs, in the form used by `spec` on the `pinecone_index` resource. The same information is in `deployment`.",
 							Optional:    true,
 							Computed:    true,
 							Attributes: map[string]schema.Attribute{
@@ -103,7 +103,7 @@ func (d *IndexesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 											Computed:            true,
 										},
 										"metadata_config": schema.SingleNestedAttribute{
-											Description: "Configuration for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when metadata_config is present, only specified metadata fields are indexed. These configurations are only valid for use with pod-based indexes.",
+											Description: "Configuration for the behavior of Pinecone's internal metadata index. The API no longer reports this setting, so `indexed` is always null. Indexed metadata fields are listed in the top-level `schema`.",
 											Optional:    true,
 											Computed:    true,
 											Attributes: map[string]schema.Attribute{
@@ -115,7 +115,7 @@ func (d *IndexesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 											},
 										},
 										"source_collection": schema.StringAttribute{
-											MarkdownDescription: "The name of the collection to create an index from.",
+											MarkdownDescription: "The name of the collection the index was created from, if any.",
 											Computed:            true,
 										},
 									},
@@ -197,7 +197,7 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 							},
 						},
 						"status": schema.SingleNestedAttribute{
-							Description: "Configuration for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when metadata_config is present, only specified metadata fields are indexed. To specify metadata fields to index, provide an array of the following form: [example_metadata_field]",
+							Description: "The index's status.",
 							Optional:    true,
 							Computed:    true,
 							Attributes: map[string]schema.Attribute{
@@ -206,7 +206,7 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 									Computed:    true,
 								},
 								"state": schema.StringAttribute{
-									MarkdownDescription: "Initializing InitializationFailed ScalingUp ScalingDown ScalingUpPodSize ScalingDownPodSize Upgrading Terminating Ready",
+									MarkdownDescription: "Initializing InitializationFailed ScalingUp ScalingDown ScalingUpPodSize Terminating Ready Failed Disabled",
 									Computed:            true,
 								},
 							},

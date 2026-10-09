@@ -56,9 +56,9 @@ Optional:
 - `embed` (Attributes) Specify the integrated inference embedding configuration for the index. The model and field map are fixed when the index is created; the read and write parameters can be updated.
 			
 Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details. (see [below for nested schema](#nestedatt--indexes--embed))
-- `spec` (Attributes) Spec (see [below for nested schema](#nestedatt--indexes--spec))
-- `status` (Attributes) Configuration for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when metadata_config is present, only specified metadata fields are indexed. To specify metadata fields to index, provide an array of the following form: [example_metadata_field] (see [below for nested schema](#nestedatt--indexes--status))
-- `tags` (Map of String) Custom user tags added to an index. Keys must be 80 characters or less. Values must be 120 characters or less. Keys must be alphanumeric, '', or '-'. Values must be alphanumeric, ';', '@', '', '-', '.', '+', or ' '. To unset a key, set the value to be an empty string.
+- `spec` (Attributes) Where and how the index runs, in the form used by `spec` on the `pinecone_index` resource. The same information is in `deployment`. (see [below for nested schema](#nestedatt--indexes--spec))
+- `status` (Attributes) The index's status. (see [below for nested schema](#nestedatt--indexes--status))
+- `tags` (Map of String) Custom user tags added to an index, at most 20 per index. Keys must be 80 characters or less and contain only letters, digits, `_`, or `-`. Values must be 120 characters or less and consist of printable ASCII characters or spaces.
 
 Read-Only:
 
@@ -167,7 +167,7 @@ Read-Only:
 
 Optional:
 
-- `metadata_config` (Attributes) Configuration for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when metadata_config is present, only specified metadata fields are indexed. These configurations are only valid for use with pod-based indexes. (see [below for nested schema](#nestedatt--indexes--spec--pod--metadata_config))
+- `metadata_config` (Attributes) Configuration for the behavior of Pinecone's internal metadata index. The API no longer reports this setting, so `indexed` is always null. Indexed metadata fields are listed in the top-level `schema`. (see [below for nested schema](#nestedatt--indexes--spec--pod--metadata_config))
 
 Read-Only:
 
@@ -176,7 +176,7 @@ Read-Only:
 - `pods` (Number) The number of pods to be used in the index. This should be equal to shards x replicas.'
 - `replicas` (Number) The number of replicas. Replicas duplicate your index. They provide higher availability and throughput. Replicas can be scaled up or down as your needs change.
 - `shards` (Number) The number of shards. Shards split your data across multiple pods so you can fit more data into an index.
-- `source_collection` (String) The name of the collection to create an index from.
+- `source_collection` (String) The name of the collection the index was created from, if any.
 
 <a id="nestedatt--indexes--spec--pod--metadata_config"></a>
 ### Nested Schema for `indexes.spec.pod.metadata_config`
@@ -255,7 +255,7 @@ Read-Only:
 Read-Only:
 
 - `ready` (Boolean) Ready.
-- `state` (String) Initializing InitializationFailed ScalingUp ScalingDown ScalingUpPodSize ScalingDownPodSize Upgrading Terminating Ready
+- `state` (String) Initializing InitializationFailed ScalingUp ScalingDown ScalingUpPodSize Terminating Ready Failed Disabled
 
 
 <a id="nestedatt--indexes--deployment"></a>

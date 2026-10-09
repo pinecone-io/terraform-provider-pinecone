@@ -84,7 +84,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				},
 			},
 			"dimension": schema.Int32Attribute{
-				MarkdownDescription: "The dimensions of the vectors to be inserted in the index. Required for pod-based and non-integrated serverless indexes. For integrated indexes with an embed model, this is optional and will default to the model's dimension if not specified.",
+				MarkdownDescription: "The dimensions of the vectors to be inserted in the index. Required for dense serverless and BYOC indexes without `embed`. Not used with `schema`, where each dense vector field sets its own dimension. For integrated indexes with an embed model, this is optional and will default to the model's dimension if not specified.",
 				Optional:            true,
 				Computed:            true,
 				Validators: []validator.Int32{
@@ -118,7 +118,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				},
 			},
 			"vector_type": schema.StringAttribute{
-				MarkdownDescription: "The index vector type. You can use 'dense' or 'sparse'. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension should not be specified.",
+				MarkdownDescription: "The index vector type. You can use 'dense' or 'sparse'. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension should not be specified. Not used with `schema`.",
 				Optional:            true,
 				Computed:            true,
 				Validators: []validator.String{
@@ -129,10 +129,10 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				},
 			},
 			"tags": schema.MapAttribute{
-				Description: "Custom user tags added to an index. Keys must be 80 characters or less. Values must be 120 characters or less. Keys must be alphanumeric, '', or '-'. Values must be alphanumeric, ';', '@', '', '-', '.', '+', or ' '. To unset a key, set the value to be an empty string.",
-				Optional:    true,
-				Computed:    true,
-				ElementType: types.StringType,
+				MarkdownDescription: "Custom user tags added to an index, at most 20 per index. Keys must be 80 characters or less and contain only letters, digits, `_`, or `-`. Values must be 120 characters or less and consist of printable ASCII characters or spaces. To remove a tag, remove its key from the map; to remove every tag, set `tags = {}`. Removing the `tags` attribute leaves the index's tags unchanged.",
+				Optional:            true,
+				Computed:            true,
+				ElementType:         types.StringType,
 				PlanModifiers: []planmodifier.Map{
 					mapplanmodifier.UseStateForUnknown(),
 				},
@@ -146,7 +146,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 			},
 			"schema":        indexSchemaResourceAttribute(),
 			"deployment":    indexDeploymentResourceAttribute(),
-			"read_capacity": readCapacitySchema(),
+			"read_capacity": readCapacitySchema("Read capacity configuration for an index described with `schema`. With `spec`, set `read_capacity` inside `spec.serverless` or `spec.byoc` instead. "),
 			"cmek_id": schema.StringAttribute{
 				MarkdownDescription: "The ID of a customer-managed encryption key (CMEK) to encrypt the index with. Only with `schema` and a managed " +
 					"`deployment`, and only when the index is created; changing it replaces the index.",
@@ -158,8 +158,8 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				},
 			},
 			"spec": schema.SingleNestedAttribute{
-				Description: "Spec",
-				Optional:    true,
+				MarkdownDescription: "Where and how a vector index, or an index with integrated embedding, runs. Set exactly one of `serverless`, `byoc`, or `pod`. Not used with `schema`.",
+				Optional:            true,
 				Attributes: map[string]schema.Attribute{
 					"pod": schema.SingleNestedAttribute{
 						MarkdownDescription: "Configuration of an existing pod-based index. New pod-based indexes can't be created: " +
@@ -240,7 +240,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 									stringplanmodifier.RequiresReplace(),
 								},
 							},
-							"read_capacity": readCapacitySchema(),
+							"read_capacity": readCapacitySchema("Read capacity configuration for the index. "),
 							"schema":        metadataSchemaResourceSchema(),
 						},
 					},
@@ -255,7 +255,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 									stringplanmodifier.RequiresReplace(),
 								},
 							},
-							"read_capacity": readCapacitySchema(),
+							"read_capacity": readCapacitySchema("Read capacity configuration for the index. "),
 							"schema":        metadataSchemaResourceSchema(),
 						},
 					},
@@ -376,7 +376,7 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 			"timeouts": timeouts.Block(ctx,
 				timeouts.Opts{
 					Create: true,
-					CreateDescription: `Timeout defaults to 5 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) ` +
+					CreateDescription: `Timeout defaults to 10 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) ` +
 						`consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are ` +
 						`"s" (seconds), "m" (minutes), "h" (hours).`,
 					Update: true,
@@ -384,7 +384,7 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 						`consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are ` +
 						`"s" (seconds), "m" (minutes), "h" (hours).`,
 					Delete: true,
-					DeleteDescription: `Timeout defaults to 5 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) ` +
+					DeleteDescription: `Timeout defaults to 10 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) ` +
 						`consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are ` +
 						`"s" (seconds), "m" (minutes), "h" (hours).`,
 				},
@@ -1311,10 +1311,10 @@ func extractReadCapacityFromSpec(ctx context.Context, specObj types.Object, diag
 // current_shards, error_message) are intentionally omitted: they cannot be configured,
 // and their asynchronous, nullable nature makes them difficult to represent in the desired-state
 // model without custom plan modifiers. Use the index data source to observe them.
-func readCapacitySchema() schema.Attribute {
+func readCapacitySchema(summary string) schema.Attribute {
 	return schema.SingleNestedAttribute{
-		MarkdownDescription: "Read capacity configuration for the index. Set exactly one of `dedicated` or `on_demand` to select the mode. " +
-			"Omitting `read_capacity` entirely on create defaults to OnDemand. " +
+		MarkdownDescription: summary + "Set exactly one of `dedicated` or `on_demand` to select the mode. " +
+			"Omitting `read_capacity` entirely on create selects on-demand, which BYOC indexes don't support: BYOC indexes need `dedicated`. " +
 			"To switch modes after creation, explicitly set the desired sub-block — removing `read_capacity` from config will not change the mode already recorded in state.",
 		Optional: true,
 		Computed: true,
@@ -1354,9 +1354,10 @@ func readCapacitySchema() schema.Attribute {
 				},
 			},
 			"on_demand": schema.SingleNestedAttribute{
-				MarkdownDescription: "OnDemand read capacity mode (the default). Specify this block (even empty) to explicitly select OnDemand or to switch back from dedicated mode.",
-				Optional:            true,
-				Attributes:          map[string]schema.Attribute{},
+				MarkdownDescription: "On-demand read capacity, the default. Set it to `{}` to select on-demand explicitly or to switch back from dedicated mode. " +
+					"BYOC indexes don't support on-demand, and document indexes can't switch back to it from dedicated.",
+				Optional:   true,
+				Attributes: map[string]schema.Attribute{},
 			},
 		},
 	}
@@ -1368,7 +1369,7 @@ func metadataSchemaResourceSchema() schema.Attribute {
 			"By default, all metadata is indexed; when `schema` is present, only fields listed in `fields` " +
 			"with `filterable: true` are indexed. This field can only be set at index creation time — " +
 			"setting or changing it requires replacing the index, while removing it leaves the index in place. " +
-			"New indexes accept it only together with `embed`; " +
+			"New serverless indexes accept it only together with `embed`, and new BYOC indexes don't accept it; " +
 			"other indexes index metadata automatically when you upsert data.",
 		DeprecationMessage: "Metadata fields are indexed automatically when you upsert data, so they no longer need to be declared. " +
 			"This attribute is kept for existing indexes and for integrated indexes created with embed.",

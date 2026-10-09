@@ -342,7 +342,7 @@ resource "pinecone_index" "dedicated" {
 }
 ```
 
-**Note**: To switch from `dedicated` back to `on_demand` after creation, explicitly set the `on_demand = {}` sub-block. Removing the `read_capacity` block entirely will not change the mode already recorded in state. Document indexes can't switch from `dedicated` back to `on_demand`.
+**Note**: To switch from `dedicated` back to `on_demand` after creation, explicitly set the `on_demand = {}` sub-block. Removing the `read_capacity` block entirely will not change the mode already recorded in state. Document indexes and BYOC indexes can't switch from `dedicated` back to `on_demand`.
 
 ### Metadata Schema (deprecated)
 

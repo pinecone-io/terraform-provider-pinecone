@@ -68,7 +68,7 @@ func indexSchemaResourceAttribute() schema.Attribute {
 		Attributes: map[string]schema.Attribute{
 			"fields": schema.MapNestedAttribute{
 				MarkdownDescription: "The schema's fields, keyed by field name. Set exactly one of `dense_vector`, `sparse_vector`, or " +
-					"`string` on each. Field names are at most 64 bytes and can't start with `$` or `_`, except for the reserved fields.",
+					"`string` on each. Field names are at most 64 bytes and can't start with `$` or `_`, except for the reserved fields `_values` and `_sparse_values`.",
 				Required: true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
@@ -174,8 +174,9 @@ func indexDeploymentResourceAttribute() schema.Attribute {
 				},
 			},
 			"byoc": schema.SingleNestedAttribute{
-				MarkdownDescription: "A BYOC (Bring Your Own Cloud) index. Only vector indexes, whose schema is made of the reserved fields, can run on BYOC.",
-				Optional:            true,
+				MarkdownDescription: "A BYOC (Bring Your Own Cloud) index. Only vector indexes, whose schema is made of the reserved fields, can run on BYOC. " +
+					"BYOC indexes need `read_capacity.dedicated`: they don't support on-demand read capacity.",
+				Optional: true,
 				Attributes: map[string]schema.Attribute{
 					"environment": schema.StringAttribute{
 						MarkdownDescription: "The BYOC environment where the index is hosted.",
