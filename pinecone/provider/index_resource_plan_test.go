@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -364,6 +365,34 @@ func TestIndexResourceModifyPlan_effectiveEmbedParameters(t *testing.T) {
 				t.Error("effective_write_parameters is unknown, but write_parameters didn't change")
 			}
 		})
+	}
+}
+
+func TestIndexResourceModifyPlan_reportsEveryCreateError(t *testing.T) {
+	s := indexResourceSchema(t)
+	ctx := context.Background()
+	fields, d := types.MapValueFrom(ctx, types.ObjectType{AttrTypes: models.IndexMetadataSchemaFieldModel{}.AttrTypes()},
+		map[string]models.IndexMetadataSchemaFieldModel{"genre": {Filterable: types.BoolValue(true)}})
+	if d.HasError() {
+		t.Fatalf("building schema fields: %v", d)
+	}
+	spec, d := types.ObjectValueFrom(ctx, attrTypesOf(t, s, "spec"), models.IndexSpecModel{
+		BYOC: &models.IndexBYOCSpecModel{
+			Environment:  types.StringValue("aws-us-east-1-b921"),
+			ReadCapacity: types.ObjectNull(models.IndexReadCapacityResourceModel{}.AttrTypes()),
+			Schema:       types.ObjectValueMust(models.IndexMetadataSchemaModel{}.AttrTypes(), map[string]attr.Value{"fields": fields}),
+		},
+	})
+	if d.HasError() {
+		t.Fatalf("building byoc spec: %v", d)
+	}
+	config := testIndexModel(t, s)
+	config.Spec = spec
+
+	errs := runModifyPlan(t, s, config, nil)
+	want := []string{"BYOC indexes need dedicated read capacity", "Metadata schema isn't supported"}
+	if !slices.Equal(errs, want) {
+		t.Fatalf("errors = %v, want %v", errs, want)
 	}
 }
 

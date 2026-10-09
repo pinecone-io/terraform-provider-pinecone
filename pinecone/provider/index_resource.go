@@ -1065,8 +1065,9 @@ func validateIndexCreate(ctx context.Context, config models.IndexResourceModel) 
 		return diags
 	}
 	var spec models.IndexSpecModel
-	diags.Append(config.Spec.As(ctx, &spec, basetypes.ObjectAsOptions{UnhandledUnknownAsEmpty: true})...)
-	if diags.HasError() {
+	specDiags := config.Spec.As(ctx, &spec, basetypes.ObjectAsOptions{UnhandledUnknownAsEmpty: true})
+	diags.Append(specDiags...)
+	if specDiags.HasError() {
 		return diags
 	}
 
