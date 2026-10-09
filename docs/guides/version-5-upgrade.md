@@ -208,6 +208,9 @@ Some existing data source attributes changed:
   time. Earlier versions failed during apply.
 - Values left out of `read_capacity.dedicated` keep their current setting. Earlier versions could send `0` replicas
   or shards, or an empty node type, when the index was updated for an unrelated change.
+- Tag values can't be empty: `tags = { team = "" }` fails at plan time. Earlier versions documented `""` as the way
+  to remove a tag, but the apply then failed with `Provider produced inconsistent result after apply`. To remove a tag,
+  remove its key from `tags`. To remove every tag, set `tags = {}`.
 - `pinecone_indexes` reports `deletion_protection`. Earlier versions always reported it as null.
 - Updating `embed.read_parameters` or `embed.write_parameters` no longer fails with
   `Provider produced inconsistent result after apply`.

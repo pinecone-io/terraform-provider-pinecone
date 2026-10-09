@@ -129,7 +129,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				},
 			},
 			"tags": schema.MapAttribute{
-				MarkdownDescription: "Custom user tags added to an index, at most 20 per index. Keys must be 80 characters or less and contain only letters, digits, `_`, or `-`. Values must be 120 characters or less and consist of printable ASCII characters or spaces. To remove a tag, remove its key from the map; to remove every tag, set `tags = {}`. Removing the `tags` attribute leaves the index's tags unchanged.",
+				MarkdownDescription: "Custom user tags added to an index, at most 20 per index. Keys must be 80 characters or less and contain only letters, digits, `_`, or `-`. Values must be 120 characters or less and consist of printable ASCII characters or spaces. Values can't be empty. To remove a tag, remove its key from the map; to remove every tag, set `tags = {}`. Removing the `tags` attribute leaves the index's tags unchanged.",
 				Optional:            true,
 				Computed:            true,
 				ElementType:         types.StringType,
@@ -1351,6 +1351,24 @@ func mergeTags(oldTags, newTags map[string]string) map[string]string {
 	}
 
 	return mergedTags
+}
+
+// validateIndexTags rejects empty tag values. The API deletes a tag set to "", so the plan's value
+// would never match the index after apply. mergeTags already removes tags left out of the config.
+func validateIndexTags(tags types.Map) diag.Diagnostics {
+	var diags diag.Diagnostics
+	if tags.IsNull() || tags.IsUnknown() {
+		return diags
+	}
+	for key, value := range tags.Elements() {
+		tag, ok := value.(types.String)
+		if !ok || tag.IsUnknown() || tag.IsNull() || tag.ValueString() != "" {
+			continue
+		}
+		diags.AddAttributeError(path.Root("tags").AtMapKey(key), "Empty tag value",
+			fmt.Sprintf("Tag %q has an empty value. To remove a tag, remove its key from tags. To remove every tag, set tags = {}.", key))
+	}
+	return diags
 }
 
 // extractReadCapacityFromSpec pulls the read_capacity object out of a spec object

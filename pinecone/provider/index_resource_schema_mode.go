@@ -239,6 +239,7 @@ func (r *IndexResource) ValidateConfig(ctx context.Context, req resource.Validat
 	}
 	resp.Diagnostics.Append(validateIndexStyleConfig(config)...)
 	resp.Diagnostics.Append(validateIndexSchemaConfig(ctx, config)...)
+	resp.Diagnostics.Append(validateIndexTags(config.Tags)...)
 }
 
 // validateIndexStyleConfig checks that a configuration describes the index one way: with schema

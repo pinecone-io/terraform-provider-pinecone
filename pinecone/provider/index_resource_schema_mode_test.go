@@ -181,6 +181,14 @@ func TestIndexResourceValidateConfig(t *testing.T) {
 	if !ok {
 		t.Fatalf("spec.serverless is %T, want types.ObjectType", specTypes["serverless"])
 	}
+	withTags := func(tags types.Map) models.IndexResourceModel {
+		m := base
+		m.Tags = tags
+		return m
+	}
+	tagMap := func(tags map[string]attr.Value) types.Map {
+		return types.MapValueMust(types.StringType, tags)
+	}
 	unknownServerless := specOf(models.IndexSpecModel{}).Attributes()
 	unknownServerless["serverless"] = types.ObjectUnknown(serverlessType.AttrTypes)
 
@@ -225,6 +233,10 @@ func TestIndexResourceValidateConfig(t *testing.T) {
 		{name: "empty spec", config: withSpec(specOf(models.IndexSpecModel{})), wantErr: "Missing spec type"},
 		{name: "two spec types", config: withSpec(specOf(models.IndexSpecModel{Serverless: serverless.Serverless, BYOC: byoc.BYOC})), wantErr: "Conflicting spec types"},
 		{name: "unknown spec", config: withSpec(types.ObjectUnknown(specTypes))},
+		{name: "tags", config: withTags(tagMap(map[string]attr.Value{"team": types.StringValue("search")}))},
+		{name: "empty tag value", config: withTags(tagMap(map[string]attr.Value{"team": types.StringValue("search"), "env": types.StringValue("")})), wantErr: "Empty tag value"},
+		{name: "unknown tag value", config: withTags(tagMap(map[string]attr.Value{"team": types.StringUnknown()}))},
+		{name: "unknown tags", config: withTags(types.MapUnknown(types.StringType))},
 		{name: "unknown spec type", config: withSpec(types.ObjectValueMust(specTypes, unknownServerless))},
 	}
 
