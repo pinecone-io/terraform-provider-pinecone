@@ -396,6 +396,60 @@ func TestIndexResourceModifyPlan_reportsEveryCreateError(t *testing.T) {
 	}
 }
 
+func requiresReplace[M interface{ Description(context.Context) string }](mods []M) bool {
+	return slices.ContainsFunc(mods, func(m M) bool {
+		return strings.Contains(m.Description(context.Background()), "destroy and recreate")
+	})
+}
+
+func collectReplacePaths(t *testing.T, parent path.Path, attrs map[string]schema.Attribute) []string {
+	t.Helper()
+	var paths []string
+	for name, attribute := range attrs {
+		p := parent.AtName(name)
+		var replace bool
+		switch a := attribute.(type) {
+		case schema.StringAttribute:
+			replace = requiresReplace(a.PlanModifiers)
+		case schema.Int32Attribute:
+			replace = requiresReplace(a.PlanModifiers)
+		case schema.Int64Attribute:
+			replace = requiresReplace(a.PlanModifiers)
+		case schema.BoolAttribute:
+			replace = requiresReplace(a.PlanModifiers)
+		case schema.MapAttribute:
+			replace = requiresReplace(a.PlanModifiers)
+		case schema.ListAttribute:
+			replace = requiresReplace(a.PlanModifiers)
+		case schema.MapNestedAttribute:
+			replace = requiresReplace(a.PlanModifiers)
+		case schema.SingleNestedAttribute:
+			replace = requiresReplace(a.PlanModifiers)
+			paths = append(paths, collectReplacePaths(t, p, a.Attributes)...)
+		default:
+			t.Fatalf("%s has unhandled attribute type %T", p, attribute)
+		}
+		if replace {
+			paths = append(paths, p.String())
+		}
+	}
+	return paths
+}
+
+func TestIndexReplacePathsMatchSchema(t *testing.T) {
+	s := indexResourceSchema(t)
+	got := collectReplacePaths(t, path.Empty(), s.Attributes)
+	var want []string
+	for _, p := range indexReplacePaths {
+		want = append(want, p.String())
+	}
+	slices.Sort(got)
+	slices.Sort(want)
+	if !slices.Equal(got, want) {
+		t.Fatalf("attributes with RequiresReplace = %v, indexReplacePaths = %v", got, want)
+	}
+}
+
 func TestPlansIndexReplacement(t *testing.T) {
 	ctx := context.Background()
 	s := indexResourceSchema(t)
@@ -403,6 +457,8 @@ func TestPlansIndexReplacement(t *testing.T) {
 	withMetadataSchema := withServerlessMetadataSchema(t, s, base)
 	renamed := base
 	renamed.Name = types.StringValue("my-renamed-index")
+	sparse := base
+	sparse.VectorType = types.StringValue("sparse")
 
 	tests := []struct {
 		name   string
@@ -412,6 +468,7 @@ func TestPlansIndexReplacement(t *testing.T) {
 	}{
 		{"no changes", base, base, false},
 		{"rename", renamed, base, true},
+		{"change vector_type", sparse, base, true},
 		{"add metadata schema", withMetadataSchema, base, true},
 		{"change metadata schema", withServerlessMetadataSchemaField(t, s, base, "year"), withMetadataSchema, true},
 		{"remove metadata schema", base, withMetadataSchema, false},

@@ -118,7 +118,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				},
 			},
 			"vector_type": schema.StringAttribute{
-				MarkdownDescription: "The index vector type. You can use 'dense' or 'sparse'. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension should not be specified. Not used with `schema`.",
+				MarkdownDescription: "The index vector type. You can use 'dense' or 'sparse'. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension should not be specified. Not used with `schema`. The vector type can't be changed after the index is created; changing it replaces the index.",
 				Optional:            true,
 				Computed:            true,
 				Validators: []validator.String{
@@ -126,6 +126,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"tags": schema.MapAttribute{
@@ -937,6 +938,7 @@ var indexReplacePaths = []path.Path{
 	path.Root("name"),
 	path.Root("dimension"),
 	path.Root("metric"),
+	path.Root("vector_type"),
 	path.Root("spec").AtName("pod").AtName("environment"),
 	path.Root("spec").AtName("pod").AtName("shards"),
 	path.Root("spec").AtName("pod").AtName("source_collection"),

@@ -151,7 +151,7 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 - `spec` (Attributes) Where and how a vector index, or an index with integrated embedding, runs. Set exactly one of `serverless`, `byoc`, or `pod`. Not used with `schema`. (see [below for nested schema](#nestedatt--spec))
 - `tags` (Map of String) Custom user tags added to an index, at most 20 per index. Keys must be 80 characters or less and contain only letters, digits, `_`, or `-`. Values must be 120 characters or less and consist of printable ASCII characters or spaces. Values can't be empty. To remove a tag, remove its key from the map; to remove every tag, set `tags = {}`. Removing the `tags` attribute leaves the index's tags unchanged.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
-- `vector_type` (String) The index vector type. You can use 'dense' or 'sparse'. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension should not be specified. Not used with `schema`.
+- `vector_type` (String) The index vector type. You can use 'dense' or 'sparse'. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension should not be specified. Not used with `schema`. The vector type can't be changed after the index is created; changing it replaces the index.
 
 ### Read-Only
 
