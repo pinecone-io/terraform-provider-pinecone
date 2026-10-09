@@ -114,6 +114,14 @@ resource "pinecone_index" "byoc" {
 }
 ```
 
+### Read-only attributes can't be set
+
+`dimension`, `size`, and `vector_count` on `pinecone_collection` are read-only: they're reported by Pinecone, and
+setting them never changed the collection. Configurations that set them now fail validation. Remove them from your
+configuration.
+
+The same applies to `embed`, `spec`, and `status` on the `pinecone_index` data source.
+
 ## New: indexes defined by schema and deployment
 
 `pinecone_index` can describe an index with `schema` and `deployment`, the way API version `2026-07` does, instead

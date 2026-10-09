@@ -60,7 +60,6 @@ func (r *CollectionResource) Schema(ctx context.Context, req resource.SchemaRequ
 			},
 			"size": schema.Int64Attribute{
 				MarkdownDescription: "The size of the collection in bytes.",
-				Optional:            true,
 				Computed:            true,
 			},
 			"status": schema.StringAttribute{
@@ -69,12 +68,10 @@ func (r *CollectionResource) Schema(ctx context.Context, req resource.SchemaRequ
 			},
 			"dimension": schema.Int32Attribute{
 				MarkdownDescription: "The dimension of the vectors stored in each record held in the collection.",
-				Optional:            true,
 				Computed:            true,
 			},
 			"vector_count": schema.Int32Attribute{
 				MarkdownDescription: "The number of records stored in the collection.",
-				Optional:            true,
 				Computed:            true,
 			},
 			"environment": schema.StringAttribute{

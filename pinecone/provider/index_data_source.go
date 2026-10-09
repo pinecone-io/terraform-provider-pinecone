@@ -70,12 +70,10 @@ func (d *IndexDataSource) Schema(ctx context.Context, req datasource.SchemaReque
 			},
 			"spec": schema.SingleNestedAttribute{
 				Description: "Where and how the index runs, in the form used by `spec` on the `pinecone_index` resource. The same information is in `deployment`.",
-				Optional:    true,
 				Computed:    true,
 				Attributes: map[string]schema.Attribute{
 					"pod": schema.SingleNestedAttribute{
 						Description: "Configuration needed to deploy a pod-based index.",
-						Optional:    true,
 						Computed:    true,
 						Attributes: map[string]schema.Attribute{
 							"environment": schema.StringAttribute{
@@ -100,7 +98,6 @@ func (d *IndexDataSource) Schema(ctx context.Context, req datasource.SchemaReque
 							},
 							"metadata_config": schema.SingleNestedAttribute{
 								Description: "Configuration for the behavior of Pinecone's internal metadata index. The API no longer reports this setting, so `indexed` is always null. Indexed metadata fields are listed in the top-level `schema`.",
-								Optional:    true,
 								Computed:    true,
 								Attributes: map[string]schema.Attribute{
 									"indexed": schema.ListAttribute{
@@ -118,7 +115,6 @@ func (d *IndexDataSource) Schema(ctx context.Context, req datasource.SchemaReque
 					},
 					"serverless": schema.SingleNestedAttribute{
 						Description: "Configuration needed to deploy a serverless index.",
-						Optional:    true,
 						Computed:    true,
 						Attributes: map[string]schema.Attribute{
 							"cloud": schema.StringAttribute{
@@ -135,7 +131,6 @@ func (d *IndexDataSource) Schema(ctx context.Context, req datasource.SchemaReque
 					},
 					"byoc": schema.SingleNestedAttribute{
 						Description: "Configuration for a BYOC (Bring Your Own Cloud) index.",
-						Optional:    true,
 						Computed:    true,
 						Attributes: map[string]schema.Attribute{
 							"environment": schema.StringAttribute{
@@ -152,7 +147,6 @@ func (d *IndexDataSource) Schema(ctx context.Context, req datasource.SchemaReque
 				Description: `Specify the integrated inference embedding configuration for the index. The model and field map are fixed when the index is created; the read and write parameters can be updated.
 
 Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details.`,
-				Optional: true,
 				Computed: true,
 				Attributes: map[string]schema.Attribute{
 					"model": schema.StringAttribute{
@@ -190,7 +184,6 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 			},
 			"status": schema.SingleNestedAttribute{
 				Description: "The index's status.",
-				Optional:    true,
 				Computed:    true,
 				Attributes: map[string]schema.Attribute{
 					"ready": schema.BoolAttribute{

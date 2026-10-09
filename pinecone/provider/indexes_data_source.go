@@ -60,7 +60,6 @@ func (d *IndexesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 						},
 						"tags": schema.MapAttribute{
 							MarkdownDescription: "Custom user tags added to an index, at most 20 per index. Keys must be 80 characters or less and contain only letters, digits, `_`, or `-`. Values must be 120 characters or less and consist of printable ASCII characters or spaces.",
-							Optional:            true,
 							Computed:            true,
 							ElementType:         types.StringType,
 						},
@@ -74,12 +73,10 @@ func (d *IndexesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 						},
 						"spec": schema.SingleNestedAttribute{
 							Description: "Where and how the index runs, in the form used by `spec` on the `pinecone_index` resource. The same information is in `deployment`.",
-							Optional:    true,
 							Computed:    true,
 							Attributes: map[string]schema.Attribute{
 								"pod": schema.SingleNestedAttribute{
 									Description: "Configuration needed to deploy a pod-based index.",
-									Optional:    true,
 									Computed:    true,
 									Attributes: map[string]schema.Attribute{
 										"environment": schema.StringAttribute{
@@ -104,7 +101,6 @@ func (d *IndexesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 										},
 										"metadata_config": schema.SingleNestedAttribute{
 											Description: "Configuration for the behavior of Pinecone's internal metadata index. The API no longer reports this setting, so `indexed` is always null. Indexed metadata fields are listed in the top-level `schema`.",
-											Optional:    true,
 											Computed:    true,
 											Attributes: map[string]schema.Attribute{
 												"indexed": schema.ListAttribute{
@@ -122,7 +118,6 @@ func (d *IndexesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 								},
 								"serverless": schema.SingleNestedAttribute{
 									Description: "Configuration needed to deploy a serverless index.",
-									Optional:    true,
 									Computed:    true,
 									Attributes: map[string]schema.Attribute{
 										"cloud": schema.StringAttribute{
@@ -139,7 +134,6 @@ func (d *IndexesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 								},
 								"byoc": schema.SingleNestedAttribute{
 									Description: "Configuration for a BYOC (Bring Your Own Cloud) index.",
-									Optional:    true,
 									Computed:    true,
 									Attributes: map[string]schema.Attribute{
 										"environment": schema.StringAttribute{
@@ -156,7 +150,6 @@ func (d *IndexesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 							Description: `Specify the integrated inference embedding configuration for the index. The model and field map are fixed when the index is created; the read and write parameters can be updated.
 			
 Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details.`,
-							Optional: true,
 							Computed: true,
 							Attributes: map[string]schema.Attribute{
 								"model": schema.StringAttribute{
@@ -169,12 +162,10 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 									ElementType: types.StringType,
 								},
 								"metric": schema.StringAttribute{
-									Optional:    true,
 									Computed:    true,
 									Description: "The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'.",
 								},
 								"dimension": schema.Int64Attribute{
-									Optional:    true,
 									Computed:    true,
 									Description: "The dimension of the embedding model, specifying the size of the output vector.",
 								},
@@ -183,13 +174,11 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 									Description: "The index vector type associated with the model. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension will be nil.",
 								},
 								"read_parameters": schema.MapAttribute{
-									Optional:    true,
 									Computed:    true,
 									Description: "The read parameters for the embedding model.",
 									ElementType: types.StringType,
 								},
 								"write_parameters": schema.MapAttribute{
-									Optional:    true,
 									Computed:    true,
 									Description: "The write parameters for the embedding model.",
 									ElementType: types.StringType,
@@ -198,7 +187,6 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 						},
 						"status": schema.SingleNestedAttribute{
 							Description: "The index's status.",
-							Optional:    true,
 							Computed:    true,
 							Attributes: map[string]schema.Attribute{
 								"ready": schema.BoolAttribute{
