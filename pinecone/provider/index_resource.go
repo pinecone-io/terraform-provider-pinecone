@@ -377,11 +377,11 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 			"timeouts": timeouts.Block(ctx,
 				timeouts.Opts{
 					Create: true,
-					CreateDescription: `Timeout defaults to 10 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) ` +
+					CreateDescription: `How long to wait for a new index, and any read capacity it configures, to be ready. Defaults to 10 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) ` +
 						`consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are ` +
 						`"s" (seconds), "m" (minutes), "h" (hours).`,
 					Update: true,
-					UpdateDescription: `How long to wait for a pod-based index to finish scaling. Defaults to 10 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) ` +
+					UpdateDescription: `How long to wait for a pod-based index to finish scaling, or for a read capacity change to finish. Defaults to 10 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) ` +
 						`consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are ` +
 						`"s" (seconds), "m" (minutes), "h" (hours).`,
 					Delete: true,
@@ -596,6 +596,11 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	readCapacityTarget, diags := models.ToReadCapacityParams(ctx, indexReadCapacity(ctx, data, &resp.Diagnostics))
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	err := retry.RetryContext(ctx, createTimeout, func() *retry.RetryError {
 		index, err := r.client.DescribeIndex(ctx, data.Name.ValueString())
@@ -627,7 +632,10 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 			return retry.NonRetryableError(fmt.Errorf("setting state: %v", resp.Diagnostics))
 		}
 
-		return indexReadyRetry(index)
+		if retryErr := indexReadyRetry(index); retryErr != nil {
+			return retryErr
+		}
+		return readCapacityRetry(index, readCapacityTarget)
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to wait for index to become ready.", err.Error())
@@ -809,14 +817,19 @@ func (r *IndexResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	}
 
 	var index *pinecone.Index
-	if configureRequest.PodType != "" || configureRequest.Replicas != 0 {
+	podScaling := configureRequest.PodType != "" || configureRequest.Replicas != 0
+	if podScaling || configureRequest.ReadCapacity != nil {
 		updateTimeout, diags := newData.Timeouts.Update(ctx, defaultIndexUpdateTimeout)
 		resp.Diagnostics.Append(diags...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
 		var err error
-		index, err = r.waitForPodScaling(ctx, newData.Name.ValueString(), newPod, updateTimeout)
+		if podScaling {
+			index, err = r.waitForPodScaling(ctx, newData.Name.ValueString(), newPod, updateTimeout)
+		} else {
+			index, err = r.waitForReadCapacity(ctx, newData.Name.ValueString(), configureRequest.ReadCapacity, updateTimeout)
+		}
 		if err != nil {
 			resp.Diagnostics.AddError("Failed to wait for index to finish scaling.", err.Error())
 			return
@@ -1312,6 +1325,89 @@ func (r *IndexResource) waitForPodScaling(ctx context.Context, name string, targ
 	return index, err
 }
 
+const (
+	readCapacityStateReady = "Ready"
+	readCapacityStateError = "Error"
+)
+
+func (r *IndexResource) waitForReadCapacity(ctx context.Context, name string, target *pinecone.ReadCapacityParams, timeout time.Duration) (*pinecone.Index, error) {
+	var index *pinecone.Index
+	err := retry.RetryContext(ctx, timeout, func() *retry.RetryError {
+		described, err := r.client.DescribeIndex(ctx, name)
+		if err != nil {
+			if isTransientError(err) {
+				return retry.RetryableError(err)
+			}
+			return retry.NonRetryableError(err)
+		}
+		index = described
+		return readCapacityRetry(described, target)
+	})
+	return index, err
+}
+
+// readCapacityRetry reports whether an index's read capacity has settled on target. Right after a
+// change the status can still describe the previous configuration as Ready, so dedicated replica
+// and shard counts are compared too. Replicas of 0 pause the index, which reports no current
+// replicas, so they aren't compared.
+func readCapacityRetry(index *pinecone.Index, target *pinecone.ReadCapacityParams) *retry.RetryError {
+	if target == nil || (target.Dedicated == nil && target.OnDemand == nil) {
+		return nil
+	}
+	readCapacity := index.ReadCapacity
+	if readCapacity == nil {
+		return retry.RetryableError(fmt.Errorf("read capacity not reported yet"))
+	}
+
+	var status pinecone.ReadCapacityStatus
+	if target.Dedicated != nil {
+		if readCapacity.Dedicated == nil {
+			return retry.RetryableError(fmt.Errorf("read capacity not dedicated yet"))
+		}
+		status = readCapacity.Dedicated.Status
+	} else {
+		if readCapacity.OnDemand == nil {
+			return retry.RetryableError(fmt.Errorf("read capacity not on-demand yet"))
+		}
+		status = readCapacity.OnDemand.Status
+	}
+
+	if status.State == readCapacityStateError {
+		message := "no error message reported"
+		if status.ErrorMessage != nil && *status.ErrorMessage != "" {
+			message = *status.ErrorMessage
+		}
+		return retry.NonRetryableError(fmt.Errorf("read capacity entered state Error: %s", message))
+	}
+	if status.State != readCapacityStateReady {
+		return retry.RetryableError(fmt.Errorf("read capacity not ready. State: %s", status.State))
+	}
+
+	if target.Dedicated == nil {
+		return nil
+	}
+	if nodeType := target.Dedicated.NodeType; nodeType != nil {
+		if current := readCapacity.Dedicated.NodeType; current == nil || *current != *nodeType {
+			return retry.RetryableError(fmt.Errorf("read capacity still migrating to node type %s", *nodeType))
+		}
+	}
+	if target.Dedicated.Scaling == nil || target.Dedicated.Scaling.Manual == nil {
+		return nil
+	}
+	manual := target.Dedicated.Scaling.Manual
+	if manual.Replicas != nil && *manual.Replicas > 0 && !int32PointerEquals(status.CurrentReplicas, *manual.Replicas) {
+		return retry.RetryableError(fmt.Errorf("read capacity still scaling to %d replicas", *manual.Replicas))
+	}
+	if manual.Shards != nil && !int32PointerEquals(status.CurrentShards, *manual.Shards) {
+		return retry.RetryableError(fmt.Errorf("read capacity still scaling to %d shards", *manual.Shards))
+	}
+	return nil
+}
+
+func int32PointerEquals(value *int32, want int32) bool {
+	return value != nil && *value == want
+}
+
 // podDeploymentMatches reports whether a pod-based index reports the target pod type and replicas.
 func podDeploymentMatches(index *pinecone.Index, target *models.IndexPodSpecModel) bool {
 	if index.Deployment == nil || index.Deployment.Pod == nil {
@@ -1405,7 +1501,8 @@ func readCapacitySchema(summary string) schema.Attribute {
 	return schema.SingleNestedAttribute{
 		MarkdownDescription: summary + "Set exactly one of `dedicated` or `on_demand` to select the mode. " +
 			"Omitting `read_capacity` entirely on create selects on-demand, which BYOC indexes don't support: BYOC indexes need `dedicated`. " +
-			"To switch modes after creation, explicitly set the desired sub-block — removing `read_capacity` from config will not change the mode already recorded in state.",
+			"To switch modes after creation, explicitly set the desired sub-block — removing `read_capacity` from config will not change the mode already recorded in state. " +
+			"Creating or changing read capacity waits until it's `Ready`, with the configured replicas and shards running; the apply fails if it reports `Error`.",
 		Optional: true,
 		Computed: true,
 		PlanModifiers: []planmodifier.Object{

@@ -204,6 +204,13 @@ Some existing data source attributes changed:
   `Failed`, or `Disabled`. Earlier versions kept waiting on a failed index until the timeout, and treated a disabled
   index as ready. Because setting replicas to 0 disables an index, creating one with
   `read_capacity.dedicated.replicas = 0` fails.
+- Creating an index with `read_capacity`, or changing `read_capacity`, now waits until the read capacity is `Ready`
+  with the configured replicas and shards running. If it reports `Error`, the apply fails with the API's error message.
+  Earlier versions returned as soon as the change was accepted, so a failed scale went unreported. Set
+  `timeouts.create` or `timeouts.update` to change how long to wait (10 minutes by default). If a change to an existing
+  index times out, it carries on, and the next apply waits for it again. If creating an index times out, Terraform
+  marks the index tainted and replaces it on the next apply, so allow enough time in `timeouts.create` for dedicated
+  read capacity to be provisioned.
 - `embed` requires `model`, and `spec.pod.replicas` must be at least 1.
 
 ## Fixes

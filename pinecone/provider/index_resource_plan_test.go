@@ -613,6 +613,72 @@ func TestIndexReadyRetry(t *testing.T) {
 	}
 }
 
+func TestReadCapacityRetry(t *testing.T) {
+	int32Ptr := func(v int32) *int32 { return &v }
+	stringPtr := func(v string) *string { return &v }
+	dedicatedTarget := func(nodeType string, replicas, shards int32) *pinecone.ReadCapacityParams {
+		return &pinecone.ReadCapacityParams{Dedicated: &pinecone.ReadCapacityDedicatedConfig{
+			NodeType: stringPtr(nodeType),
+			Scaling:  &pinecone.ReadCapacityScaling{Manual: &pinecone.ReadCapacityManualScaling{Replicas: int32Ptr(replicas), Shards: int32Ptr(shards)}},
+		}}
+	}
+	dedicated := func(nodeType, state string, replicas, shards *int32) *pinecone.ReadCapacity {
+		return &pinecone.ReadCapacity{Dedicated: &pinecone.ReadCapacityDedicated{
+			NodeType: stringPtr(nodeType),
+			Status:   pinecone.ReadCapacityStatus{State: state, CurrentReplicas: replicas, CurrentShards: shards},
+		}}
+	}
+	onDemandTarget := &pinecone.ReadCapacityParams{OnDemand: &pinecone.ReadCapacityOnDemandConfig{}}
+	onDemand := func(state string) *pinecone.ReadCapacity {
+		return &pinecone.ReadCapacity{OnDemand: &pinecone.ReadCapacityOnDemand{Status: pinecone.ReadCapacityStatus{State: state}}}
+	}
+	failed := dedicated("b1", "Error", int32Ptr(1), int32Ptr(1))
+	failed.Dedicated.Status.ErrorMessage = stringPtr("insufficient capacity for b1")
+
+	tests := []struct {
+		name         string
+		target       *pinecone.ReadCapacityParams
+		readCapacity *pinecone.ReadCapacity
+		done         bool
+		retryable    bool
+		errContains  string
+	}{
+		{name: "no target", target: nil, readCapacity: nil, done: true},
+		{name: "not reported", target: dedicatedTarget("b1", 2, 1), readCapacity: nil, retryable: true},
+		{name: "still on-demand", target: dedicatedTarget("b1", 2, 1), readCapacity: onDemand("Ready"), retryable: true},
+		{name: "scaling", target: dedicatedTarget("b1", 2, 1), readCapacity: dedicated("b1", "Scaling", int32Ptr(1), int32Ptr(1)), retryable: true},
+		{name: "migrating", target: dedicatedTarget("t1", 1, 1), readCapacity: dedicated("t1", "Migrating", int32Ptr(1), int32Ptr(1)), retryable: true},
+		{name: "ready before scaling starts", target: dedicatedTarget("b1", 2, 1), readCapacity: dedicated("b1", "Ready", int32Ptr(1), int32Ptr(1)), retryable: true},
+		{name: "replicas not provisioned", target: dedicatedTarget("b1", 1, 1), readCapacity: dedicated("b1", "Ready", nil, nil), retryable: true},
+		{name: "old node type", target: dedicatedTarget("t1", 1, 1), readCapacity: dedicated("b1", "Ready", int32Ptr(1), int32Ptr(1)), retryable: true},
+		{name: "scaled", target: dedicatedTarget("b1", 2, 3), readCapacity: dedicated("b1", "Ready", int32Ptr(2), int32Ptr(3)), done: true},
+		{name: "paused", target: dedicatedTarget("b1", 0, 1), readCapacity: dedicated("b1", "Ready", nil, int32Ptr(1)), done: true},
+		{name: "error", target: dedicatedTarget("b1", 1, 1), readCapacity: failed, errContains: "insufficient capacity for b1"},
+		{name: "partial target", target: &pinecone.ReadCapacityParams{Dedicated: &pinecone.ReadCapacityDedicatedConfig{
+			Scaling: &pinecone.ReadCapacityScaling{Manual: &pinecone.ReadCapacityManualScaling{Replicas: int32Ptr(2)}},
+		}}, readCapacity: dedicated("b1", "Ready", int32Ptr(2), int32Ptr(4)), done: true},
+		{name: "on-demand ready", target: onDemandTarget, readCapacity: onDemand("Ready"), done: true},
+		{name: "on-demand still dedicated", target: onDemandTarget, readCapacity: dedicated("b1", "Ready", int32Ptr(1), int32Ptr(1)), retryable: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			retryErr := readCapacityRetry(&pinecone.Index{ReadCapacity: tt.readCapacity}, tt.target)
+			if done := retryErr == nil; done != tt.done {
+				t.Fatalf("done = %v, want %v (%v)", done, tt.done, retryErr)
+			}
+			if retryErr == nil {
+				return
+			}
+			if retryErr.Retryable != tt.retryable {
+				t.Errorf("retryable = %v, want %v (%v)", retryErr.Retryable, tt.retryable, retryErr.Err)
+			}
+			if tt.errContains != "" && !strings.Contains(retryErr.Err.Error(), tt.errContains) {
+				t.Errorf("error %q doesn't contain %q", retryErr.Err, tt.errContains)
+			}
+		})
+	}
+}
+
 func TestPodDeploymentMatches(t *testing.T) {
 	target := &models.IndexPodSpecModel{PodType: types.StringValue("p1.x2"), Replicas: types.Int64Value(1)}
 	three := int32(3)
