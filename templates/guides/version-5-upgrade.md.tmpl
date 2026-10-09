@@ -204,6 +204,8 @@ Some existing data source attributes changed:
   `dotproduct`. Earlier versions always failed with `Dimension should not be specified when VectorType is 'sparse'`.
 - Integrated indexes (`embed`) without `metric` use the model's metric. Earlier versions always sent `cosine`.
 - `embed` without `field_map` fails at plan time. Earlier versions crashed the provider during apply.
+- An index without `spec` or `schema`, with an empty `spec`, or with more than one type in `spec` fails at plan
+  time. Earlier versions failed during apply.
 - Values left out of `read_capacity.dedicated` keep their current setting. Earlier versions could send `0` replicas
   or shards, or an empty node type, when the index was updated for an unrelated change.
 - `pinecone_indexes` reports `deletion_protection`. Earlier versions always reported it as null.

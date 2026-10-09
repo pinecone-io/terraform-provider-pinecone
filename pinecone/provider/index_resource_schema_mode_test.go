@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/pinecone-io/go-pinecone/v7/pinecone"
 	"github.com/pinecone-io/terraform-provider-pinecone/pinecone/models"
@@ -155,6 +156,33 @@ func TestIndexResourceValidateConfig(t *testing.T) {
 	}))
 	unknownManaged := withUnknownDeployment(t, s, document(documentFields), "managed")
 	unknownByoc := withUnknownDeployment(t, s, withSchemaMode(t, s, base, schemaFields{"_values": denseField(1024, "cosine")}, byocDeployment()), "byoc")
+	specTypes := attrTypesOf(t, s, "spec")
+	withSpec := func(spec types.Object) models.IndexResourceModel {
+		m := base
+		m.Spec = spec
+		return m
+	}
+	specOf := func(spec models.IndexSpecModel) types.Object {
+		obj, d := types.ObjectValueFrom(context.Background(), specTypes, spec)
+		if d.HasError() {
+			t.Fatalf("building spec: %v", d)
+		}
+		return obj
+	}
+	var serverless models.IndexSpecModel
+	if d := base.Spec.As(context.Background(), &serverless, basetypes.ObjectAsOptions{}); d.HasError() {
+		t.Fatalf("reading spec: %v", d)
+	}
+	var byoc models.IndexSpecModel
+	if d := withByocSpec(t, s, base, dedicatedReadCapacity).Spec.As(context.Background(), &byoc, basetypes.ObjectAsOptions{}); d.HasError() {
+		t.Fatalf("reading spec: %v", d)
+	}
+	serverlessType, ok := specTypes["serverless"].(types.ObjectType)
+	if !ok {
+		t.Fatalf("spec.serverless is %T, want types.ObjectType", specTypes["serverless"])
+	}
+	unknownServerless := specOf(models.IndexSpecModel{}).Attributes()
+	unknownServerless["serverless"] = types.ObjectUnknown(serverlessType.AttrTypes)
 
 	tests := []struct {
 		name    string
@@ -193,6 +221,11 @@ func TestIndexResourceValidateConfig(t *testing.T) {
 		{name: "unknown field type", config: unknownDense},
 		{name: "unknown managed deployment", config: unknownManaged},
 		{name: "unknown byoc deployment", config: unknownByoc},
+		{name: "no spec or schema", config: withSpec(types.ObjectNull(specTypes)), wantErr: "Missing index configuration"},
+		{name: "empty spec", config: withSpec(specOf(models.IndexSpecModel{})), wantErr: "Missing spec type"},
+		{name: "two spec types", config: withSpec(specOf(models.IndexSpecModel{Serverless: serverless.Serverless, BYOC: byoc.BYOC})), wantErr: "Conflicting spec types"},
+		{name: "unknown spec", config: withSpec(types.ObjectUnknown(specTypes))},
+		{name: "unknown spec type", config: withSpec(types.ObjectValueMust(specTypes, unknownServerless))},
 	}
 
 	for _, tt := range tests {

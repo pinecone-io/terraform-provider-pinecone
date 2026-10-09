@@ -256,6 +256,7 @@ func validateIndexStyleConfig(config models.IndexResourceModel) diag.Diagnostics
 			diags.AddAttributeError(path.Root("cmek_id"), "cmek_id requires schema",
 				"cmek_id can only be set on an index created with schema and deployment.")
 		}
+		diags.Append(validateIndexSpecConfig(config.Spec)...)
 		return diags
 	}
 
@@ -415,6 +416,34 @@ func validateFullTextSearch(config *models.FullTextSearchModel, p path.Path) dia
 			diags.AddAttributeError(p.AtName("ngram"), "Invalid n-gram range",
 				fmt.Sprintf("min_gram (%d) can't be greater than max_gram (%d).", minGram.ValueInt64(), maxGram.ValueInt64()))
 		}
+	}
+	return diags
+}
+
+func validateIndexSpecConfig(spec types.Object) diag.Diagnostics {
+	var diags diag.Diagnostics
+	if spec.IsUnknown() {
+		return diags
+	}
+	if spec.IsNull() {
+		diags.AddAttributeError(path.Root("spec"), "Missing index configuration",
+			"Describe the index with spec, for example spec = { serverless = { cloud = \"aws\", region = \"us-east-1\" } }, or with schema and deployment.")
+		return diags
+	}
+	kinds := 0
+	for _, kind := range spec.Attributes() {
+		if kind.IsUnknown() {
+			return diags
+		}
+		if !kind.IsNull() {
+			kinds++
+		}
+	}
+	switch {
+	case kinds == 0:
+		diags.AddAttributeError(path.Root("spec"), "Missing spec type", "Set one of spec.serverless, spec.byoc, or spec.pod.")
+	case kinds > 1:
+		diags.AddAttributeError(path.Root("spec"), "Conflicting spec types", "Set only one of spec.serverless, spec.byoc, or spec.pod.")
 	}
 	return diags
 }
