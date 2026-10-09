@@ -6,7 +6,6 @@ package provider
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
@@ -129,7 +128,7 @@ func (r *CollectionResource) Create(ctx context.Context, req resource.CreateRequ
 			// Right after create the collection may not be visible yet (404),
 			// and the API can return transient 5xx errors. Retry those; on any
 			// other error stop. Do not touch state here — collection is nil.
-			if strings.Contains(err.Error(), "404") || isTransientError(err) {
+			if isNotFoundErr(err) || isTransientError(err) {
 				return retry.RetryableError(err)
 			}
 			return retry.NonRetryableError(err)
@@ -202,9 +201,7 @@ func (r *CollectionResource) Delete(ctx context.Context, req resource.DeleteRequ
 	// already gone (404/not found) is treated as a successful delete.
 	err := retry.RetryContext(ctx, deleteTimeout, func() *retry.RetryError {
 		err := r.client.DeleteCollection(ctx, data.Name.ValueString())
-		if err == nil ||
-			strings.Contains(err.Error(), "404") ||
-			strings.Contains(err.Error(), "not found") {
+		if err == nil || isNotFoundErr(err) {
 			return nil
 		}
 		if isTransientError(err) {
@@ -222,7 +219,7 @@ func (r *CollectionResource) Delete(ctx context.Context, req resource.DeleteRequ
 		collection, err := r.client.DescribeCollection(ctx, data.Name.ValueString())
 
 		if err != nil {
-			if strings.Contains(err.Error(), "404") {
+			if isNotFoundErr(err) {
 				return nil
 			}
 			if isTransientError(err) {

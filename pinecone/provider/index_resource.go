@@ -600,11 +600,8 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 	err := retry.RetryContext(ctx, createTimeout, func() *retry.RetryError {
 		index, err := r.client.DescribeIndex(ctx, data.Name.ValueString())
 		if err != nil {
-			errStr := err.Error()
 			// Retry if the index is not found, otherwise return a non-retryable error
-			if strings.Contains(errStr, "not found") ||
-				strings.Contains(errStr, "404") ||
-				strings.Contains(errStr, "NOT_FOUND") {
+			if isNotFoundErr(err) {
 				return retry.RetryableError(err)
 			}
 			return retry.NonRetryableError(err)
@@ -663,7 +660,7 @@ func (r *IndexResource) Read(ctx context.Context, req resource.ReadRequest, resp
 
 	index, err := r.client.DescribeIndex(ctx, data.Id.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		if isNotFoundErr(err) {
 			resp.State.RemoveResource(ctx)
 		} else {
 			resp.Diagnostics.AddError("Failed to describe index", err.Error())
@@ -887,7 +884,7 @@ func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	// request is not re-issued once it has taken effect.
 	err := retry.RetryContext(ctx, deleteTimeout, func() *retry.RetryError {
 		err := r.client.DeleteIndex(ctx, data.Name.ValueString())
-		if err == nil || strings.Contains(err.Error(), "not found") {
+		if err == nil || isNotFoundErr(err) {
 			return nil
 		}
 		if isTransientError(err) {
@@ -903,7 +900,7 @@ func (r *IndexResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	err = retry.RetryContext(ctx, deleteTimeout, func() *retry.RetryError {
 		index, err := r.client.DescribeIndex(ctx, data.Id.ValueString())
 		if err != nil {
-			if strings.Contains(err.Error(), "not found") {
+			if isNotFoundErr(err) {
 				return nil
 			}
 			if isTransientError(err) {

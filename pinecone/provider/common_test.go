@@ -4,9 +4,11 @@
 package provider
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 
@@ -40,6 +42,40 @@ func TestHasStatusCode(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := hasStatusCode(tt.err, tt.code); got != tt.want {
 				t.Errorf("hasStatusCode(%v, %d) = %v, want %v", tt.err, tt.code, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsNotFoundErr_controlPlane(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		body   string
+		want   bool
+	}{
+		{"missing index", http.StatusNotFound, `{"error":{"code":"NOT_FOUND","message":"Index missing not found."},"status":404}`, true},
+		{"server error mentioning not found", http.StatusInternalServerError, `{"error":{"code":"UNKNOWN","message":"upstream not found"},"status":500}`, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tt.status)
+				_, _ = w.Write([]byte(tt.body))
+			}))
+			defer server.Close()
+
+			client, err := pinecone.NewClient(pinecone.NewClientParams{ApiKey: "test", Host: server.URL})
+			if err != nil {
+				t.Fatalf("creating client: %v", err)
+			}
+			_, err = client.DescribeIndex(context.Background(), "missing")
+			if err == nil {
+				t.Fatal("DescribeIndex succeeded, want an error")
+			}
+			if got := isNotFoundErr(err); got != tt.want {
+				t.Errorf("isNotFoundErr(%v) = %v, want %v", err, got, tt.want)
 			}
 		})
 	}

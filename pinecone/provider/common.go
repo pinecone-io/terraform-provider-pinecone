@@ -46,7 +46,7 @@ func roleBindingScopeError(resourceType, resourceId types.String) (summary, deta
 
 // hasStatusCode reports whether err is (or wraps) a *pinecone.PineconeError
 // whose HTTP status code equals code. The SDK returns this typed error for all
-// non-2xx admin API responses, so matching on the code is more reliable than
+// non-2xx API responses, control plane and admin alike, so matching on the code is more reliable than
 // scanning the rendered error string (which embeds the raw response body).
 // Non-API errors (transport failures, uuid.Parse failures) do not match, which
 // is the desired behavior for the callers below.
@@ -55,7 +55,7 @@ func hasStatusCode(err error, code int) bool {
 	return errors.As(err, &pineconeErr) && pineconeErr.Code == code
 }
 
-// isNotFoundErr reports whether an admin API error indicates the resource no
+// isNotFoundErr reports whether an API error indicates the resource no
 // longer exists, so callers can treat it as a removed resource rather than a
 // hard failure.
 func isNotFoundErr(err error) bool {

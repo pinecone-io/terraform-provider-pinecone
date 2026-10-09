@@ -163,7 +163,7 @@ func (r *ProjectResource) Read(ctx context.Context, req resource.ReadRequest, re
 	// Describe the project directly
 	project, err := r.adminClient.Project.Describe(ctx, data.Id.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		if isNotFoundErr(err) {
 			resp.State.RemoveResource(ctx)
 		} else {
 			resp.Diagnostics.AddError("Failed to describe project", err.Error())
@@ -271,9 +271,7 @@ func (r *ProjectResource) Delete(ctx context.Context, req resource.DeleteRequest
 		_, err := r.adminClient.Project.Describe(ctx, data.Id.ValueString())
 		if err != nil {
 			// If we can't describe the project, it's likely deleted
-			if strings.Contains(err.Error(), "not found") ||
-				strings.Contains(err.Error(), "NOT_FOUND") ||
-				strings.Contains(err.Error(), "404") {
+			if isNotFoundErr(err) {
 				return nil // Project is deleted
 			}
 			// For other errors, retry

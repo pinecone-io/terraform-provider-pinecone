@@ -148,7 +148,7 @@ func (r *ApiKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 	// Describe the API key directly
 	apiKey, err := r.adminClient.APIKey.Describe(ctx, data.Id.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		if isNotFoundErr(err) {
 			resp.State.RemoveResource(ctx)
 		} else {
 			resp.Diagnostics.AddError("Failed to describe API key", err.Error())
@@ -261,7 +261,7 @@ func (r *ApiKeyResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	// Delete the API key
 	err := r.adminClient.APIKey.Delete(ctx, data.Id.ValueString())
 	if err != nil {
-		if !strings.Contains(err.Error(), "not found") {
+		if !isNotFoundErr(err) {
 			resp.Diagnostics.AddError("Failed to delete API key", err.Error())
 		}
 		return
