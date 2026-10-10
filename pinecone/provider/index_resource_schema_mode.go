@@ -497,32 +497,6 @@ func validateIndexStyleChange(config, state models.IndexResourceModel) diag.Diag
 	return diags
 }
 
-// validateReadCapacityChange rejects moving a document index from dedicated read capacity back to
-// on-demand, which the API doesn't support.
-func validateReadCapacityChange(ctx context.Context, config, state models.IndexResourceModel) diag.Diagnostics {
-	var diags diag.Diagnostics
-	if state.Schema.IsNull() || state.ReadCapacity.IsNull() || config.ReadCapacity.IsNull() || config.ReadCapacity.IsUnknown() {
-		return diags
-	}
-	fields, d := models.ResourceSchemaFields(ctx, state.Schema)
-	diags.Append(d...)
-	if diags.HasError() || !models.IsDocumentIndexConfig(fields) {
-		return diags
-	}
-
-	var configured, current models.IndexReadCapacityResourceModel
-	diags.Append(config.ReadCapacity.As(ctx, &configured, lenientObjectAs)...)
-	diags.Append(state.ReadCapacity.As(ctx, &current, lenientObjectAs)...)
-	if diags.HasError() {
-		return diags
-	}
-	if !current.Dedicated.IsNull() && !configured.OnDemand.IsNull() {
-		diags.AddAttributeError(path.Root("read_capacity").AtName("on_demand"), "Document indexes can't return to on-demand read capacity",
-			"A document index with dedicated read capacity can't be switched back to on-demand. Keep read_capacity.dedicated. "+recreateIndexHint)
-	}
-	return diags
-}
-
 // indexReadCapacity returns the read capacity a model configures: top-level with schema, under spec
 // otherwise.
 func indexReadCapacity(ctx context.Context, model models.IndexResourceModel, diagnostics *diag.Diagnostics) types.Object {

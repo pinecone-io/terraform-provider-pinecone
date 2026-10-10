@@ -1010,7 +1010,6 @@ func (r *IndexResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 
 	resp.Diagnostics.Append(validateIndexUpdate(ctx, config, state)...)
 	resp.Diagnostics.Append(validateReadCapacityChange(ctx, config, state)...)
-	resp.Diagnostics.Append(validateByocReadCapacityChange(ctx, config, state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -1099,38 +1098,43 @@ func validateIndexCreate(ctx context.Context, config models.IndexResourceModel) 
 
 const byocOnDemandDetail = "API version 2026-07 doesn't support on-demand read capacity on BYOC indexes."
 
-// byocReadCapacity returns the read capacity configured for a BYOC index, with spec.byoc or
-// deployment.byoc, and its path. ok is false for other indexes, and when an unknown value hides
-// whether the index is BYOC.
-func byocReadCapacity(ctx context.Context, model models.IndexResourceModel) (readCapacity types.Object, at path.Path, ok bool, diags diag.Diagnostics) {
+// configuredReadCapacity returns the read capacity a model configures and its path: top-level with
+// schema, under spec.serverless or spec.byoc otherwise. ok is false when the index has no read
+// capacity block, and when an unknown value hides which one applies.
+func configuredReadCapacity(ctx context.Context, model models.IndexResourceModel) (readCapacity types.Object, at path.Path, byoc, ok bool, diags diag.Diagnostics) {
 	if !model.Schema.IsNull() {
 		if model.Deployment.IsNull() || model.Deployment.IsUnknown() {
-			return readCapacity, at, false, diags
+			return readCapacity, at, false, false, diags
 		}
 		var deployment models.IndexResourceDeploymentModel
 		diags.Append(model.Deployment.As(ctx, &deployment, lenientObjectAs)...)
-		if diags.HasError() || deployment.Byoc == nil {
-			return readCapacity, at, false, diags
+		if diags.HasError() || (deployment.Byoc == nil && deployment.Managed == nil) {
+			return readCapacity, at, false, false, diags
 		}
-		return model.ReadCapacity, path.Root("read_capacity"), true, diags
+		return model.ReadCapacity, path.Root("read_capacity"), deployment.Byoc != nil, true, diags
 	}
 	if model.Spec.IsNull() || model.Spec.IsUnknown() {
-		return readCapacity, at, false, diags
+		return readCapacity, at, false, false, diags
 	}
 	var spec models.IndexSpecModel
 	diags.Append(model.Spec.As(ctx, &spec, lenientObjectAs)...)
-	if diags.HasError() || spec.BYOC == nil {
-		return readCapacity, at, false, diags
+	switch {
+	case diags.HasError():
+		return readCapacity, at, false, false, diags
+	case spec.BYOC != nil:
+		return spec.BYOC.ReadCapacity, path.Root("spec").AtName("byoc").AtName("read_capacity"), true, true, diags
+	case spec.Serverless != nil:
+		return spec.Serverless.ReadCapacity, path.Root("spec").AtName("serverless").AtName("read_capacity"), false, true, diags
 	}
-	return spec.BYOC.ReadCapacity, path.Root("spec").AtName("byoc").AtName("read_capacity"), true, diags
+	return readCapacity, at, false, false, diags
 }
 
 // validateByocReadCapacity rejects creating a BYOC index without dedicated read capacity. Leaving
 // read_capacity out selects on-demand, so the create would fail after a replacement had already
 // deleted the existing index.
 func validateByocReadCapacity(ctx context.Context, config models.IndexResourceModel) diag.Diagnostics {
-	readCapacity, at, ok, diags := byocReadCapacity(ctx, config)
-	if !ok || readCapacity.IsUnknown() {
+	readCapacity, at, byoc, ok, diags := configuredReadCapacity(ctx, config)
+	if !ok || !byoc || readCapacity.IsUnknown() {
 		return diags
 	}
 	if !readCapacity.IsNull() {
@@ -1145,11 +1149,13 @@ func validateByocReadCapacity(ctx context.Context, config models.IndexResourceMo
 	return diags
 }
 
-func validateByocReadCapacityChange(ctx context.Context, config, state models.IndexResourceModel) diag.Diagnostics {
-	configuredValue, at, ok, diags := byocReadCapacity(ctx, config)
-	currentValue, _, wasByoc, d := byocReadCapacity(ctx, state)
+// validateReadCapacityChange rejects moving an index from dedicated read capacity back to
+// on-demand, which API version 2026-07 doesn't allow for any index.
+func validateReadCapacityChange(ctx context.Context, config, state models.IndexResourceModel) diag.Diagnostics {
+	configuredValue, at, _, ok, diags := configuredReadCapacity(ctx, config)
+	currentValue, _, _, hadReadCapacity, d := configuredReadCapacity(ctx, state)
 	diags.Append(d...)
-	if diags.HasError() || !ok || !wasByoc || configuredValue.IsNull() || configuredValue.IsUnknown() || currentValue.IsNull() {
+	if diags.HasError() || !ok || !hadReadCapacity || configuredValue.IsNull() || configuredValue.IsUnknown() || currentValue.IsNull() {
 		return diags
 	}
 	var configured, current models.IndexReadCapacityResourceModel
@@ -1159,8 +1165,9 @@ func validateByocReadCapacityChange(ctx context.Context, config, state models.In
 		return diags
 	}
 	if !current.Dedicated.IsNull() && !configured.OnDemand.IsNull() {
-		diags.AddAttributeError(at.AtName("on_demand"), "BYOC indexes can't use on-demand read capacity",
-			byocOnDemandDetail+" Keep read_capacity.dedicated.")
+		diags.AddAttributeError(at.AtName("on_demand"), "Read capacity can't return to on-demand",
+			"API version 2026-07 doesn't support switching an index from dedicated read capacity back to on-demand. "+
+				"Keep read_capacity.dedicated, or contact Pinecone support to switch it. "+recreateIndexHint)
 	}
 	return diags
 }
@@ -1504,7 +1511,8 @@ func readCapacitySchema(summary string) schema.Attribute {
 	return schema.SingleNestedAttribute{
 		MarkdownDescription: summary + "Set exactly one of `dedicated` or `on_demand` to select the mode. " +
 			"Omitting `read_capacity` entirely on create selects on-demand, which BYOC indexes don't support: BYOC indexes need `dedicated`. " +
-			"To switch modes after creation, explicitly set the desired sub-block — removing `read_capacity` from config will not change the mode already recorded in state. " +
+			"To move an existing index from on-demand to dedicated, set `dedicated`; removing `read_capacity` from config will not change the mode already recorded in state. " +
+			"An index can't move from dedicated back to on-demand. " +
 			"Creating or changing read capacity waits until it's `Ready`, with the configured replicas and shards running; the apply fails if it reports `Error`.",
 		Optional: true,
 		Computed: true,
@@ -1544,8 +1552,8 @@ func readCapacitySchema(summary string) schema.Attribute {
 				},
 			},
 			"on_demand": schema.SingleNestedAttribute{
-				MarkdownDescription: "On-demand read capacity, the default. Set it to `{}` to select on-demand explicitly or to switch back from dedicated mode. " +
-					"BYOC indexes don't support on-demand, and document indexes can't switch back to it from dedicated.",
+				MarkdownDescription: "On-demand read capacity, the default. Set it to `{}` to select on-demand explicitly. " +
+					"BYOC indexes don't support on-demand, and an index with dedicated read capacity can't switch back to it.",
 				Optional:   true,
 				Attributes: map[string]schema.Attribute{},
 			},

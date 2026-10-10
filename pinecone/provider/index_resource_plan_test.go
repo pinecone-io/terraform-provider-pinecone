@@ -170,6 +170,23 @@ func withByocSpec(t *testing.T, s schema.Schema, model models.IndexResourceModel
 	return model
 }
 
+func withServerlessReadCapacity(t *testing.T, s schema.Schema, model models.IndexResourceModel, mode readCapacityMode) models.IndexResourceModel {
+	t.Helper()
+	spec, d := types.ObjectValueFrom(context.Background(), attrTypesOf(t, s, "spec"), models.IndexSpecModel{
+		Serverless: &models.IndexServerlessSpecModel{
+			Cloud:        types.StringValue("aws"),
+			Region:       types.StringValue("us-west-2"),
+			ReadCapacity: readCapacityValue(t, models.IndexReadCapacityResourceModel{}.AttrTypes(), mode),
+			Schema:       types.ObjectNull(models.IndexMetadataSchemaModel{}.AttrTypes()),
+		},
+	})
+	if d.HasError() {
+		t.Fatalf("building serverless spec: %v", d)
+	}
+	model.Spec = spec
+	return model
+}
+
 func withServerlessMetadataSchema(t *testing.T, s schema.Schema, model models.IndexResourceModel) models.IndexResourceModel {
 	t.Helper()
 	return withServerlessMetadataSchemaField(t, s, model, "genre")
@@ -245,6 +262,8 @@ func TestIndexResourceModifyPlan(t *testing.T) {
 	byocDedicated := withByocSpec(t, s, base, dedicatedReadCapacity)
 	byocOnDemand := withByocSpec(t, s, base, onDemandReadCapacity)
 	byocNoReadCapacity := withByocSpec(t, s, base, noReadCapacity)
+	serverlessDedicated := withServerlessReadCapacity(t, s, base, dedicatedReadCapacity)
+	serverlessOnDemand := withServerlessReadCapacity(t, s, base, onDemandReadCapacity)
 
 	renamed := func(m models.IndexResourceModel) models.IndexResourceModel {
 		m.Name = types.StringValue("my-renamed-index")
@@ -281,7 +300,11 @@ func TestIndexResourceModifyPlan(t *testing.T) {
 		{name: "update byoc without read capacity", config: byocNoReadCapacity, state: &byocDedicated},
 		{name: "replace byoc without read capacity", config: renamed(byocNoReadCapacity), state: &byocOnDemand, wantErr: "BYOC indexes need dedicated read capacity"},
 		{name: "replace byoc dedicated", config: renamed(byocDedicated), state: &byocOnDemand},
-		{name: "byoc dedicated to on-demand", config: byocOnDemand, state: &byocDedicated, wantErr: "BYOC indexes can't use on-demand read capacity"},
+		{name: "byoc dedicated to on-demand", config: byocOnDemand, state: &byocDedicated, wantErr: "Read capacity can't return to on-demand"},
+		{name: "serverless dedicated to on-demand", config: serverlessOnDemand, state: &serverlessDedicated, wantErr: "Read capacity can't return to on-demand"},
+		{name: "serverless on-demand to dedicated", config: serverlessDedicated, state: &serverlessOnDemand},
+		{name: "serverless dedicated without read capacity", config: base, state: &serverlessDedicated},
+		{name: "keep serverless on-demand", config: serverlessOnDemand, state: &serverlessOnDemand},
 		{name: "keep byoc on-demand", config: byocOnDemand, state: &byocOnDemand},
 		{name: "byoc on-demand to dedicated", config: byocDedicated, state: &byocOnDemand},
 	}

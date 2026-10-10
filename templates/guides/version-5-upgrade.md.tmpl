@@ -169,7 +169,7 @@ Things to know:
 - An existing index can't switch between the two styles. Keep describing existing indexes the way they were created.
 - With `schema`, read capacity and encryption are set at the top level: `read_capacity` and `cmek_id`.
 - Changing `schema`, `deployment`, or `cmek_id` replaces the index.
-- Document indexes run only on managed deployments, and can't move from dedicated read capacity back to on-demand.
+- Document indexes run only on managed deployments.
 - `terraform import` reads document indexes with `schema` and vector indexes with `spec`, including vector indexes
   created with a `schema` of reserved fields. To import a vector index, describe it with `dimension`, `metric`, and
   `spec`. Otherwise every plan fails with `An index can't change how it's described`.
@@ -202,8 +202,9 @@ Some existing data source attributes changed:
 
 - Creating an index, or scaling a pod-based index, now fails as soon as the index reaches `InitializationFailed`,
   `Failed`, or `Disabled`. Earlier versions kept waiting on a failed index until the timeout, and treated a disabled
-  index as ready. Because setting replicas to 0 disables an index, creating one with
-  `read_capacity.dedicated.replicas = 0` fails.
+  index as ready.
+- Switching an index from dedicated read capacity back to `on_demand` fails at plan time with `Read capacity can't
+  return to on-demand`. API version `2026-07` doesn't allow it for any index. Contact Pinecone support to switch one.
 - Creating an index with `read_capacity`, or changing `read_capacity`, now waits until the read capacity is `Ready`
   with the configured replicas and shards running. If it reports `Error`, the apply fails with the API's error message.
   Earlier versions returned as soon as the change was accepted, so a failed scale went unreported. Set
