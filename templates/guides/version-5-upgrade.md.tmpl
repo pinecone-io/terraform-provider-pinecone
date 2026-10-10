@@ -169,7 +169,7 @@ Things to know:
 - An existing index can't switch between the two styles. Keep describing existing indexes the way they were created.
 - With `schema`, read capacity and encryption are set at the top level: `read_capacity` and `cmek_id`.
 - Changing `schema`, `deployment`, or `cmek_id` replaces the index.
-- Document indexes run only on managed deployments, and can't move from dedicated read capacity back to on-demand.
+- Document indexes run only on managed deployments.
 - `terraform import` reads document indexes with `schema` and vector indexes with `spec`, including vector indexes
   created with a `schema` of reserved fields. To import a vector index, describe it with `dimension`, `metric`, and
   `spec`. Otherwise every plan fails with `An index can't change how it's described`.
@@ -202,8 +202,16 @@ Some existing data source attributes changed:
 
 - Creating an index, or scaling a pod-based index, now fails as soon as the index reaches `InitializationFailed`,
   `Failed`, or `Disabled`. Earlier versions kept waiting on a failed index until the timeout, and treated a disabled
-  index as ready. Because setting replicas to 0 disables an index, creating one with
-  `read_capacity.dedicated.replicas = 0` fails.
+  index as ready.
+- Switching an index from dedicated read capacity back to `on_demand` fails at plan time with `Read capacity can't
+  return to on-demand`. API version `2026-07` doesn't allow it for any index. Contact Pinecone support to switch one.
+- Creating an index with `read_capacity`, or changing `read_capacity`, now waits until the read capacity is `Ready`
+  with the configured replicas and shards running. If it reports `Error`, the apply fails with the API's error message.
+  Earlier versions returned as soon as the change was accepted, so a failed scale went unreported. Set
+  `timeouts.create` or `timeouts.update` to change how long to wait (10 minutes by default). If a change to an existing
+  index times out, it carries on, and the next apply waits for it again. If creating an index times out, Terraform
+  marks the index tainted and replaces it on the next apply, so allow enough time in `timeouts.create` for dedicated
+  read capacity to be provisioned.
 - `embed` requires `model`, and `spec.pod.replicas` must be at least 1.
 
 ## Fixes
@@ -216,6 +224,8 @@ Some existing data source attributes changed:
   time. Earlier versions failed during apply.
 - Values left out of `read_capacity.dedicated` keep their current setting. Earlier versions could send `0` replicas
   or shards, or an empty node type, when the index was updated for an unrelated change.
+- Changing `vector_type` replaces the index, like `dimension` and `metric`. Earlier versions left the index unchanged
+  and failed with `Provider produced inconsistent result after apply`.
 - Tag values can't be empty: `tags = { team = "" }` fails at plan time. Earlier versions documented `""` as the way
   to remove a tag, but the apply then failed with `Provider produced inconsistent result after apply`. To remove a tag,
   remove its key from `tags`. To remove every tag, set `tags = {}`.

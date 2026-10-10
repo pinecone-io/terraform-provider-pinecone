@@ -299,7 +299,8 @@ scaled in place with `spec.pod.replicas` and `spec.pod.pod_type`, and deleted.
 
 Serverless and BYOC indexes support configurable read capacity. With `schema`, set `read_capacity` at the top level;
 with `spec`, set it inside the `serverless` or `byoc` block. Omitting `read_capacity` defaults to `on_demand`, which
-BYOC indexes don't support, so BYOC indexes must set `dedicated`:
+BYOC indexes don't support, so BYOC indexes must set `dedicated`. Creating or changing read capacity waits until the
+new capacity is running (see `timeouts.create` and `timeouts.update`):
 
 ```terraform
 # Dedicated read capacity on a document index
@@ -342,7 +343,7 @@ resource "pinecone_index" "dedicated" {
 }
 ```
 
-**Note**: To switch from `dedicated` back to `on_demand` after creation, explicitly set the `on_demand = {}` sub-block. Removing the `read_capacity` block entirely will not change the mode already recorded in state. Document indexes and BYOC indexes can't switch from `dedicated` back to `on_demand`.
+**Note**: An existing index can move from `on_demand` to `dedicated`, but not back: switching from `dedicated` to `on_demand` fails at plan time. Removing the `read_capacity` block entirely will not change the mode already recorded in state.
 
 ### Metadata Schema (deprecated)
 

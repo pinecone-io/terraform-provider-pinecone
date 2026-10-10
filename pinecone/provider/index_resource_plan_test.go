@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -169,6 +170,23 @@ func withByocSpec(t *testing.T, s schema.Schema, model models.IndexResourceModel
 	return model
 }
 
+func withServerlessReadCapacity(t *testing.T, s schema.Schema, model models.IndexResourceModel, mode readCapacityMode) models.IndexResourceModel {
+	t.Helper()
+	spec, d := types.ObjectValueFrom(context.Background(), attrTypesOf(t, s, "spec"), models.IndexSpecModel{
+		Serverless: &models.IndexServerlessSpecModel{
+			Cloud:        types.StringValue("aws"),
+			Region:       types.StringValue("us-west-2"),
+			ReadCapacity: readCapacityValue(t, models.IndexReadCapacityResourceModel{}.AttrTypes(), mode),
+			Schema:       types.ObjectNull(models.IndexMetadataSchemaModel{}.AttrTypes()),
+		},
+	})
+	if d.HasError() {
+		t.Fatalf("building serverless spec: %v", d)
+	}
+	model.Spec = spec
+	return model
+}
+
 func withServerlessMetadataSchema(t *testing.T, s schema.Schema, model models.IndexResourceModel) models.IndexResourceModel {
 	t.Helper()
 	return withServerlessMetadataSchemaField(t, s, model, "genre")
@@ -244,6 +262,8 @@ func TestIndexResourceModifyPlan(t *testing.T) {
 	byocDedicated := withByocSpec(t, s, base, dedicatedReadCapacity)
 	byocOnDemand := withByocSpec(t, s, base, onDemandReadCapacity)
 	byocNoReadCapacity := withByocSpec(t, s, base, noReadCapacity)
+	serverlessDedicated := withServerlessReadCapacity(t, s, base, dedicatedReadCapacity)
+	serverlessOnDemand := withServerlessReadCapacity(t, s, base, onDemandReadCapacity)
 
 	renamed := func(m models.IndexResourceModel) models.IndexResourceModel {
 		m.Name = types.StringValue("my-renamed-index")
@@ -280,7 +300,11 @@ func TestIndexResourceModifyPlan(t *testing.T) {
 		{name: "update byoc without read capacity", config: byocNoReadCapacity, state: &byocDedicated},
 		{name: "replace byoc without read capacity", config: renamed(byocNoReadCapacity), state: &byocOnDemand, wantErr: "BYOC indexes need dedicated read capacity"},
 		{name: "replace byoc dedicated", config: renamed(byocDedicated), state: &byocOnDemand},
-		{name: "byoc dedicated to on-demand", config: byocOnDemand, state: &byocDedicated, wantErr: "BYOC indexes can't use on-demand read capacity"},
+		{name: "byoc dedicated to on-demand", config: byocOnDemand, state: &byocDedicated, wantErr: "Read capacity can't return to on-demand"},
+		{name: "serverless dedicated to on-demand", config: serverlessOnDemand, state: &serverlessDedicated, wantErr: "Read capacity can't return to on-demand"},
+		{name: "serverless on-demand to dedicated", config: serverlessDedicated, state: &serverlessOnDemand},
+		{name: "serverless dedicated without read capacity", config: base, state: &serverlessDedicated},
+		{name: "keep serverless on-demand", config: serverlessOnDemand, state: &serverlessOnDemand},
 		{name: "keep byoc on-demand", config: byocOnDemand, state: &byocOnDemand},
 		{name: "byoc on-demand to dedicated", config: byocDedicated, state: &byocOnDemand},
 	}
@@ -396,6 +420,60 @@ func TestIndexResourceModifyPlan_reportsEveryCreateError(t *testing.T) {
 	}
 }
 
+func requiresReplace[M interface{ Description(context.Context) string }](mods []M) bool {
+	return slices.ContainsFunc(mods, func(m M) bool {
+		return strings.Contains(m.Description(context.Background()), "destroy and recreate")
+	})
+}
+
+func collectReplacePaths(t *testing.T, parent path.Path, attrs map[string]schema.Attribute) []string {
+	t.Helper()
+	var paths []string
+	for name, attribute := range attrs {
+		p := parent.AtName(name)
+		var replace bool
+		switch a := attribute.(type) {
+		case schema.StringAttribute:
+			replace = requiresReplace(a.PlanModifiers)
+		case schema.Int32Attribute:
+			replace = requiresReplace(a.PlanModifiers)
+		case schema.Int64Attribute:
+			replace = requiresReplace(a.PlanModifiers)
+		case schema.BoolAttribute:
+			replace = requiresReplace(a.PlanModifiers)
+		case schema.MapAttribute:
+			replace = requiresReplace(a.PlanModifiers)
+		case schema.ListAttribute:
+			replace = requiresReplace(a.PlanModifiers)
+		case schema.MapNestedAttribute:
+			replace = requiresReplace(a.PlanModifiers)
+		case schema.SingleNestedAttribute:
+			replace = requiresReplace(a.PlanModifiers)
+			paths = append(paths, collectReplacePaths(t, p, a.Attributes)...)
+		default:
+			t.Fatalf("%s has unhandled attribute type %T", p, attribute)
+		}
+		if replace {
+			paths = append(paths, p.String())
+		}
+	}
+	return paths
+}
+
+func TestIndexReplacePathsMatchSchema(t *testing.T) {
+	s := indexResourceSchema(t)
+	got := collectReplacePaths(t, path.Empty(), s.Attributes)
+	var want []string
+	for _, p := range indexReplacePaths {
+		want = append(want, p.String())
+	}
+	slices.Sort(got)
+	slices.Sort(want)
+	if !slices.Equal(got, want) {
+		t.Fatalf("attributes with RequiresReplace = %v, indexReplacePaths = %v", got, want)
+	}
+}
+
 func TestPlansIndexReplacement(t *testing.T) {
 	ctx := context.Background()
 	s := indexResourceSchema(t)
@@ -403,6 +481,8 @@ func TestPlansIndexReplacement(t *testing.T) {
 	withMetadataSchema := withServerlessMetadataSchema(t, s, base)
 	renamed := base
 	renamed.Name = types.StringValue("my-renamed-index")
+	sparse := base
+	sparse.VectorType = types.StringValue("sparse")
 
 	tests := []struct {
 		name   string
@@ -412,6 +492,7 @@ func TestPlansIndexReplacement(t *testing.T) {
 	}{
 		{"no changes", base, base, false},
 		{"rename", renamed, base, true},
+		{"change vector_type", sparse, base, true},
 		{"add metadata schema", withMetadataSchema, base, true},
 		{"change metadata schema", withServerlessMetadataSchemaField(t, s, base, "year"), withMetadataSchema, true},
 		{"remove metadata schema", base, withMetadataSchema, false},
@@ -456,6 +537,30 @@ func TestRequiresReplaceUnlessRemoved(t *testing.T) {
 			requiresReplaceUnlessRemoved(context.Background(), planmodifier.ObjectRequest{PlanValue: tt.plan}, &resp)
 			if resp.RequiresReplace != tt.want {
 				t.Errorf("RequiresReplace = %v, want %v", resp.RequiresReplace, tt.want)
+			}
+		})
+	}
+}
+
+func TestMergeTags(t *testing.T) {
+	tests := []struct {
+		name     string
+		old, new map[string]string
+		want     map[string]string
+	}{
+		{name: "unchanged", old: map[string]string{"team": "search"}, new: map[string]string{"team": "search"}, want: nil},
+		{name: "both empty", old: map[string]string{}, new: map[string]string{}, want: nil},
+		{name: "no prior tags", old: nil, new: map[string]string{}, want: nil},
+		{name: "add", old: map[string]string{"team": "search"}, new: map[string]string{"team": "search", "env": "prod"}, want: map[string]string{"env": "prod"}},
+		{name: "change", old: map[string]string{"team": "search"}, new: map[string]string{"team": "ranking"}, want: map[string]string{"team": "ranking"}},
+		{name: "remove", old: map[string]string{"team": "search", "env": "prod"}, new: map[string]string{"team": "search"}, want: map[string]string{"env": ""}},
+		{name: "remove all", old: map[string]string{"team": "search"}, new: map[string]string{}, want: map[string]string{"team": ""}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := mergeTags(tt.old, tt.new)
+			if (got == nil) != (tt.want == nil) || !maps.Equal(got, tt.want) {
+				t.Errorf("mergeTags() = %#v, want %#v", got, tt.want)
 			}
 		})
 	}
@@ -526,6 +631,74 @@ func TestIndexReadyRetry(t *testing.T) {
 			}
 			if retryErr != nil && !tt.retryable && !strings.Contains(retryErr.Err.Error(), string(tt.status.State)) {
 				t.Errorf("error %q doesn't name the state", retryErr.Err)
+			}
+		})
+	}
+}
+
+func TestReadCapacityRetry(t *testing.T) {
+	int32Ptr := func(v int32) *int32 { return &v }
+	stringPtr := func(v string) *string { return &v }
+	dedicatedTarget := func(nodeType string, replicas, shards int32) *pinecone.ReadCapacityParams {
+		return &pinecone.ReadCapacityParams{Dedicated: &pinecone.ReadCapacityDedicatedConfig{
+			NodeType: stringPtr(nodeType),
+			Scaling:  &pinecone.ReadCapacityScaling{Manual: &pinecone.ReadCapacityManualScaling{Replicas: int32Ptr(replicas), Shards: int32Ptr(shards)}},
+		}}
+	}
+	dedicated := func(nodeType, state string, replicas, shards *int32) *pinecone.ReadCapacity {
+		return &pinecone.ReadCapacity{Dedicated: &pinecone.ReadCapacityDedicated{
+			NodeType: stringPtr(nodeType),
+			Status:   pinecone.ReadCapacityStatus{State: state, CurrentReplicas: replicas, CurrentShards: shards},
+		}}
+	}
+	onDemandTarget := &pinecone.ReadCapacityParams{OnDemand: &pinecone.ReadCapacityOnDemandConfig{}}
+	onDemand := func(state string) *pinecone.ReadCapacity {
+		return &pinecone.ReadCapacity{OnDemand: &pinecone.ReadCapacityOnDemand{Status: pinecone.ReadCapacityStatus{State: state}}}
+	}
+	failed := dedicated("b1", "Error", int32Ptr(1), int32Ptr(1))
+	failed.Dedicated.Status.ErrorMessage = stringPtr("insufficient capacity for b1")
+
+	tests := []struct {
+		name         string
+		target       *pinecone.ReadCapacityParams
+		readCapacity *pinecone.ReadCapacity
+		done         bool
+		retryable    bool
+		errContains  string
+	}{
+		{name: "no target", target: nil, readCapacity: nil, done: true},
+		{name: "not reported", target: dedicatedTarget("b1", 2, 1), readCapacity: nil, retryable: true},
+		{name: "still on-demand", target: dedicatedTarget("b1", 2, 1), readCapacity: onDemand("Ready"), retryable: true},
+		{name: "scaling", target: dedicatedTarget("b1", 2, 1), readCapacity: dedicated("b1", "Scaling", int32Ptr(1), int32Ptr(1)), retryable: true},
+		{name: "migrating", target: dedicatedTarget("t1", 1, 1), readCapacity: dedicated("t1", "Migrating", int32Ptr(1), int32Ptr(1)), retryable: true},
+		{name: "ready before scaling starts", target: dedicatedTarget("b1", 2, 1), readCapacity: dedicated("b1", "Ready", int32Ptr(1), int32Ptr(1)), retryable: true},
+		{name: "replicas not provisioned", target: dedicatedTarget("b1", 1, 1), readCapacity: dedicated("b1", "Ready", nil, nil), retryable: true},
+		{name: "old node type", target: dedicatedTarget("t1", 1, 1), readCapacity: dedicated("b1", "Ready", int32Ptr(1), int32Ptr(1)), retryable: true},
+		{name: "scaled", target: dedicatedTarget("b1", 2, 3), readCapacity: dedicated("b1", "Ready", int32Ptr(2), int32Ptr(3)), done: true},
+		{name: "paused, no current replicas", target: dedicatedTarget("b1", 0, 1), readCapacity: dedicated("b1", "Ready", nil, int32Ptr(1)), done: true},
+		{name: "paused, zero current replicas", target: dedicatedTarget("b1", 0, 1), readCapacity: dedicated("b1", "Ready", int32Ptr(0), int32Ptr(1)), done: true},
+		{name: "pausing, still at old replicas", target: dedicatedTarget("b1", 0, 1), readCapacity: dedicated("b1", "Ready", int32Ptr(2), int32Ptr(1)), retryable: true},
+		{name: "error", target: dedicatedTarget("b1", 1, 1), readCapacity: failed, errContains: "insufficient capacity for b1"},
+		{name: "partial target", target: &pinecone.ReadCapacityParams{Dedicated: &pinecone.ReadCapacityDedicatedConfig{
+			Scaling: &pinecone.ReadCapacityScaling{Manual: &pinecone.ReadCapacityManualScaling{Replicas: int32Ptr(2)}},
+		}}, readCapacity: dedicated("b1", "Ready", int32Ptr(2), int32Ptr(4)), done: true},
+		{name: "on-demand ready", target: onDemandTarget, readCapacity: onDemand("Ready"), done: true},
+		{name: "on-demand still dedicated", target: onDemandTarget, readCapacity: dedicated("b1", "Ready", int32Ptr(1), int32Ptr(1)), retryable: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			retryErr := readCapacityRetry(&pinecone.Index{ReadCapacity: tt.readCapacity}, tt.target)
+			if done := retryErr == nil; done != tt.done {
+				t.Fatalf("done = %v, want %v (%v)", done, tt.done, retryErr)
+			}
+			if retryErr == nil {
+				return
+			}
+			if retryErr.Retryable != tt.retryable {
+				t.Errorf("retryable = %v, want %v (%v)", retryErr.Retryable, tt.retryable, retryErr.Err)
+			}
+			if tt.errContains != "" && !strings.Contains(retryErr.Err.Error(), tt.errContains) {
+				t.Errorf("error %q doesn't contain %q", retryErr.Err, tt.errContains)
 			}
 		})
 	}
