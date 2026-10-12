@@ -286,7 +286,29 @@ func planIndexStyleSwitch(ctx context.Context, config tfsdk.Config, plan *tfsdk.
 	if diags.HasError() {
 		return diags
 	}
-	filled = plan.Raw
+
+	// A computed value the restyled state can't know yet, such as deployment.managed.environment,
+	// has no prior value in the new style, so UseStateForUnknown plans it as null. It's known after
+	// apply instead.
+	filled, err = tftypes.Transform(plan.Raw, func(p *tftypes.AttributePath, v tftypes.Value) (tftypes.Value, error) {
+		if !v.IsNull() || len(p.Steps()) == 0 {
+			return v, nil
+		}
+		if name, ok := p.Steps()[0].(tftypes.AttributeName); !ok || !slices.Contains(indexStyleAttributes, string(name)) {
+			return v, nil
+		}
+		if found, _, err := tftypes.WalkAttributePath(prior.Raw, p); err == nil {
+			if priorValue, ok := found.(tftypes.Value); ok && !priorValue.IsKnown() {
+				return priorValue, nil
+			}
+		}
+		return v, nil
+	})
+	if err != nil {
+		diags.AddError("Failed to plan index", err.Error())
+		return diags
+	}
+	plan.Raw = filled
 
 	// Values still unknown on either side, such as a computed value the other style doesn't
 	// record, can't contradict each other.

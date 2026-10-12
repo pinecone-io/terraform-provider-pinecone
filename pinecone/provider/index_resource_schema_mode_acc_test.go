@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
+	"github.com/hashicorp/terraform-plugin-testing/tfversion"
 )
 
 func testAccDocumentIndexConfig(name, tags string) string {
@@ -156,6 +157,8 @@ import {
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckIndexDestroy(),
+		// removed blocks need Terraform 1.7, and import blocks 1.5.
+		TerraformVersionChecks: []tfversion.TerraformVersionCheck{tfversion.SkipBelow(tfversion.Version1_7_0)},
 		Steps: []resource.TestStep{
 			{
 				Config: original,

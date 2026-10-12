@@ -142,6 +142,13 @@ func TestPlanIndexStyleSwitch(t *testing.T) {
 	if !got.Dimension.IsNull() || !got.VectorType.IsNull() {
 		t.Errorf("dimension, vector_type = %v, %v, want null: schema doesn't record them", got.Dimension, got.VectorType)
 	}
+	var environment types.String
+	if d := plan.GetAttribute(ctx, path.Root("deployment").AtName("managed").AtName("environment"), &environment); d.HasError() {
+		t.Fatalf("reading deployment.managed.environment: %v", d)
+	}
+	if !environment.IsUnknown() {
+		t.Errorf("deployment.managed.environment = %v, want unknown: the API reports it after apply", environment)
+	}
 
 	var readCapacity types.Object
 	if d := plan.GetAttribute(ctx, path.Root("read_capacity"), &readCapacity); d.HasError() {
