@@ -230,7 +230,7 @@ func TestAccIndexResource_documentIndex(t *testing.T) {
 			},
 			{
 				Config:      testAccSpecIndexConfig(rName, 1536),
-				ExpectError: regexp.MustCompile("Document indexes are described with schema"),
+				ExpectError: regexp.MustCompile("An index can't move back to spec"),
 			},
 		},
 	})
