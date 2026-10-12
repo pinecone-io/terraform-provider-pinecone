@@ -32,7 +32,7 @@ import (
 const requiresReplaceUnlessStyleSwitchDescription = "If the value of this attribute changes, Terraform will destroy and recreate " +
 	"the resource, unless the configuration changes whether the index is described with spec or with schema and deployment."
 
-const indexStyleSwitchHint = "Moving an index from spec to schema and deployment only changes how Terraform records the index, so " +
+const indexStyleSwitchHint = "Moving an index from the spec style to the schema style only changes Terraform state, so " +
 	"the configuration has to describe the existing index: its vectors, dimension, metric, and location can't change in place."
 
 // indexStyleSwitch reports whether the configuration describes an existing index in the other

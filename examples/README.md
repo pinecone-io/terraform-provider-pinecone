@@ -13,4 +13,8 @@ The document generation tool looks for files in the following locations by defau
 * **pinecone_api_key** - Manage API keys in Pinecone projects
 * **pinecone_collection** - Manage Pinecone collections
 * **pinecone_index** - Manage Pinecone indexes
+* **pinecone_invite** - Invite users to a Pinecone organization (requires admin credentials)
 * **pinecone_project** - Manage Pinecone projects (requires admin credentials)
+* **pinecone_role_binding** - Manage role bindings (requires admin credentials)
+* **pinecone_service_account** - Manage service accounts (requires admin credentials)
+* **pinecone_user** - Manage existing organization members, brought in with `terraform import` (requires admin credentials)

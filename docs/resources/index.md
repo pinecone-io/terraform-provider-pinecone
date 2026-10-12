@@ -4,24 +4,30 @@ page_title: "pinecone_index Resource - terraform-provider-pinecone"
 subcategory: ""
 description: |-
   The pinecone_index resource creates and manages a Pinecone index. Learn more about indexes in the docs https://docs.pinecone.io/guides/indexes/understanding-indexes.
-  An index is described in one of two ways:
+  An index is described in one of two styles:
   
-  With schema and deployment, the way Pinecone API version 2026-07 describes indexes. A schema of named fields creates a document index, which combines dense vector, sparse vector, and full-text-search fields. A schema made only of the reserved fields _values and _sparse_values creates a vector index. Use this style for new indexes without integrated embedding.
-  With dimension, metric, vector_type, spec, and embed, the style earlier versions of the provider used. It describes vector indexes, indexes with integrated embedding, and existing pod-based indexes. This style is planned for deprecation. Integrated embedding and pod-based indexes still need it for now.
-  A configuration uses one style or the other. To move an existing vector index from spec to schema and deployment, rewrite its configuration: as long as it describes the same index, the plan updates it in place, without calling the API or replacing the index. An index can't move back to spec. terraform import records document indexes with schema and other indexes with spec. If the configuration describes an imported vector index with schema, the next plan moves it there.
+  The schema style, with schema and deployment, the way Pinecone API version 2026-07 describes indexes. A schema of named fields creates a document index, which combines dense vector, sparse vector, and full-text-search fields. A schema made only of the reserved fields _values and _sparse_values creates a vector index. Use this style for new indexes without integrated embedding.
+  The spec style, with dimension, metric, vector_type, spec, and embed, the way earlier versions of the provider described indexes. It's planned for deprecation. Indexes with integrated embedding and existing pod-based indexes still need it for now.
+  A configuration uses one style or the other.
+  Moving to the schema style: to move an existing vector index from the spec style to the schema style, rewrite its configuration to describe the same index. The plan shows an in-place update that only changes Terraform state: the API isn't called, and the index isn't replaced. The move is one way: an index in the schema style can't move back to the spec style. See the version 5 upgrade guide https://registry.terraform.io/providers/pinecone-io/pinecone/latest/docs/guides/version-5-upgrade for how each attribute maps.
+  Importing: import records document indexes in the schema style and every other index in the spec style, however the index was created. If the configuration describes an imported vector index in the schema style, the next plan moves it there the same way.
 ---
 
 # pinecone_index (Resource)
 
 The `pinecone_index` resource creates and manages a Pinecone index. Learn more about indexes in the [docs](https://docs.pinecone.io/guides/indexes/understanding-indexes).
 
-An index is described in one of two ways:
+An index is described in one of two styles:
 
-- **With `schema` and `deployment`**, the way Pinecone API version `2026-07` describes indexes. A schema of named fields creates a document index, which combines dense vector, sparse vector, and full-text-search fields. A schema made only of the reserved fields `_values` and `_sparse_values` creates a vector index. Use this style for new indexes without integrated embedding.
+- **The `schema` style**, with `schema` and `deployment`, the way Pinecone API version `2026-07` describes indexes. A schema of named fields creates a document index, which combines dense vector, sparse vector, and full-text-search fields. A schema made only of the reserved fields `_values` and `_sparse_values` creates a vector index. Use this style for new indexes without integrated embedding.
 
-- **With `dimension`, `metric`, `vector_type`, `spec`, and `embed`**, the style earlier versions of the provider used. It describes vector indexes, indexes with integrated embedding, and existing pod-based indexes. This style is planned for deprecation. Integrated embedding and pod-based indexes still need it for now.
+- **The `spec` style**, with `dimension`, `metric`, `vector_type`, `spec`, and `embed`, the way earlier versions of the provider described indexes. It's planned for deprecation. Indexes with integrated embedding and existing pod-based indexes still need it for now.
 
-A configuration uses one style or the other. To move an existing vector index from `spec` to `schema` and `deployment`, rewrite its configuration: as long as it describes the same index, the plan updates it in place, without calling the API or replacing the index. An index can't move back to `spec`. `terraform import` records document indexes with `schema` and other indexes with `spec`. If the configuration describes an imported vector index with `schema`, the next plan moves it there.
+A configuration uses one style or the other.
+
+**Moving to the `schema` style:** to move an existing vector index from the `spec` style to the `schema` style, rewrite its configuration to describe the same index. The plan shows an in-place update that only changes Terraform state: the API isn't called, and the index isn't replaced. The move is one way: an index in the `schema` style can't move back to the `spec` style. See the [version 5 upgrade guide](https://registry.terraform.io/providers/pinecone-io/pinecone/latest/docs/guides/version-5-upgrade) for how each attribute maps.
+
+**Importing:** import records document indexes in the `schema` style and every other index in the `spec` style, however the index was created. If the configuration describes an imported vector index in the `schema` style, the next plan moves it there the same way.
 
 ## Example Usage
 
@@ -151,13 +157,13 @@ resource "pinecone_index" "serverless" {
 - `deletion_protection` (String) Whether deletion protection is enabled: `enabled` or `disabled`. Defaults to `disabled`. An index with deletion protection enabled can't be deleted.
 - `deployment` (Attributes) Where the index runs. Required with `schema`. Set exactly one of `managed` or `byoc`. Changing it replaces the index. (see [below for nested schema](#nestedatt--deployment))
 - `dimension` (Number) The dimension of the index's dense vectors. Required for dense indexes without `embed`; with `embed`, it defaults to the model's dimension. Not used with `schema`, where each dense vector field sets its own dimension. Changing it replaces the index.
-- `embed` (Attributes) Specify the integrated inference embedding configuration for the index. It can only be set when the index is created: `model` and `field_map` can't be changed afterwards, and `embed` can't be added to or removed from an existing index. `read_parameters` and `write_parameters` can be updated in place.
+- `embed` (Attributes) The index's integrated embedding: a model hosted by Pinecone that embeds a text field. Only with the `spec` style; the `schema` style doesn't support integrated embedding yet. It can only be set when the index is created: `model` and `field_map` can't be changed afterwards, and `embed` can't be added to or removed from an existing index. `read_parameters` and `write_parameters` can be updated in place.
 
 Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details. (see [below for nested schema](#nestedatt--embed))
 - `metric` (String) The distance metric used for similarity search: `cosine`, `dotproduct`, or `euclidean`. Sparse indexes use `dotproduct`. Defaults to `dotproduct` for sparse indexes, the model's metric with `embed`, and `cosine` otherwise. Not used with `schema`, where each dense vector field sets its own metric. Changing it replaces the index.
 - `read_capacity` (Attributes) Read capacity configuration for an index described with `schema`. With `spec`, set `read_capacity` inside `spec.serverless` or `spec.byoc` instead. BYOC indexes need `dedicated`: they don't support on-demand. Set exactly one of `dedicated` or `on_demand` to select the mode. Leaving `read_capacity` out when the index is created selects on-demand. To move an existing index from on-demand to dedicated, set `dedicated`; removing `read_capacity` from config will not change the mode already recorded in state. An index can't move from dedicated back to on-demand. Creating or changing read capacity waits until it's `Ready`, with the configured replicas and shards running; the apply fails if it reports `Error`. (see [below for nested schema](#nestedatt--read_capacity))
 - `schema` (Attributes) The index's schema: the typed fields its records contain. Use it with `deployment` instead of `dimension`, `metric`, `vector_type`, `spec`, and `embed`. A schema of named fields creates a document index, used with the documents API. A schema made only of the reserved fields `_values` (dense) and `_sparse_values` (sparse) creates a vector index, used with the vectors API. Metadata fields don't need to be declared: they're indexed automatically when you upsert data. The schema can't be changed after the index is created; changing it replaces the index. (see [below for nested schema](#nestedatt--schema))
-- `spec` (Attributes) Where and how the index runs, for an index described with `dimension` and `metric`. Set exactly one of `serverless`, `byoc`, or `pod`. Not used with `schema`, which uses `deployment` instead. (see [below for nested schema](#nestedatt--spec))
+- `spec` (Attributes) Where and how the index runs, in the `spec` style. Set exactly one of `serverless`, `byoc`, or `pod`. Not used with `schema`, which uses `deployment` instead. (see [below for nested schema](#nestedatt--spec))
 - `tags` (Map of String) Custom user tags added to an index, at most 20 per index. Keys must be 80 characters or less and contain only letters, digits, `_`, or `-`. Values must be 120 characters or less and consist of printable ASCII characters or spaces. Values can't be empty. To remove a tag, remove its key from the map; to remove every tag, set `tags = {}`. Removing the `tags` attribute leaves the index's tags unchanged.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `vector_type` (String) The type of vectors the index stores: `dense` or `sparse`. A dense index needs a `dimension`, and a sparse index doesn't take one. Not used with `schema`, where the vector fields set the type. Changing it replaces the index.
@@ -483,8 +489,8 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# Import an index by name. Document indexes are recorded with schema and deployment, and other indexes
-# with spec. If the configuration describes an imported vector index with schema and deployment, the
-# next plan moves it there in place, without changing the index.
+# Import an index by name. Document indexes are recorded in the schema style, and every other index in
+# the spec style. If the configuration describes an imported vector index in the schema style, the
+# next plan moves it there with an in-place update that only changes Terraform state.
 terraform import pinecone_index.example my-index
 ```

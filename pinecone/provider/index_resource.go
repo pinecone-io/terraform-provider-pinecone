@@ -65,17 +65,23 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 		// This description is used by the documentation generator and the language server.
 		MarkdownDescription: "The `pinecone_index` resource creates and manages a Pinecone index. Learn more about indexes in the " +
 			"[docs](https://docs.pinecone.io/guides/indexes/understanding-indexes).\n\n" +
-			"An index is described in one of two ways:\n\n" +
-			"- **With `schema` and `deployment`**, the way Pinecone API version `2026-07` describes indexes. A schema of named fields " +
-			"creates a document index, which combines dense vector, sparse vector, and full-text-search fields. A schema made only of the " +
-			"reserved fields `_values` and `_sparse_values` creates a vector index. Use this style for new indexes without integrated embedding.\n\n" +
-			"- **With `dimension`, `metric`, `vector_type`, `spec`, and `embed`**, the style earlier versions of the provider used. It " +
-			"describes vector indexes, indexes with integrated embedding, and existing pod-based indexes. This style is planned for " +
-			"deprecation. Integrated embedding and pod-based indexes still need it for now.\n\n" +
-			"A configuration uses one style or the other. To move an existing vector index from `spec` to `schema` and `deployment`, " +
-			"rewrite its configuration: as long as it describes the same index, the plan updates it in place, without calling the API or " +
-			"replacing the index. An index can't move back to `spec`. `terraform import` records document indexes with `schema` and " +
-			"other indexes with `spec`. If the configuration describes an imported vector index with `schema`, the next plan moves it there.",
+			"An index is described in one of two styles:\n\n" +
+			"- **The `schema` style**, with `schema` and `deployment`, the way Pinecone API version `2026-07` describes indexes. A schema of " +
+			"named fields creates a document index, which combines dense vector, sparse vector, and full-text-search fields. A schema made " +
+			"only of the reserved fields `_values` and `_sparse_values` creates a vector index. Use this style for new indexes without " +
+			"integrated embedding.\n\n" +
+			"- **The `spec` style**, with `dimension`, `metric`, `vector_type`, `spec`, and `embed`, the way earlier versions of the provider " +
+			"described indexes. It's planned for deprecation. Indexes with integrated embedding and existing pod-based indexes still need it " +
+			"for now.\n\n" +
+			"A configuration uses one style or the other.\n\n" +
+			"**Moving to the `schema` style:** to move an existing vector index from the `spec` style to the `schema` style, rewrite its " +
+			"configuration to describe the same index. The plan shows an in-place update that only changes Terraform state: the API isn't " +
+			"called, and the index isn't replaced. The move is one way: an index in the `schema` style can't move back to the `spec` style. " +
+			"See the [version 5 upgrade guide](https://registry.terraform.io/providers/pinecone-io/pinecone/latest/docs/guides/version-5-upgrade) " +
+			"for how each attribute maps.\n\n" +
+			"**Importing:** import records document indexes in the `schema` style and every other index in the `spec` style, however the " +
+			"index was created. If the configuration describes an imported vector index in the `schema` style, the next plan moves it there " +
+			"the same way.",
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
@@ -176,7 +182,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				},
 			},
 			"spec": schema.SingleNestedAttribute{
-				MarkdownDescription: "Where and how the index runs, for an index described with `dimension` and `metric`. Set exactly one of `serverless`, `byoc`, or `pod`. " +
+				MarkdownDescription: "Where and how the index runs, in the `spec` style. Set exactly one of `serverless`, `byoc`, or `pod`. " +
 					"Not used with `schema`, which uses `deployment` instead.",
 				Optional: true,
 				Attributes: map[string]schema.Attribute{
@@ -281,7 +287,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				},
 			},
 			"embed": schema.SingleNestedAttribute{
-				Description: `Specify the integrated inference embedding configuration for the index. It can only be set when the index is created: ` + "`model`" + ` and ` + "`field_map`" + ` can't be changed afterwards, and ` + "`embed`" + ` can't be added to or removed from an existing index. ` + "`read_parameters`" + ` and ` + "`write_parameters`" + ` can be updated in place.
+				Description: `The index's integrated embedding: a model hosted by Pinecone that embeds a text field. Only with the ` + "`spec`" + ` style; the ` + "`schema`" + ` style doesn't support integrated embedding yet. It can only be set when the index is created: ` + "`model`" + ` and ` + "`field_map`" + ` can't be changed afterwards, and ` + "`embed`" + ` can't be added to or removed from an existing index. ` + "`read_parameters`" + ` and ` + "`write_parameters`" + ` can be updated in place.
 
 Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details.`,
 				Optional: true,

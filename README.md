@@ -180,20 +180,18 @@ The Terraform Provider for Pinecone supports creating and managing Pinecone proj
 
 ### Indexes
 
-An index is described in one of two ways:
+An index is described in one of two styles:
 
-- **With `schema` and `deployment`**, the way Pinecone API version `2026-07` describes indexes. A schema of named
-  fields creates a document index, which combines dense vector, sparse vector, and full-text-search fields. A schema
-  made only of the reserved fields `_values` and `_sparse_values` creates a vector index. Use this style for new
-  indexes without integrated embedding.
-- **With `dimension`, `metric`, `vector_type`, `spec`, and `embed`**, the style earlier versions of the provider
-  used. This style is planned for deprecation. Indexes with integrated embedding and existing pod-based indexes still
-  need it for now.
+- **The `schema` style**, with `schema` and `deployment`, the way Pinecone API version `2026-07` describes indexes. A
+  schema of named fields creates a document index, which combines dense vector, sparse vector, and full-text-search
+  fields. A schema made only of the reserved fields `_values` and `_sparse_values` creates a vector index. Use this
+  style for new indexes without integrated embedding.
+- **The `spec` style**, with `dimension`, `metric`, `vector_type`, `spec`, and `embed`, the way earlier versions of
+  the provider described indexes. It's planned for deprecation. Indexes with integrated embedding and existing
+  pod-based indexes still need it for now.
 
-A configuration uses one style or the other. To move an existing vector index from `spec` to `schema` and
-`deployment`, rewrite its configuration: as long as it describes the same index, the plan shows an in-place update
-that only changes how Terraform records the index, without calling the API or replacing it. An index can't move back
-to `spec`. Upgrading from version 4? See the [version 5 upgrade guide](docs/guides/version-5-upgrade.md).
+A configuration uses one style or the other. Upgrading from version 4? See the
+[version 5 upgrade guide](docs/guides/version-5-upgrade.md).
 
 #### Document indexes
 
@@ -235,7 +233,7 @@ resource "pinecone_index" "products" {
 }
 ```
 
-#### Vector indexes described with `spec`
+#### Vector indexes in the `spec` style
 
 Serverless vector indexes take a `cloud` and `region`:
 
@@ -302,11 +300,20 @@ resource "pinecone_index" "integrated" {
 Pod-based indexes can't be created with Pinecone API version `2026-07`. Existing pod-based indexes can be imported,
 scaled in place with `spec.pod.replicas` and `spec.pod.pod_type`, and deleted.
 
+#### Moving an index to the `schema` style
+
+To move an existing vector index from the `spec` style to the `schema` style, rewrite its configuration to describe
+the same index. The plan shows an in-place update that only changes Terraform state: the API isn't called, and the
+index isn't replaced. The move is one way: an index in the `schema` style can't move back to the `spec` style. The
+[version 5 upgrade guide](docs/guides/version-5-upgrade.md#moving-an-index-to-the-schema-style) shows how each
+attribute maps.
+
 #### Importing indexes
 
-Import an index by name, with `terraform import` or an `import` block. Import records document indexes with `schema`
-and other indexes with `spec`. If the configuration describes an imported vector index with `schema`, the next plan
-shows an in-place update that only changes how Terraform records the index:
+Import an index by name, with `terraform import` or an `import` block (Terraform 1.5 and later). Import records
+document indexes in the `schema` style and every other index in the `spec` style, however the index was created. If
+the configuration describes an imported vector index in the `schema` style, the next plan moves it there the same
+way:
 
 ```shell
 terraform import pinecone_index.example my-index
