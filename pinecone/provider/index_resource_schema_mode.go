@@ -17,7 +17,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -63,7 +62,7 @@ func indexSchemaResourceAttribute() schema.Attribute {
 			"automatically when you upsert data. The schema can't be changed after the index is created; changing it replaces the index.",
 		Optional: true,
 		PlanModifiers: []planmodifier.Object{
-			objectplanmodifier.RequiresReplace(),
+			requiresReplaceUnlessStyleSwitchObject(),
 		},
 		Attributes: map[string]schema.Attribute{
 			"fields": schema.MapNestedAttribute{
@@ -150,7 +149,7 @@ func indexDeploymentResourceAttribute() schema.Attribute {
 			"Changing it replaces the index.",
 		Optional: true,
 		PlanModifiers: []planmodifier.Object{
-			objectplanmodifier.RequiresReplace(),
+			requiresReplaceUnlessStyleSwitchObject(),
 		},
 		Attributes: map[string]schema.Attribute{
 			"managed": schema.SingleNestedAttribute{
@@ -476,24 +475,6 @@ func validateIndexDeploymentConfig(ctx context.Context, config models.IndexResou
 	case deployment.Byoc != nil && !config.CmekId.IsNull():
 		diags.AddAttributeError(path.Root("cmek_id"), "cmek_id isn't supported on BYOC", "Customer-managed encryption keys are only supported on managed deployments.")
 	}
-	return diags
-}
-
-// validateIndexStyleChange rejects switching an existing index between spec and schema with
-// deployment. Both describe the same index, so replacing it would only lose its data.
-func validateIndexStyleChange(config, state models.IndexResourceModel) diag.Diagnostics {
-	var diags diag.Diagnostics
-	configSchema, stateSchema := !config.Schema.IsNull(), !state.Schema.IsNull()
-	if configSchema == stateSchema {
-		return diags
-	}
-	from, to := "spec", "schema and deployment"
-	if stateSchema {
-		from, to = to, from
-	}
-	diags.AddAttributeError(path.Root("schema"), "An index can't change how it's described",
-		fmt.Sprintf("This index is managed with %s, and the configuration describes it with %s. An existing index can't switch between "+
-			"the two. Describe it with %s again. %s", from, to, from, recreateIndexHint))
 	return diags
 }
 

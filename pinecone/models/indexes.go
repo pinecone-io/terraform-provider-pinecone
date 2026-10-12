@@ -40,9 +40,9 @@ func (model *IndexModel) Read(ctx context.Context, index *pinecone.Index) diag.D
 	var diags diag.Diagnostics
 
 	model.Name = types.StringValue(index.Name)
-	model.Metric = types.StringValue(string(index.Metric))
+	model.Metric = stringOrNull(string(index.Metric))
 	model.DeletionProtection = types.StringValue(string(index.DeletionProtection))
-	model.VectorType = types.StringValue(index.VectorType)
+	model.VectorType = stringOrNull(index.VectorType)
 	model.Host = types.StringValue(index.Host)
 	model.PrivateHost = types.StringPointerValue(index.PrivateHost)
 	model.CmekId = types.StringPointerValue(index.CmekId)
@@ -425,6 +425,15 @@ func (model IndexPodSpecModel) AttrTypes() map[string]attr.Type {
 		"metadata_config":   types.ObjectType{AttrTypes: IndexMetadataConfigModel{}.AttrTypes()},
 		"source_collection": types.StringType,
 	}
+}
+
+// stringOrNull returns null for an empty string. The SDK leaves an index's metric and vector type
+// empty when it has no single vector field to derive them from, as for a full-text-search index.
+func stringOrNull(s string) types.String {
+	if s == "" {
+		return types.StringNull()
+	}
+	return types.StringValue(s)
 }
 
 // indexSpec returns the index's spec, or an empty one when the SDK couldn't derive it from the

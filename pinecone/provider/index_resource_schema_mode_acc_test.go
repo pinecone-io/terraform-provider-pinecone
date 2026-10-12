@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
+	"github.com/hashicorp/terraform-plugin-testing/tfversion"
 )
 
 func testAccDocumentIndexConfig(name, tags string) string {
@@ -49,6 +50,139 @@ resource "pinecone_index" "test" {
   }
 }
 `, name, dimension)
+}
+
+func testAccSchemaVectorIndexConfig(name string, dimension int) string {
+	return fmt.Sprintf(`
+provider "pinecone" {
+}
+
+resource "pinecone_index" "test" {
+  name = %q
+  deployment = {
+    managed = { cloud = "aws", region = "us-west-2" }
+  }
+  schema = {
+    fields = {
+      _values = { dense_vector = { dimension = %d, metric = "cosine" } }
+    }
+  }
+}
+`, name, dimension)
+}
+
+// TestAccIndexResource_specToSchema moves an index created with spec to schema and deployment. The
+// move only changes state, and a move back to spec is rejected.
+func TestAccIndexResource_specToSchema(t *testing.T) {
+	t.Parallel()
+	rName := acctest.RandomWithPrefix("tftest")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckIndexDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccSpecIndexConfig(rName, 1024),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckIndexExists(),
+					resource.TestCheckResourceAttr("pinecone_index.test", "dimension", "1024"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "metric", "cosine"),
+				),
+			},
+			{
+				Config:      testAccSchemaVectorIndexConfig(rName, 768),
+				ExpectError: regexp.MustCompile("The configuration describes a different index"),
+			},
+			{
+				Config: testAccSchemaVectorIndexConfig(rName, 1024),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("pinecone_index.test", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckIndexExists(),
+					resource.TestCheckResourceAttr("pinecone_index.test", "schema.fields._values.dense_vector.dimension", "1024"),
+					resource.TestCheckResourceAttr("pinecone_index.test", "deployment.managed.region", "us-west-2"),
+					resource.TestCheckNoResourceAttr("pinecone_index.test", "dimension"),
+					resource.TestCheckNoResourceAttr("pinecone_index.test", "spec.serverless.region"),
+				),
+			},
+			{
+				Config:   testAccSchemaVectorIndexConfig(rName, 1024),
+				PlanOnly: true,
+			},
+			{
+				Config:      testAccSpecIndexConfig(rName, 1024),
+				ExpectError: regexp.MustCompile("An index can't move back to spec"),
+			},
+		},
+	})
+}
+
+// TestAccIndexResource_importSpecIndexIntoSchema imports an index created with spec into a schema
+// configuration. A removed block drops it from state without deleting it, then an import block
+// brings it back under a new address, as a user would after losing state.
+func TestAccIndexResource_importSpecIndexIntoSchema(t *testing.T) {
+	t.Parallel()
+	rName := acctest.RandomWithPrefix("tftest")
+	original := fmt.Sprintf(`
+provider "pinecone" {
+}
+
+resource "pinecone_index" "original" {
+  name      = %q
+  dimension = 1024
+  spec = {
+    serverless = { cloud = "aws", region = "us-west-2" }
+  }
+}
+`, rName)
+	imported := testAccSchemaVectorIndexConfig(rName, 1024) + fmt.Sprintf(`
+removed {
+  from = pinecone_index.original
+  lifecycle {
+    destroy = false
+  }
+}
+
+import {
+  to = pinecone_index.test
+  id = %q
+}
+`, rName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckIndexDestroy(),
+		// removed blocks need Terraform 1.7, and import blocks 1.5.
+		TerraformVersionChecks: []tfversion.TerraformVersionCheck{tfversion.SkipBelow(tfversion.Version1_7_0)},
+		Steps: []resource.TestStep{
+			{
+				Config: original,
+				Check:  resource.TestCheckResourceAttr("pinecone_index.original", "dimension", "1024"),
+			},
+			{
+				Config: imported,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("pinecone_index.test", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckIndexExists(),
+					resource.TestCheckResourceAttr("pinecone_index.test", "schema.fields._values.dense_vector.dimension", "1024"),
+					resource.TestCheckNoResourceAttr("pinecone_index.test", "spec.serverless.region"),
+				),
+			},
+			{
+				Config:   imported,
+				PlanOnly: true,
+			},
+		},
+	})
 }
 
 func TestAccIndexResource_documentIndex(t *testing.T) {
@@ -96,7 +230,7 @@ func TestAccIndexResource_documentIndex(t *testing.T) {
 			},
 			{
 				Config:      testAccSpecIndexConfig(rName, 1536),
-				ExpectError: regexp.MustCompile("An index can't change how it's described"),
+				ExpectError: regexp.MustCompile("An index can't move back to spec"),
 			},
 		},
 	})
@@ -206,7 +340,7 @@ resource "pinecone_index" "test" {
 			},
 			{
 				Config:      testAccSpecIndexConfig(rName, 1024),
-				ExpectError: regexp.MustCompile("An index can't change how it's described"),
+				ExpectError: regexp.MustCompile("An index can't move back to spec"),
 			},
 		},
 	})

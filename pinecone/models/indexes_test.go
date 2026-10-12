@@ -384,3 +384,21 @@ func TestToReadCapacityParams_dedicatedLeavesOutUnknownValues(t *testing.T) {
 		t.Errorf("Shards = %v, want 2", got.Scaling.Manual.Shards)
 	}
 }
+
+func TestIndexModelRead_fullTextSearchIndex(t *testing.T) {
+	index := &pinecone.Index{
+		Name:               "articles",
+		Host:               "articles.example.com",
+		DeletionProtection: pinecone.DeletionProtectionDisabled,
+		Schema: &pinecone.IndexSchema{Fields: map[string]pinecone.IndexSchemaField{
+			"body": {String: &pinecone.StringField{FullTextSearch: &pinecone.FullTextSearchConfig{}}},
+		}},
+	}
+	var model IndexModel
+	if diags := model.Read(t.Context(), index); diags.HasError() {
+		t.Fatalf("IndexModel.Read returned errors: %v", diags)
+	}
+	if !model.Metric.IsNull() || !model.VectorType.IsNull() || !model.Dimension.IsNull() {
+		t.Errorf("metric, vector_type, dimension = %v, %v, %v, want null", model.Metric, model.VectorType, model.Dimension)
+	}
+}

@@ -3,12 +3,31 @@
 page_title: "pinecone_index Resource - terraform-provider-pinecone"
 subcategory: ""
 description: |-
-  The pinecone_index resource lets you create and manage indexes in Pinecone. Learn more about indexes in the docs https://docs.pinecone.io/guides/indexes/understanding-indexes.
+  The pinecone_index resource creates and manages a Pinecone index. Learn more about indexes in the docs https://docs.pinecone.io/guides/indexes/understanding-indexes.
+  An index is described in one of two styles:
+  
+  The schema style, with schema and deployment, the way Pinecone API version 2026-07 describes indexes. A schema of named fields creates a document index, which combines dense vector, sparse vector, and full-text-search fields. A schema made only of the reserved fields _values and _sparse_values creates a vector index. Use this style for new indexes without integrated embedding.
+  The spec style, with dimension, metric, vector_type, spec, and embed, the way earlier versions of the provider described indexes. It's planned for deprecation. Indexes with integrated embedding and existing pod-based indexes still need it for now.
+  A configuration uses one style or the other.
+  Moving to the schema style: to move an existing vector index from the spec style to the schema style, rewrite its configuration to describe the same index. The plan shows an in-place update that only changes Terraform state: the API isn't called, and the index isn't replaced. The move is one way: an index in the schema style can't move back to the spec style. See the version 5 upgrade guide https://registry.terraform.io/providers/pinecone-io/pinecone/latest/docs/guides/version-5-upgrade for how each attribute maps.
+  Importing: import records document indexes in the schema style and every other index in the spec style, however the index was created. If the configuration describes an imported vector index in the schema style, the next plan moves it there the same way.
 ---
 
 # pinecone_index (Resource)
 
-The `pinecone_index` resource lets you create and manage indexes in Pinecone. Learn more about indexes in the [docs](https://docs.pinecone.io/guides/indexes/understanding-indexes).
+The `pinecone_index` resource creates and manages a Pinecone index. Learn more about indexes in the [docs](https://docs.pinecone.io/guides/indexes/understanding-indexes).
+
+An index is described in one of two styles:
+
+- **The `schema` style**, with `schema` and `deployment`, the way Pinecone API version `2026-07` describes indexes. A schema of named fields creates a document index, which combines dense vector, sparse vector, and full-text-search fields. A schema made only of the reserved fields `_values` and `_sparse_values` creates a vector index. Use this style for new indexes without integrated embedding.
+
+- **The `spec` style**, with `dimension`, `metric`, `vector_type`, `spec`, and `embed`, the way earlier versions of the provider described indexes. It's planned for deprecation. Indexes with integrated embedding and existing pod-based indexes still need it for now.
+
+A configuration uses one style or the other.
+
+**Moving to the `schema` style:** to move an existing vector index from the `spec` style to the `schema` style, rewrite its configuration to describe the same index. The plan shows an in-place update that only changes Terraform state: the API isn't called, and the index isn't replaced. The move is one way: an index in the `schema` style can't move back to the `spec` style. See the [version 5 upgrade guide](https://registry.terraform.io/providers/pinecone-io/pinecone/latest/docs/guides/version-5-upgrade) for how each attribute maps.
+
+**Importing:** import records document indexes in the `schema` style and every other index in the `spec` style, however the index was created. If the configuration describes an imported vector index in the `schema` style, the next plan moves it there the same way.
 
 ## Example Usage
 
@@ -23,71 +42,7 @@ terraform {
 
 provider "pinecone" {}
 
-# Serverless vector index
-resource "pinecone_index" "serverless" {
-  name      = "tftestindex"
-  dimension = 1536
-  spec = {
-    serverless = {
-      cloud  = "aws"
-      region = "us-east-1"
-    }
-  }
-}
-
-# Serverless vector index with dedicated read capacity
-resource "pinecone_index" "serverless_dedicated" {
-  name      = "tftestindex-dedicated"
-  dimension = 1536
-  spec = {
-    serverless = {
-      cloud  = "aws"
-      region = "us-east-1"
-      read_capacity = {
-        dedicated = {
-          node_type = "b1"
-          replicas  = 1
-          shards    = 1
-        }
-      }
-    }
-  }
-}
-
-# Index with integrated embedding
-resource "pinecone_index" "integrated" {
-  name = "tftestindex-integrated"
-  spec = {
-    serverless = {
-      cloud  = "aws"
-      region = "us-east-1"
-    }
-  }
-  embed = {
-    model = "multilingual-e5-large"
-    field_map = {
-      text = "chunk_text"
-    }
-  }
-}
-
-# BYOC (Bring Your Own Cloud) vector index. BYOC indexes need dedicated read capacity.
-resource "pinecone_index" "byoc" {
-  name      = "tftestindex-byoc"
-  dimension = 1536
-  spec = {
-    byoc = {
-      environment = "my-byoc-env-id"
-      read_capacity = {
-        dedicated = {
-          node_type = "b1"
-          replicas  = 1
-          shards    = 1
-        }
-      }
-    }
-  }
-}
+# ── Indexes described with schema and deployment ─────────────────────────────
 
 # Document index with dense vector, sparse vector, and full-text search fields
 resource "pinecone_index" "document" {
@@ -111,7 +66,7 @@ resource "pinecone_index" "document" {
   }
 }
 
-# Vector index defined by schema, using the reserved _values and _sparse_values fields
+# Vector index, described by the reserved fields _values (dense) and _sparse_values (sparse)
 resource "pinecone_index" "schema_vectors" {
   name = "tftestindex-schema-vectors"
   deployment = {
@@ -122,8 +77,68 @@ resource "pinecone_index" "schema_vectors" {
   }
   schema = {
     fields = {
-      _values        = { dense_vector = { dimension = 1536, metric = "dotproduct" } }
-      _sparse_values = { sparse_vector = {} }
+      _values = { dense_vector = { dimension = 1536, metric = "cosine" } }
+    }
+  }
+}
+
+# BYOC (Bring Your Own Cloud) vector index. BYOC indexes need dedicated read capacity.
+resource "pinecone_index" "schema_byoc" {
+  name = "tftestindex-schema-byoc"
+  deployment = {
+    byoc = {
+      environment = "my-byoc-env-id"
+    }
+  }
+  schema = {
+    fields = {
+      _values = { dense_vector = { dimension = 1536, metric = "cosine" } }
+    }
+  }
+  read_capacity = {
+    dedicated = {
+      node_type = "b1"
+      replicas  = 1
+      shards    = 1
+    }
+  }
+}
+
+# ── Indexes described with dimension, metric, and spec ───────────────────────
+# This style is planned for deprecation. Indexes with integrated embedding still need it.
+
+# Index with integrated embedding
+resource "pinecone_index" "integrated" {
+  name = "tftestindex-integrated"
+  spec = {
+    serverless = {
+      cloud  = "aws"
+      region = "us-east-1"
+    }
+  }
+  embed = {
+    model = "multilingual-e5-large"
+    field_map = {
+      text = "chunk_text"
+    }
+  }
+}
+
+# Serverless vector index with dedicated read capacity
+resource "pinecone_index" "serverless" {
+  name      = "tftestindex"
+  dimension = 1536
+  spec = {
+    serverless = {
+      cloud  = "aws"
+      region = "us-east-1"
+      read_capacity = {
+        dedicated = {
+          node_type = "b1"
+          replicas  = 1
+          shards    = 1
+        }
+      }
     }
   }
 }
@@ -139,25 +154,25 @@ resource "pinecone_index" "schema_vectors" {
 ### Optional
 
 - `cmek_id` (String) The ID of a customer-managed encryption key (CMEK) to encrypt the index with. Only with `schema` and a managed `deployment`, and only when the index is created; changing it replaces the index.
-- `deletion_protection` (String) Whether deletion protection for the index is enabled. You can use 'enabled', or 'disabled'.
+- `deletion_protection` (String) Whether deletion protection is enabled: `enabled` or `disabled`. Defaults to `disabled`. An index with deletion protection enabled can't be deleted.
 - `deployment` (Attributes) Where the index runs. Required with `schema`. Set exactly one of `managed` or `byoc`. Changing it replaces the index. (see [below for nested schema](#nestedatt--deployment))
-- `dimension` (Number) The dimensions of the vectors to be inserted in the index. Required for dense serverless and BYOC indexes without `embed`. Not used with `schema`, where each dense vector field sets its own dimension. For integrated indexes with an embed model, this is optional and will default to the model's dimension if not specified.
-- `embed` (Attributes) Specify the integrated inference embedding configuration for the index. It can only be set when the index is created: `model` and `field_map` can't be changed afterwards, and `embed` can't be added to or removed from an existing index. `read_parameters` and `write_parameters` can be updated in place.
+- `dimension` (Number) The dimension of the index's dense vectors. Required for dense indexes without `embed`; with `embed`, it defaults to the model's dimension. Not used with `schema`, where each dense vector field sets its own dimension. Changing it replaces the index.
+- `embed` (Attributes) The index's integrated embedding: a model hosted by Pinecone that embeds a text field. Only with the `spec` style; the `schema` style doesn't support integrated embedding yet. It can only be set when the index is created: `model` and `field_map` can't be changed afterwards, and `embed` can't be added to or removed from an existing index. `read_parameters` and `write_parameters` can be updated in place.
 
 Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details. (see [below for nested schema](#nestedatt--embed))
-- `metric` (String) The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'. With embed, it defaults to the model's metric. Not used with `schema`, where each dense vector field sets its own metric. The metric can't be changed after the index is created; changing it replaces the index.
-- `read_capacity` (Attributes) Read capacity configuration for an index described with `schema`. With `spec`, set `read_capacity` inside `spec.serverless` or `spec.byoc` instead. Set exactly one of `dedicated` or `on_demand` to select the mode. Omitting `read_capacity` entirely on create selects on-demand, which BYOC indexes don't support: BYOC indexes need `dedicated`. To move an existing index from on-demand to dedicated, set `dedicated`; removing `read_capacity` from config will not change the mode already recorded in state. An index can't move from dedicated back to on-demand. Creating or changing read capacity waits until it's `Ready`, with the configured replicas and shards running; the apply fails if it reports `Error`. (see [below for nested schema](#nestedatt--read_capacity))
+- `metric` (String) The distance metric used for similarity search: `cosine`, `dotproduct`, or `euclidean`. Sparse indexes use `dotproduct`. Defaults to `dotproduct` for sparse indexes, the model's metric with `embed`, and `cosine` otherwise. Not used with `schema`, where each dense vector field sets its own metric. Changing it replaces the index.
+- `read_capacity` (Attributes) Read capacity configuration for an index described with `schema`. With `spec`, set `read_capacity` inside `spec.serverless` or `spec.byoc` instead. BYOC indexes need `dedicated`: they don't support on-demand. Set exactly one of `dedicated` or `on_demand` to select the mode. Leaving `read_capacity` out when the index is created selects on-demand. To move an existing index from on-demand to dedicated, set `dedicated`; removing `read_capacity` from config will not change the mode already recorded in state. An index can't move from dedicated back to on-demand. Creating or changing read capacity waits until it's `Ready`, with the configured replicas and shards running; the apply fails if it reports `Error`. (see [below for nested schema](#nestedatt--read_capacity))
 - `schema` (Attributes) The index's schema: the typed fields its records contain. Use it with `deployment` instead of `dimension`, `metric`, `vector_type`, `spec`, and `embed`. A schema of named fields creates a document index, used with the documents API. A schema made only of the reserved fields `_values` (dense) and `_sparse_values` (sparse) creates a vector index, used with the vectors API. Metadata fields don't need to be declared: they're indexed automatically when you upsert data. The schema can't be changed after the index is created; changing it replaces the index. (see [below for nested schema](#nestedatt--schema))
-- `spec` (Attributes) Where and how a vector index, or an index with integrated embedding, runs. Set exactly one of `serverless`, `byoc`, or `pod`. Not used with `schema`. (see [below for nested schema](#nestedatt--spec))
+- `spec` (Attributes) Where and how the index runs, in the `spec` style. Set exactly one of `serverless`, `byoc`, or `pod`. Not used with `schema`, which uses `deployment` instead. (see [below for nested schema](#nestedatt--spec))
 - `tags` (Map of String) Custom user tags added to an index, at most 20 per index. Keys must be 80 characters or less and contain only letters, digits, `_`, or `-`. Values must be 120 characters or less and consist of printable ASCII characters or spaces. Values can't be empty. To remove a tag, remove its key from the map; to remove every tag, set `tags = {}`. Removing the `tags` attribute leaves the index's tags unchanged.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
-- `vector_type` (String) The index vector type. You can use 'dense' or 'sparse'. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension should not be specified. Not used with `schema`. The vector type can't be changed after the index is created; changing it replaces the index.
+- `vector_type` (String) The type of vectors the index stores: `dense` or `sparse`. A dense index needs a `dimension`, and a sparse index doesn't take one. Not used with `schema`, where the vector fields set the type. Changing it replaces the index.
 
 ### Read-Only
 
 - `host` (String) The URL address where the index is hosted.
-- `id` (String) Index identifier
-- `status` (Attributes) Status (see [below for nested schema](#nestedatt--status))
+- `id` (String) The index's name, which Terraform uses as its ID.
+- `status` (Attributes) The index's status. (see [below for nested schema](#nestedatt--status))
 
 <a id="nestedatt--deployment"></a>
 ### Nested Schema for `deployment`
@@ -194,18 +209,18 @@ Read-Only:
 
 Optional:
 
-- `field_map` (Map of String) Identifies the name of the text field from your document model that will be embedded.
-- `model` (String) the name of the embedding model to use for the index.
+- `field_map` (Map of String) Maps `text` to the name of the record field to embed, for example `{ text = "chunk_text" }`.
+- `model` (String) The name of the embedding model.
 - `read_parameters` (Map of String) The read parameters for the embedding model.
 - `write_parameters` (Map of String) The write parameters for the embedding model.
 
 Read-Only:
 
-- `dimension` (Number) The dimension of the embedding model, specifying the size of the output vector.
+- `dimension` (Number) The dimension of the vectors the model produces. Null for models that produce sparse vectors.
 - `effective_read_parameters` (Map of String) The effective read parameters as returned by the API after apply, including any server-injected defaults not present in `read_parameters`.
 - `effective_write_parameters` (Map of String) The effective write parameters as returned by the API after apply, including any server-injected defaults not present in `write_parameters`.
-- `metric` (String) The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'.
-- `vector_type` (String) The index vector type associated with the model. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension will be nil.
+- `metric` (String) The distance metric the index uses with the model.
+- `vector_type` (String) The type of vectors the model produces: `dense` or `sparse`.
 
 
 <a id="nestedatt--read_capacity"></a>
@@ -221,7 +236,7 @@ Optional:
 
 Optional:
 
-- `node_type` (String) The type of machines to use. Available options: 'b1' and 't1'.
+- `node_type` (String) The node type: `b1` or `t1`.
 - `replicas` (Number) The desired number of replicas.
 - `shards` (Number) The desired number of shards.
 
@@ -311,20 +326,20 @@ Optional:
 
 Optional:
 
-- `byoc` (Attributes) Configuration needed to deploy a BYOC (Bring Your Own Cloud) index. (see [below for nested schema](#nestedatt--spec--byoc))
+- `byoc` (Attributes) A BYOC (Bring Your Own Cloud) index, deployed into your own cloud environment. (see [below for nested schema](#nestedatt--spec--byoc))
 - `pod` (Attributes) Configuration of an existing pod-based index. New pod-based indexes can't be created: Pinecone API version 2026-07 doesn't support it. Existing pod-based indexes can still be imported, scaled with `replicas` and `pod_type`, and deleted. (see [below for nested schema](#nestedatt--spec--pod))
-- `serverless` (Attributes) Configuration needed to deploy a serverless index. (see [below for nested schema](#nestedatt--spec--serverless))
+- `serverless` (Attributes) A serverless index. (see [below for nested schema](#nestedatt--spec--serverless))
 
 <a id="nestedatt--spec--byoc"></a>
 ### Nested Schema for `spec.byoc`
 
 Required:
 
-- `environment` (String) The environment identifier for the BYOC index.
+- `environment` (String) The BYOC environment where the index is hosted. Changing it replaces the index.
 
 Optional:
 
-- `read_capacity` (Attributes) Read capacity configuration for the index. Set exactly one of `dedicated` or `on_demand` to select the mode. Omitting `read_capacity` entirely on create selects on-demand, which BYOC indexes don't support: BYOC indexes need `dedicated`. To move an existing index from on-demand to dedicated, set `dedicated`; removing `read_capacity` from config will not change the mode already recorded in state. An index can't move from dedicated back to on-demand. Creating or changing read capacity waits until it's `Ready`, with the configured replicas and shards running; the apply fails if it reports `Error`. (see [below for nested schema](#nestedatt--spec--byoc--read_capacity))
+- `read_capacity` (Attributes) Read capacity configuration for the index. BYOC indexes need `dedicated`: they don't support on-demand. Set exactly one of `dedicated` or `on_demand` to select the mode. Leaving `read_capacity` out when the index is created selects on-demand. To move an existing index from on-demand to dedicated, set `dedicated`; removing `read_capacity` from config will not change the mode already recorded in state. An index can't move from dedicated back to on-demand. Creating or changing read capacity waits until it's `Ready`, with the configured replicas and shards running; the apply fails if it reports `Error`. (see [below for nested schema](#nestedatt--spec--byoc--read_capacity))
 - `schema` (Attributes, Deprecated) Schema for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when `schema` is present, only fields listed in `fields` with `filterable: true` are indexed. This field can only be set at index creation time — setting or changing it requires replacing the index, while removing it leaves the index in place. New serverless indexes accept it only together with `embed`, and new BYOC indexes don't accept it; other indexes index metadata automatically when you upsert data. (see [below for nested schema](#nestedatt--spec--byoc--schema))
 
 <a id="nestedatt--spec--byoc--read_capacity"></a>
@@ -340,7 +355,7 @@ Optional:
 
 Optional:
 
-- `node_type` (String) The type of machines to use. Available options: 'b1' and 't1'.
+- `node_type` (String) The node type: `b1` or `t1`.
 - `replicas` (Number) The desired number of replicas.
 - `shards` (Number) The desired number of shards.
 
@@ -384,7 +399,7 @@ Optional:
 
 Read-Only:
 
-- `pods` (Number) The number of pods to be used in the index. This should be equal to shards x replicas.'
+- `pods` (Number) The number of pods the index uses: `shards` × `replicas`.
 
 <a id="nestedatt--spec--pod--metadata_config"></a>
 ### Nested Schema for `spec.pod.metadata_config`
@@ -400,12 +415,12 @@ Required:
 
 Required:
 
-- `cloud` (String) The public cloud where you would like your index hosted. [gcp|aws|azure]
-- `region` (String) The region where you would like your index to be created.
+- `cloud` (String) The public cloud where the index is hosted: `aws`, `gcp`, or `azure`. Changing it replaces the index.
+- `region` (String) The region where the index is hosted. Changing it replaces the index.
 
 Optional:
 
-- `read_capacity` (Attributes) Read capacity configuration for the index. Set exactly one of `dedicated` or `on_demand` to select the mode. Omitting `read_capacity` entirely on create selects on-demand, which BYOC indexes don't support: BYOC indexes need `dedicated`. To move an existing index from on-demand to dedicated, set `dedicated`; removing `read_capacity` from config will not change the mode already recorded in state. An index can't move from dedicated back to on-demand. Creating or changing read capacity waits until it's `Ready`, with the configured replicas and shards running; the apply fails if it reports `Error`. (see [below for nested schema](#nestedatt--spec--serverless--read_capacity))
+- `read_capacity` (Attributes) Read capacity configuration for the index. Set exactly one of `dedicated` or `on_demand` to select the mode. Leaving `read_capacity` out when the index is created selects on-demand. To move an existing index from on-demand to dedicated, set `dedicated`; removing `read_capacity` from config will not change the mode already recorded in state. An index can't move from dedicated back to on-demand. Creating or changing read capacity waits until it's `Ready`, with the configured replicas and shards running; the apply fails if it reports `Error`. (see [below for nested schema](#nestedatt--spec--serverless--read_capacity))
 - `schema` (Attributes, Deprecated) Schema for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when `schema` is present, only fields listed in `fields` with `filterable: true` are indexed. This field can only be set at index creation time — setting or changing it requires replacing the index, while removing it leaves the index in place. New serverless indexes accept it only together with `embed`, and new BYOC indexes don't accept it; other indexes index metadata automatically when you upsert data. (see [below for nested schema](#nestedatt--spec--serverless--schema))
 
 <a id="nestedatt--spec--serverless--read_capacity"></a>
@@ -421,7 +436,7 @@ Optional:
 
 Optional:
 
-- `node_type` (String) The type of machines to use. Available options: 'b1' and 't1'.
+- `node_type` (String) The node type: `b1` or `t1`.
 - `replicas` (Number) The desired number of replicas.
 - `shards` (Number) The desired number of shards.
 
@@ -455,7 +470,7 @@ Required:
 Optional:
 
 - `create` (String) How long to wait for a new index, and any read capacity it configures, to be ready. Defaults to 10 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
-- `delete` (String) Timeout defaults to 10 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
+- `delete` (String) How long to wait for the index to be deleted. Defaults to 10 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
 - `update` (String) How long to wait for a pod-based index to finish scaling, or for a read capacity change to finish. Defaults to 10 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
 
 
@@ -464,8 +479,8 @@ Optional:
 
 Read-Only:
 
-- `ready` (Boolean) Ready.
-- `state` (String) Initializing InitializationFailed ScalingUp ScalingDown ScalingUpPodSize Terminating Ready Failed Disabled
+- `ready` (Boolean) Whether the index is ready to use.
+- `state` (String) The index's state: `Initializing`, `InitializationFailed`, `ScalingUp`, `ScalingDown`, `ScalingUpPodSize`, `Terminating`, `Ready`, `Failed`, or `Disabled`.
 
 ## Import
 
@@ -474,7 +489,8 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# Import an index by name. Document indexes are imported with schema and deployment; vector
-# indexes, including those with integrated embedding, are imported with spec.
+# Import an index by name. Document indexes are recorded in the schema style, and every other index in
+# the spec style. If the configuration describes an imported vector index in the schema style, the
+# next plan moves it there with an in-place update that only changes Terraform state.
 terraform import pinecone_index.example my-index
 ```

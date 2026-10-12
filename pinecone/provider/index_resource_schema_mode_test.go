@@ -263,8 +263,6 @@ func TestIndexResourceModifyPlan_schemaMode(t *testing.T) {
 	vector := withSchemaMode(t, s, base, schemaFields{"_values": denseField(1024, "cosine")}, managedDeployment())
 	retagged := document
 	retagged.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{"team": types.StringValue("search")})
-	renamedVector := vector
-	renamedVector.Name = types.StringValue("my-renamed-index")
 	byocVector := withSchemaMode(t, s, base, schemaFields{"_values": denseField(1024, "cosine")}, byocDeployment())
 	byocDedicated := withReadCapacity(t, s, byocVector, true)
 
@@ -276,9 +274,6 @@ func TestIndexResourceModifyPlan_schemaMode(t *testing.T) {
 	}{
 		{name: "create document index", config: document},
 		{name: "update document index tags", config: retagged, state: &document},
-		{name: "spec to schema", config: vector, state: &base, wantErr: "An index can't change how it's described"},
-		{name: "schema to spec", config: base, state: &vector, wantErr: "An index can't change how it's described"},
-		{name: "spec to schema while renaming", config: renamedVector, state: &base, wantErr: "An index can't change how it's described"},
 		{name: "document index dedicated to on-demand", config: withReadCapacity(t, s, document, false), state: pointerTo(withReadCapacity(t, s, document, true)),
 			wantErr: "Read capacity can't return to on-demand"},
 		{name: "document index on-demand to dedicated", config: withReadCapacity(t, s, document, true), state: pointerTo(withReadCapacity(t, s, document, false))},

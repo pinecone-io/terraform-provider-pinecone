@@ -8,7 +8,9 @@ description: |-
 # Upgrading to version 5.0.0
 
 Version 5.0.0 moves the provider to [go-pinecone v7](https://github.com/pinecone-io/go-pinecone) and Pinecone API
-version `2026-07`, and adds support for creating indexes from an explicit schema.
+version `2026-07`, and adds support for creating indexes from an explicit schema. Describing indexes with `dimension`,
+`metric`, `vector_type`, `spec`, and `embed` is now planned for deprecation, and existing vector indexes can
+[move to the new style](#moving-an-index-to-the-schema-style) without being replaced.
 
 Most configurations written for version 4 plan with no changes. The exceptions below are reported as errors at plan
 time, before anything is changed. Pin the new version, run `terraform plan`, and work through any errors:
@@ -122,11 +124,16 @@ configuration.
 
 The same applies to `embed`, `spec`, and `status` on the `pinecone_index` data source.
 
-## New: indexes defined by schema and deployment
+## New: the `schema` style
 
-`pinecone_index` can describe an index with `schema` and `deployment`, the way API version `2026-07` does, instead
-of `dimension`, `metric`, `vector_type`, and `spec`. A schema of named fields creates a document index, used with the
-documents API, which can combine dense vector, sparse vector, and full-text-search fields:
+`pinecone_index` now describes an index in one of two styles:
+
+- **The `schema` style**, with `schema` and `deployment`, the way API version `2026-07` describes indexes.
+- **The `spec` style**, with `dimension`, `metric`, `vector_type`, `spec`, and `embed`, the way earlier versions of the
+  provider described indexes. It's planned for deprecation.
+
+In the `schema` style, a schema of named fields creates a document index, used with the documents API, which can
+combine dense vector, sparse vector, and full-text-search fields:
 
 ```terraform
 resource "pinecone_index" "articles" {
@@ -146,7 +153,7 @@ resource "pinecone_index" "articles" {
 ```
 
 A schema made only of the reserved fields `_values` (dense) and `_sparse_values` (sparse) creates a vector index,
-used with the vectors API, the same kind of index `dimension` and `metric` create:
+used with the vectors API, the same kind of index the `spec` style creates:
 
 ```terraform
 resource "pinecone_index" "products" {
@@ -166,14 +173,75 @@ Things to know:
 
 - A configuration uses one style or the other. `schema` and `deployment` can't be combined with `dimension`,
   `metric`, `vector_type`, `spec`, or `embed`.
-- An existing index can't switch between the two styles. Keep describing existing indexes the way they were created.
 - With `schema`, read capacity and encryption are set at the top level: `read_capacity` and `cmek_id`.
 - Changing `schema`, `deployment`, or `cmek_id` replaces the index.
 - Document indexes run only on managed deployments.
-- `terraform import` reads document indexes with `schema` and vector indexes with `spec`, including vector indexes
-  created with a `schema` of reserved fields. To import a vector index, describe it with `dimension`, `metric`, and
-  `spec`. Otherwise every plan fails with `An index can't change how it's described`.
-- Indexes with integrated embedding (`embed`) are still created with `spec`.
+- Indexes with integrated embedding (`embed`) are still created in the `spec` style.
+
+### Moving an index to the `schema` style
+
+An existing vector index can move from the `spec` style to the `schema` style now. Rewrite its configuration to
+describe the same index, and the plan shows an in-place update that only changes Terraform state: the API isn't
+called, and the index isn't replaced.
+
+```terraform
+# Before: the spec style
+resource "pinecone_index" "products" {
+  name      = "products"
+  dimension = 1024
+  metric    = "dotproduct"
+  spec = {
+    serverless = { cloud = "aws", region = "us-east-1" }
+  }
+}
+
+# After: the schema style
+resource "pinecone_index" "products" {
+  name = "products"
+  deployment = {
+    managed = { cloud = "aws", region = "us-east-1" }
+  }
+  schema = {
+    fields = {
+      _values = { dense_vector = { dimension = 1024, metric = "dotproduct" } }
+    }
+  }
+}
+```
+
+Each attribute maps like this:
+
+| `spec` style | `schema` style |
+|---|---|
+| `dimension` and `metric`, on a dense index | `schema.fields._values = { dense_vector = { dimension = ..., metric = ... } }` |
+| `vector_type = "sparse"` | `schema.fields._sparse_values = { sparse_vector = {} }` |
+| `spec.serverless.cloud` and `region` | `deployment.managed.cloud` and `region` |
+| `spec.byoc.environment` | `deployment.byoc.environment` |
+| `spec.serverless.read_capacity` or `spec.byoc.read_capacity` | `read_capacity` |
+| `spec.serverless.schema` or `spec.byoc.schema` (deprecated) | Remove it. Metadata is indexed automatically. |
+| `name`, `deletion_protection`, `tags`, `timeouts` | Unchanged |
+
+The dimension, metric, and location have to match the index. If they don't, the plan fails with `The configuration
+describes a different index`, and nothing changes. `metric` always has to be set on `_values`, even if the `spec`
+style left it to its default of `cosine`. `read_capacity` can be left out, as in the `spec` style, which keeps the
+index's current read capacity.
+
+Changes that apply in place, such as to `tags` or `read_capacity`, can be made in the same apply. The plan then shows
+them alongside the move. A plan that replaces the index means something besides the style changed, such as `name`:
+check the configuration before applying.
+
+After the move, `deployment.managed.environment`, which Pinecone reports for serverless indexes, shows as known
+after apply. It's read-only, and the `spec` style didn't record it.
+
+The move is one way. An index in the `schema` style can't move back to the `spec` style: the plan fails with `An
+index can't move back to spec`. Indexes with integrated embedding and pod-based indexes can't move yet, and keep the
+`spec` style for now.
+
+### Importing indexes
+
+Import records document indexes in the `schema` style and every other index in the `spec` style, however the index
+was created, because Terraform doesn't pass the configuration to an import. A vector index can still be imported into
+a `schema` style configuration: the next plan moves it there with the same in-place update.
 
 ## New data source attributes
 
@@ -197,6 +265,8 @@ Some existing data source attributes changed:
   schema, and are null for indexes created without one. Read the top-level `schema` for the full field list.
 - `spec.pod.metadata_config.indexed` is always null, because API version `2026-07` no longer reports it.
 - `status.state` can now be `Failed` or `Disabled`. `ScalingDownPodSize` and `Upgrading` are no longer reported.
+- `dimension`, `metric`, and `vector_type` are derived from the index's vector fields, and are null when they don't
+  determine a single value, as for an index with only full-text-search fields.
 
 ## Other changes
 

@@ -3,12 +3,12 @@
 page_title: "pinecone_index Data Source - terraform-provider-pinecone"
 subcategory: ""
 description: |-
-  Index data source
+  The pinecone_index data source reads an existing index. It reports the index both ways the pinecone_index resource describes indexes: with schema and deployment, and with dimension, metric, vector_type, spec, and embed. The second set is derived from the first.
 ---
 
 # pinecone_index (Data Source)
 
-Index data source
+The `pinecone_index` data source reads an existing index. It reports the index both ways the `pinecone_index` resource describes indexes: with `schema` and `deployment`, and with `dimension`, `metric`, `vector_type`, `spec`, and `embed`. The second set is derived from the first.
 
 ## Example Usage
 
@@ -53,20 +53,20 @@ output "articles_full_text_search_fields" {
 
 ### Required
 
-- `name` (String) Index name
+- `name` (String) The index's name.
 
 ### Read-Only
 
 - `cmek_id` (String) The ID of the customer-managed encryption key used to encrypt the index, if any.
-- `deletion_protection` (String) Index deletion protection can be one of 'enabled' or 'disabled'.
+- `deletion_protection` (String) Whether deletion protection is enabled: `enabled` or `disabled`.
 - `deployment` (Attributes) Where the index runs. Exactly one of `managed`, `pod`, or `byoc` is set. (see [below for nested schema](#nestedatt--deployment))
-- `dimension` (Number) Index dimension
-- `embed` (Attributes) Specify the integrated inference embedding configuration for the index. The model and field map are fixed when the index is created; the read and write parameters can be updated.
+- `dimension` (Number) The dimension of the index's dense vectors. Derived from the index's vector fields in `schema`: null when they don't determine a single value, as for an index with only full-text-search fields.
+- `embed` (Attributes) The index's integrated embedding, for an index created with embed, or a document index whose schema embeds a text field. Null for other indexes.
 
 Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details. (see [below for nested schema](#nestedatt--embed))
 - `host` (String) The URL address where the index is hosted.
-- `id` (String) Index identifier
-- `metric` (String) Index metric can be one of 'cosine', 'dotproduct', or 'euclidean'.
+- `id` (String) The index's name.
+- `metric` (String) The distance metric used for similarity search: `cosine`, `dotproduct`, or `euclidean`. Derived from the index's vector fields in `schema`: null when they don't determine a single value, as for an index with only full-text-search fields.
 - `private_host` (String) The private endpoint URL of the index, if any.
 - `read_capacity` (Attributes) Read capacity configuration for the index. (see [below for nested schema](#nestedatt--read_capacity))
 - `schema` (Attributes) The index's schema: the typed fields its records can contain. (see [below for nested schema](#nestedatt--schema))
@@ -75,7 +75,7 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 - `spec` (Attributes) Where and how the index runs, in the form used by `spec` on the `pinecone_index` resource. The same information is in `deployment`. (see [below for nested schema](#nestedatt--spec))
 - `status` (Attributes) The index's status. (see [below for nested schema](#nestedatt--status))
 - `tags` (Map of String) Custom user tags added to an index, at most 20 per index. Keys must be 80 characters or less and contain only letters, digits, `_`, or `-`. Values must be 120 characters or less and consist of printable ASCII characters or spaces.
-- `vector_type` (String) Index vector type, for example 'dense' or 'sparse'.
+- `vector_type` (String) The type of vectors the index stores: `dense` or `sparse`. Derived from the index's vector fields in `schema`: null when they don't determine a single value, as for an index with only full-text-search fields.
 
 <a id="nestedatt--deployment"></a>
 ### Nested Schema for `deployment`
@@ -99,7 +99,7 @@ Read-Only:
 
 Read-Only:
 
-- `cloud` (String) The public cloud where the index is hosted.
+- `cloud` (String) The public cloud where the index is hosted: `aws`, `gcp`, or `azure`.
 - `environment` (String) The Pinecone environment hosting the index.
 - `region` (String) The region where the index is hosted.
 
@@ -121,12 +121,12 @@ Read-Only:
 
 Read-Only:
 
-- `dimension` (Number) The dimension of the embedding model, specifying the size of the output vector.
-- `field_map` (Map of String) Identifies the name of the text field from your document model that will be embedded.
-- `metric` (String) The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'.
-- `model` (String) the name of the embedding model to use for the index.
+- `dimension` (Number) The dimension of the vectors the model produces. Null for models that produce sparse vectors.
+- `field_map` (Map of String) Maps `text` to the name of the record field that's embedded.
+- `metric` (String) The distance metric the index uses with the model.
+- `model` (String) The name of the embedding model.
 - `read_parameters` (Map of String) The read parameters for the embedding model.
-- `vector_type` (String) The index vector type associated with the model. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension will be nil.
+- `vector_type` (String) The type of vectors the model produces: `dense` or `sparse`.
 - `write_parameters` (Map of String) The write parameters for the embedding model.
 
 
@@ -299,16 +299,16 @@ Read-Only:
 
 Read-Only:
 
-- `byoc` (Attributes) Configuration for a BYOC (Bring Your Own Cloud) index. (see [below for nested schema](#nestedatt--spec--byoc))
-- `pod` (Attributes) Configuration needed to deploy a pod-based index. (see [below for nested schema](#nestedatt--spec--pod))
-- `serverless` (Attributes) Configuration needed to deploy a serverless index. (see [below for nested schema](#nestedatt--spec--serverless))
+- `byoc` (Attributes) A BYOC (Bring Your Own Cloud) index. (see [below for nested schema](#nestedatt--spec--byoc))
+- `pod` (Attributes) A pod-based index. (see [below for nested schema](#nestedatt--spec--pod))
+- `serverless` (Attributes) A serverless index. (see [below for nested schema](#nestedatt--spec--serverless))
 
 <a id="nestedatt--spec--byoc"></a>
 ### Nested Schema for `spec.byoc`
 
 Read-Only:
 
-- `environment` (String) The environment identifier for the BYOC index.
+- `environment` (String) The BYOC environment where the index is hosted.
 - `read_capacity` (Attributes) Read capacity configuration for the index. (see [below for nested schema](#nestedatt--spec--byoc--read_capacity))
 - `schema` (Attributes) Schema for the behavior of Pinecone's internal metadata index. When present, only fields listed in `fields` with `filterable: true` are indexed. (see [below for nested schema](#nestedatt--spec--byoc--schema))
 
@@ -371,7 +371,7 @@ Read-Only:
 - `environment` (String) The environment where the index is hosted.
 - `metadata_config` (Attributes) Configuration for the behavior of Pinecone's internal metadata index. The API no longer reports this setting, so `indexed` is always null. Indexed metadata fields are listed in the top-level `schema`. (see [below for nested schema](#nestedatt--spec--pod--metadata_config))
 - `pod_type` (String) The type of pod to use. One of s1, p1, or p2 appended with . and one of x1, x2, x4, or x8.
-- `pods` (Number) The number of pods to be used in the index. This should be equal to shards x replicas.'
+- `pods` (Number) The number of pods the index uses: `shards` × `replicas`.
 - `replicas` (Number) The number of replicas. Replicas duplicate your index. They provide higher availability and throughput. Replicas can be scaled up or down as your needs change.
 - `shards` (Number) The number of shards. Shards split your data across multiple pods so you can fit more data into an index.
 - `source_collection` (String) The name of the collection the index was created from, if any.
@@ -390,7 +390,7 @@ Read-Only:
 
 Read-Only:
 
-- `cloud` (String) The public cloud where the index is hosted.
+- `cloud` (String) The public cloud where the index is hosted: `aws`, `gcp`, or `azure`.
 - `read_capacity` (Attributes) Read capacity configuration for the index. (see [below for nested schema](#nestedatt--spec--serverless--read_capacity))
 - `region` (String) The region where the index is hosted.
 - `schema` (Attributes) Schema for the behavior of Pinecone's internal metadata index. When present, only fields listed in `fields` with `filterable: true` are indexed. (see [below for nested schema](#nestedatt--spec--serverless--schema))
@@ -452,5 +452,5 @@ Read-Only:
 
 Read-Only:
 
-- `ready` (Boolean) Ready.
-- `state` (String) Initializing InitializationFailed ScalingUp ScalingDown ScalingUpPodSize Terminating Ready Failed Disabled
+- `ready` (Boolean) Whether the index is ready to use.
+- `state` (String) The index's state: `Initializing`, `InitializationFailed`, `ScalingUp`, `ScalingDown`, `ScalingUpPodSize`, `Terminating`, `Ready`, `Failed`, or `Disabled`.
