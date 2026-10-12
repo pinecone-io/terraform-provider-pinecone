@@ -34,28 +34,29 @@ func (d *IndexesDataSource) Metadata(ctx context.Context, req datasource.Metadat
 func (d *IndexesDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		// This description is used by the documentation generator and the language server.
-		MarkdownDescription: "Indexes data source",
+		MarkdownDescription: "The `pinecone_indexes` data source lists the indexes in the project. Each index is reported both ways the `pinecone_index` resource describes indexes: " +
+			"with `schema` and `deployment`, and with `dimension`, `metric`, `vector_type`, `spec`, and `embed`. The second set is derived from the first.",
 
 		Attributes: map[string]schema.Attribute{
 			"indexes": schema.ListNestedAttribute{
-				MarkdownDescription: "List of the indexes in your project",
+				MarkdownDescription: "The indexes in the project.",
 				Computed:            true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: withSharedIndexDSAttributes(map[string]schema.Attribute{
 						"name": schema.StringAttribute{
-							MarkdownDescription: "Index name",
+							MarkdownDescription: "The index's name.",
 							Computed:            true,
 						},
 						"dimension": schema.Int32Attribute{
-							MarkdownDescription: "Index dimension",
+							MarkdownDescription: "The dimension of the index's dense vectors. Derived from the index's vector fields in `schema`: null when they don't determine a single value, as for an index with only full-text-search fields.",
 							Computed:            true,
 						},
 						"metric": schema.StringAttribute{
-							MarkdownDescription: "Index metric",
+							MarkdownDescription: "The distance metric used for similarity search: `cosine`, `dotproduct`, or `euclidean`. Derived from the index's vector fields in `schema`: null when they don't determine a single value, as for an index with only full-text-search fields.",
 							Computed:            true,
 						},
 						"deletion_protection": schema.StringAttribute{
-							MarkdownDescription: "Index deletion protection configuration",
+							MarkdownDescription: "Whether deletion protection is enabled: `enabled` or `disabled`.",
 							Computed:            true,
 						},
 						"tags": schema.MapAttribute{
@@ -64,7 +65,7 @@ func (d *IndexesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 							ElementType:         types.StringType,
 						},
 						"vector_type": schema.StringAttribute{
-							MarkdownDescription: "Index vector type",
+							MarkdownDescription: "The type of vectors the index stores: `dense` or `sparse`. Derived from the index's vector fields in `schema`: null when they don't determine a single value, as for an index with only full-text-search fields.",
 							Computed:            true,
 						},
 						"host": schema.StringAttribute{
@@ -76,8 +77,8 @@ func (d *IndexesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 							Computed:    true,
 							Attributes: map[string]schema.Attribute{
 								"pod": schema.SingleNestedAttribute{
-									Description: "Configuration needed to deploy a pod-based index.",
-									Computed:    true,
+									MarkdownDescription: "A pod-based index.",
+									Computed:            true,
 									Attributes: map[string]schema.Attribute{
 										"environment": schema.StringAttribute{
 											MarkdownDescription: "The environment where the index is hosted.",
@@ -96,7 +97,7 @@ func (d *IndexesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 											Computed:            true,
 										},
 										"pods": schema.Int64Attribute{
-											MarkdownDescription: "The number of pods to be used in the index. This should be equal to shards x replicas.'",
+											MarkdownDescription: "The number of pods the index uses: `shards` × `replicas`.",
 											Computed:            true,
 										},
 										"metadata_config": schema.SingleNestedAttribute{
@@ -117,11 +118,11 @@ func (d *IndexesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 									},
 								},
 								"serverless": schema.SingleNestedAttribute{
-									Description: "Configuration needed to deploy a serverless index.",
-									Computed:    true,
+									MarkdownDescription: "A serverless index.",
+									Computed:            true,
 									Attributes: map[string]schema.Attribute{
 										"cloud": schema.StringAttribute{
-											Description: "The public cloud where the index is hosted.",
+											Description: "The public cloud where the index is hosted: `aws`, `gcp`, or `azure`.",
 											Computed:    true,
 										},
 										"region": schema.StringAttribute{
@@ -133,11 +134,11 @@ func (d *IndexesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 									},
 								},
 								"byoc": schema.SingleNestedAttribute{
-									Description: "Configuration for a BYOC (Bring Your Own Cloud) index.",
-									Computed:    true,
+									MarkdownDescription: "A BYOC (Bring Your Own Cloud) index.",
+									Computed:            true,
 									Attributes: map[string]schema.Attribute{
 										"environment": schema.StringAttribute{
-											MarkdownDescription: "The environment identifier for the BYOC index.",
+											MarkdownDescription: "The BYOC environment where the index is hosted.",
 											Computed:            true,
 										},
 										"read_capacity": readCapacityDSSchema(),
@@ -147,31 +148,31 @@ func (d *IndexesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 							},
 						},
 						"embed": schema.SingleNestedAttribute{
-							Description: `Specify the integrated inference embedding configuration for the index. The model and field map are fixed when the index is created; the read and write parameters can be updated.
+							Description: `The index's integrated embedding, for an index created with embed, or a document index whose schema embeds a text field. Null for other indexes.
 			
 Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details.`,
 							Computed: true,
 							Attributes: map[string]schema.Attribute{
 								"model": schema.StringAttribute{
 									Computed:    true,
-									Description: "the name of the embedding model to use for the index.",
+									Description: "The name of the embedding model.",
 								},
 								"field_map": schema.MapAttribute{
-									Computed:    true,
-									Description: "Identifies the name of the text field from your document model that will be embedded.",
-									ElementType: types.StringType,
+									Computed:            true,
+									MarkdownDescription: "Maps `text` to the name of the record field that's embedded.",
+									ElementType:         types.StringType,
 								},
 								"metric": schema.StringAttribute{
 									Computed:    true,
-									Description: "The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'.",
+									Description: "The distance metric the index uses with the model.",
 								},
 								"dimension": schema.Int64Attribute{
 									Computed:    true,
-									Description: "The dimension of the embedding model, specifying the size of the output vector.",
+									Description: "The dimension of the vectors the model produces. Null for models that produce sparse vectors.",
 								},
 								"vector_type": schema.StringAttribute{
-									Computed:    true,
-									Description: "The index vector type associated with the model. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension will be nil.",
+									Computed:            true,
+									MarkdownDescription: "The type of vectors the model produces: `dense` or `sparse`.",
 								},
 								"read_parameters": schema.MapAttribute{
 									Computed:    true,
@@ -190,11 +191,11 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 							Computed:    true,
 							Attributes: map[string]schema.Attribute{
 								"ready": schema.BoolAttribute{
-									Description: "Ready.",
+									Description: "Whether the index is ready to use.",
 									Computed:    true,
 								},
 								"state": schema.StringAttribute{
-									MarkdownDescription: "Initializing InitializationFailed ScalingUp ScalingDown ScalingUpPodSize Terminating Ready Failed Disabled",
+									MarkdownDescription: indexStateDescription,
 									Computed:            true,
 								},
 							},
@@ -203,7 +204,7 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 				},
 			},
 			"id": schema.StringAttribute{
-				MarkdownDescription: "Indexes identifier",
+				MarkdownDescription: "The data source's identifier.",
 				Computed:            true,
 			},
 		},

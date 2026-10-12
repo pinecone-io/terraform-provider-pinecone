@@ -63,11 +63,23 @@ func (r *IndexResource) Metadata(ctx context.Context, req resource.MetadataReque
 func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		// This description is used by the documentation generator and the language server.
-		MarkdownDescription: "The `pinecone_index` resource lets you create and manage indexes in Pinecone. Learn more about indexes in the [docs](https://docs.pinecone.io/guides/indexes/understanding-indexes).",
+		MarkdownDescription: "The `pinecone_index` resource creates and manages a Pinecone index. Learn more about indexes in the " +
+			"[docs](https://docs.pinecone.io/guides/indexes/understanding-indexes).\n\n" +
+			"An index is described in one of two ways:\n\n" +
+			"- **With `schema` and `deployment`**, the way Pinecone API version `2026-07` describes indexes. A schema of named fields " +
+			"creates a document index, which combines dense vector, sparse vector, and full-text-search fields. A schema made only of the " +
+			"reserved fields `_values` and `_sparse_values` creates a vector index. Use this style for new indexes without integrated embedding.\n\n" +
+			"- **With `dimension`, `metric`, `vector_type`, `spec`, and `embed`**, the style earlier versions of the provider used. It " +
+			"describes vector indexes, indexes with integrated embedding, and existing pod-based indexes. This style is planned for " +
+			"deprecation. Integrated embedding and pod-based indexes still need it for now.\n\n" +
+			"A configuration uses one style or the other. To move an existing vector index from `spec` to `schema` and `deployment`, " +
+			"rewrite its configuration: as long as it describes the same index, the plan updates it in place, without calling the API or " +
+			"replacing the index. An index can't move back to `spec`. `terraform import` records document indexes with `schema` and " +
+			"other indexes with `spec`. If the configuration describes an imported vector index with `schema`, the next plan moves it there.",
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				MarkdownDescription: "Index identifier",
+				MarkdownDescription: "The index's name, which Terraform uses as its ID.",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -84,32 +96,35 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				},
 			},
 			"dimension": schema.Int32Attribute{
-				MarkdownDescription: "The dimensions of the vectors to be inserted in the index. Required for dense serverless and BYOC indexes without `embed`. Not used with `schema`, where each dense vector field sets its own dimension. For integrated indexes with an embed model, this is optional and will default to the model's dimension if not specified.",
-				Optional:            true,
-				Computed:            true,
+				MarkdownDescription: "The dimension of the index's dense vectors. Required for dense indexes without `embed`; with `embed`, it defaults to the model's dimension. " +
+					"Not used with `schema`, where each dense vector field sets its own dimension. Changing it replaces the index.",
+				Optional: true,
+				Computed: true,
 				Validators: []validator.Int32{
 					int32validator.AtLeast(1),
 				},
 				PlanModifiers: []planmodifier.Int32{
 					int32planmodifier.UseStateForUnknown(),
-					int32planmodifier.RequiresReplace(),
+					requiresReplaceUnlessStyleSwitchInt32(),
 				},
 			},
 			"metric": schema.StringAttribute{
-				MarkdownDescription: "The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'. With embed, it defaults to the model's metric. Not used with `schema`, where each dense vector field sets its own metric. The metric can't be changed after the index is created; changing it replaces the index.",
-				Optional:            true,
-				Computed:            true,
+				MarkdownDescription: "The distance metric used for similarity search: `cosine`, `dotproduct`, or `euclidean`. Sparse indexes use `dotproduct`. " +
+					"Defaults to `dotproduct` for sparse indexes, the model's metric with `embed`, and `cosine` otherwise. " +
+					"Not used with `schema`, where each dense vector field sets its own metric. Changing it replaces the index.",
+				Optional: true,
+				Computed: true,
 				Validators: []validator.String{
 					stringvalidator.OneOf([]string{"euclidean", "cosine", "dotproduct"}...),
 				},
 				PlanModifiers: []planmodifier.String{
 					specMetricDefault{},
 					stringplanmodifier.UseStateForUnknown(),
-					stringplanmodifier.RequiresReplace(),
+					requiresReplaceUnlessStyleSwitchString(),
 				},
 			},
 			"deletion_protection": schema.StringAttribute{
-				MarkdownDescription: "Whether deletion protection for the index is enabled. You can use 'enabled', or 'disabled'.",
+				MarkdownDescription: "Whether deletion protection is enabled: `enabled` or `disabled`. Defaults to `disabled`. An index with deletion protection enabled can't be deleted.",
 				Optional:            true,
 				Computed:            true,
 				Default:             stringdefault.StaticString("disabled"),
@@ -118,15 +133,16 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				},
 			},
 			"vector_type": schema.StringAttribute{
-				MarkdownDescription: "The index vector type. You can use 'dense' or 'sparse'. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension should not be specified. Not used with `schema`. The vector type can't be changed after the index is created; changing it replaces the index.",
-				Optional:            true,
-				Computed:            true,
+				MarkdownDescription: "The type of vectors the index stores: `dense` or `sparse`. A dense index needs a `dimension`, and a sparse index doesn't take one. " +
+					"Not used with `schema`, where the vector fields set the type. Changing it replaces the index.",
+				Optional: true,
+				Computed: true,
 				Validators: []validator.String{
 					stringvalidator.OneOf([]string{"dense", "sparse"}...),
 				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
-					stringplanmodifier.RequiresReplace(),
+					requiresReplaceUnlessStyleSwitchString(),
 				},
 			},
 			"tags": schema.MapAttribute{
@@ -145,9 +161,10 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"schema":        indexSchemaResourceAttribute(),
-			"deployment":    indexDeploymentResourceAttribute(),
-			"read_capacity": readCapacitySchema("Read capacity configuration for an index described with `schema`. With `spec`, set `read_capacity` inside `spec.serverless` or `spec.byoc` instead. "),
+			"schema":     indexSchemaResourceAttribute(),
+			"deployment": indexDeploymentResourceAttribute(),
+			"read_capacity": readCapacitySchema("Read capacity configuration for an index described with `schema`. With `spec`, set `read_capacity` inside `spec.serverless` or `spec.byoc` instead. " +
+				"BYOC indexes need `dedicated`: they don't support on-demand. "),
 			"cmek_id": schema.StringAttribute{
 				MarkdownDescription: "The ID of a customer-managed encryption key (CMEK) to encrypt the index with. Only with `schema` and a managed " +
 					"`deployment`, and only when the index is created; changing it replaces the index.",
@@ -155,12 +172,13 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				Computed: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
-					stringplanmodifier.RequiresReplace(),
+					requiresReplaceUnlessStyleSwitchString(),
 				},
 			},
 			"spec": schema.SingleNestedAttribute{
-				MarkdownDescription: "Where and how a vector index, or an index with integrated embedding, runs. Set exactly one of `serverless`, `byoc`, or `pod`. Not used with `schema`.",
-				Optional:            true,
+				MarkdownDescription: "Where and how the index runs, for an index described with `dimension` and `metric`. Set exactly one of `serverless`, `byoc`, or `pod`. " +
+					"Not used with `schema`, which uses `deployment` instead.",
+				Optional: true,
 				Attributes: map[string]schema.Attribute{
 					"pod": schema.SingleNestedAttribute{
 						MarkdownDescription: "Configuration of an existing pod-based index. New pod-based indexes can't be created: " +
@@ -199,7 +217,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 								Required: true,
 							},
 							"pods": schema.Int64Attribute{
-								MarkdownDescription: "The number of pods to be used in the index. This should be equal to shards x replicas.'",
+								MarkdownDescription: "The number of pods the index uses: `shards` × `replicas`.",
 								Computed:            true,
 							},
 							"metadata_config": schema.SingleNestedAttribute{
@@ -224,21 +242,21 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 						},
 					},
 					"serverless": schema.SingleNestedAttribute{
-						Description: "Configuration needed to deploy a serverless index.",
-						Optional:    true,
+						MarkdownDescription: "A serverless index.",
+						Optional:            true,
 						Attributes: map[string]schema.Attribute{
 							"cloud": schema.StringAttribute{
-								Description: "The public cloud where you would like your index hosted. [gcp|aws|azure]",
-								Required:    true,
+								MarkdownDescription: "The public cloud where the index is hosted: `aws`, `gcp`, or `azure`. Changing it replaces the index.",
+								Required:            true,
 								PlanModifiers: []planmodifier.String{
-									stringplanmodifier.RequiresReplace(),
+									requiresReplaceUnlessStyleSwitchString(),
 								},
 							},
 							"region": schema.StringAttribute{
-								MarkdownDescription: "The region where you would like your index to be created.",
+								MarkdownDescription: "The region where the index is hosted. Changing it replaces the index.",
 								Required:            true,
 								PlanModifiers: []planmodifier.String{
-									stringplanmodifier.RequiresReplace(),
+									requiresReplaceUnlessStyleSwitchString(),
 								},
 							},
 							"read_capacity": readCapacitySchema("Read capacity configuration for the index. "),
@@ -246,17 +264,17 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 						},
 					},
 					"byoc": schema.SingleNestedAttribute{
-						Description: "Configuration needed to deploy a BYOC (Bring Your Own Cloud) index.",
-						Optional:    true,
+						MarkdownDescription: "A BYOC (Bring Your Own Cloud) index, deployed into your own cloud environment.",
+						Optional:            true,
 						Attributes: map[string]schema.Attribute{
 							"environment": schema.StringAttribute{
-								MarkdownDescription: "The environment identifier for the BYOC index.",
+								MarkdownDescription: "The BYOC environment where the index is hosted. Changing it replaces the index.",
 								Required:            true,
 								PlanModifiers: []planmodifier.String{
-									stringplanmodifier.RequiresReplace(),
+									requiresReplaceUnlessStyleSwitchString(),
 								},
 							},
-							"read_capacity": readCapacitySchema("Read capacity configuration for the index. "),
+							"read_capacity": readCapacitySchema("Read capacity configuration for the index. BYOC indexes need `dedicated`: they don't support on-demand. "),
 							"schema":        metadataSchemaResourceSchema(),
 						},
 					},
@@ -282,37 +300,37 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 					"model": schema.StringAttribute{
 						Optional:    true,
 						Computed:    true,
-						Description: "the name of the embedding model to use for the index.",
+						Description: "The name of the embedding model.",
 						PlanModifiers: []planmodifier.String{
 							stringplanmodifier.UseStateForUnknown(),
 						},
 					},
 					"field_map": schema.MapAttribute{
-						Optional:    true,
-						Computed:    true,
-						Description: "Identifies the name of the text field from your document model that will be embedded.",
-						ElementType: types.StringType,
+						Optional:            true,
+						Computed:            true,
+						MarkdownDescription: "Maps `text` to the name of the record field to embed, for example `{ text = \"chunk_text\" }`.",
+						ElementType:         types.StringType,
 						PlanModifiers: []planmodifier.Map{
 							mapplanmodifier.UseStateForUnknown(),
 						},
 					},
 					"metric": schema.StringAttribute{
 						Computed:    true,
-						Description: "The distance metric to be used for similarity search. You can use 'euclidean', 'cosine', or 'dotproduct'. If the 'vector_type' is 'sparse', the metric must be 'dotproduct'. If the vector_type is dense, the metric defaults to 'cosine'.",
+						Description: "The distance metric the index uses with the model.",
 						PlanModifiers: []planmodifier.String{
 							embedComputedStringModifier{},
 						},
 					},
 					"dimension": schema.Int32Attribute{
 						Computed:    true,
-						Description: "The dimension of the embedding model, specifying the size of the output vector.",
+						Description: "The dimension of the vectors the model produces. Null for models that produce sparse vectors.",
 						PlanModifiers: []planmodifier.Int32{
 							embedComputedInt32Modifier{},
 						},
 					},
 					"vector_type": schema.StringAttribute{
-						Computed:    true,
-						Description: "The index vector type associated with the model. If 'dense', the vector dimension must be specified. If 'sparse', the vector dimension will be nil.",
+						Computed:            true,
+						MarkdownDescription: "The type of vectors the model produces: `dense` or `sparse`.",
 						PlanModifiers: []planmodifier.String{
 							embedComputedStringModifier{},
 						},
@@ -356,18 +374,18 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 				},
 			},
 			"status": schema.SingleNestedAttribute{
-				Description: "Status",
+				Description: "The index's status.",
 				Computed:    true,
 				PlanModifiers: []planmodifier.Object{
 					objectplanmodifier.UseStateForUnknown(),
 				},
 				Attributes: map[string]schema.Attribute{
 					"ready": schema.BoolAttribute{
-						Description: "Ready.",
+						Description: "Whether the index is ready to use.",
 						Computed:    true,
 					},
 					"state": schema.StringAttribute{
-						MarkdownDescription: "Initializing InitializationFailed ScalingUp ScalingDown ScalingUpPodSize Terminating Ready Failed Disabled",
+						MarkdownDescription: indexStateDescription,
 						Computed:            true,
 					},
 				},
@@ -385,7 +403,7 @@ Refer to the [model guide](https://docs.pinecone.io/guides/inference/understandi
 						`consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are ` +
 						`"s" (seconds), "m" (minutes), "h" (hours).`,
 					Delete: true,
-					DeleteDescription: `Timeout defaults to 10 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) ` +
+					DeleteDescription: `How long to wait for the index to be deleted. Defaults to 10 mins. Accepts a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) ` +
 						`consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are ` +
 						`"s" (seconds), "m" (minutes), "h" (hours).`,
 				},
@@ -933,6 +951,10 @@ func (r *IndexResource) ImportState(ctx context.Context, req resource.ImportStat
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
+// indexStateDescription lists the states 2026-07 reports for an index.
+const indexStateDescription = "The index's state: `Initializing`, `InitializationFailed`, `ScalingUp`, `ScalingDown`, `ScalingUpPodSize`, " +
+	"`Terminating`, `Ready`, `Failed`, or `Disabled`."
+
 const (
 	podCreateUnsupportedSummary = "Pod-based indexes can't be created"
 	podCreateUnsupportedDetail  = "Pinecone API version 2026-07 doesn't support creating pod-based indexes. " +
@@ -991,21 +1013,35 @@ func (r *IndexResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 		return
 	}
 
-	// Switching style changes attributes that require replacement, so it's rejected before the
-	// replacement check would plan it.
-	resp.Diagnostics.Append(validateIndexStyleChange(config, state)...)
+	// A new name replaces the index whatever else changes. Otherwise, a switch between spec and
+	// schema with deployment is checked against the index, and the rest of the plan is checked
+	// against the index as the new style records it.
+	var plannedName types.String
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("name"), &plannedName)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	replace, diags := plansIndexReplacement(ctx, req)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-	if replace {
-		resp.Diagnostics.Append(validateIndexCreate(ctx, config)...)
-		return
+	if config.Schema.IsNull() != state.Schema.IsNull() && plannedName.Equal(state.Name) {
+		restyled, diags := restyleIndexState(ctx, config, state)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		resp.Diagnostics.Append(planIndexStyleSwitch(ctx, req.Config, &resp.Plan, restyled)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		state = restyled
+	} else {
+		replace, diags := plansIndexReplacement(ctx, req)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if replace {
+			resp.Diagnostics.Append(validateIndexCreate(ctx, config)...)
+			return
+		}
 	}
 
 	resp.Diagnostics.Append(validateIndexUpdate(ctx, config, state)...)
@@ -1065,8 +1101,10 @@ func plansIndexReplacement(ctx context.Context, req resource.ModifyPlanRequest) 
 // requiresReplaceUnlessRemoved recreates the index when the deprecated metadata schema is set or
 // changed, which only takes effect at creation, but not when it's removed from the configuration.
 // Removing it is what the deprecation asks for, and the index keeps indexing metadata either way.
-func requiresReplaceUnlessRemoved(_ context.Context, req planmodifier.ObjectRequest, resp *objectplanmodifier.RequiresReplaceIfFuncResponse) {
-	resp.RequiresReplace = !req.PlanValue.IsNull()
+func requiresReplaceUnlessRemoved(ctx context.Context, req planmodifier.ObjectRequest, resp *objectplanmodifier.RequiresReplaceIfFuncResponse) {
+	switching, diags := indexStyleSwitch(ctx, req.Config, req.State)
+	resp.Diagnostics.Append(diags...)
+	resp.RequiresReplace = !req.PlanValue.IsNull() && !switching
 }
 
 // validateIndexCreate checks a configuration that creates a new index.
@@ -1510,7 +1548,7 @@ func extractReadCapacityFromSpec(ctx context.Context, specObj types.Object, diag
 func readCapacitySchema(summary string) schema.Attribute {
 	return schema.SingleNestedAttribute{
 		MarkdownDescription: summary + "Set exactly one of `dedicated` or `on_demand` to select the mode. " +
-			"Omitting `read_capacity` entirely on create selects on-demand, which BYOC indexes don't support: BYOC indexes need `dedicated`. " +
+			"Leaving `read_capacity` out when the index is created selects on-demand. " +
 			"To move an existing index from on-demand to dedicated, set `dedicated`; removing `read_capacity` from config will not change the mode already recorded in state. " +
 			"An index can't move from dedicated back to on-demand. " +
 			"Creating or changing read capacity waits until it's `Ready`, with the configured replicas and shards running; the apply fails if it reports `Error`.",
@@ -1526,7 +1564,7 @@ func readCapacitySchema(summary string) schema.Attribute {
 				Optional: true,
 				Attributes: map[string]schema.Attribute{
 					"node_type": schema.StringAttribute{
-						MarkdownDescription: "The type of machines to use. Available options: 'b1' and 't1'.",
+						MarkdownDescription: "The node type: `b1` or `t1`.",
 						Optional:            true,
 						Computed:            true,
 						PlanModifiers: []planmodifier.String{

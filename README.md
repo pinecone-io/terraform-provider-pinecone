@@ -9,7 +9,8 @@ Workflow](https://github.com/pinecone-io/terraform-provider-pinecone/actions/wor
 ![GitHub release (latest by
 date)](https://img.shields.io/github/v/release/pinecone-io/terraform-provider-pinecone)
 
-The Terraform Provider for Pinecone allows Terraform to manage Pinecone resources including indexes, collections, API keys, and projects.
+The Terraform Provider for Pinecone allows Terraform to manage Pinecone resources: indexes, collections, projects, API keys,
+service accounts, users, invites, and role bindings.
 
 Note: We take Terraform's security and our users' trust very seriously. If you
 believe you have found a security issue in the Terraform Provider for Pinecone,
@@ -18,7 +19,7 @@ please responsibly disclose it by contacting us.
 ## Requirements
 
 - [Terraform](https://www.terraform.io/downloads.html) >= v1.4.6
-- [Go](https://golang.org/doc/install) >= 1.24. This is necessary to build the
+- [Go](https://golang.org/doc/install) >= 1.26. This is necessary to build the
   provider plugin.
 
 ## Installing the provider
@@ -35,18 +36,18 @@ tab.
 
 Follow these steps to build the Terraform Provider for Pinecone:
 
-1.  Clone the repository using the following command:
+1.  Clone the repository:
 
+    ```sh
+    git clone https://github.com/pinecone-io/terraform-provider-pinecone
     ```
-    sh $ git clone https://github.com/pinecone-io/terraform-provider-pinecone
+
+1.  Build and install the provider. The install directory depends on the `GOPATH`
+    environment variable.
+
+    ```sh
+    go install .
     ```
-
-1.  Build the provider using the following command. The install directory depends
-    on the `GOPATH` environment variable.
-
-        ```
-        sh $ go install .
-        ```
 
 ## Usage
 
@@ -181,12 +182,18 @@ The Terraform Provider for Pinecone supports creating and managing Pinecone proj
 
 An index is described in one of two ways:
 
-- **With `schema` and `deployment`**, the way Pinecone API version `2026-07` describes indexes. Use this for document
-  indexes, which combine dense vector, sparse vector, and full-text-search fields.
-- **With `dimension`, `metric`, and `spec`**, for vector indexes and indexes with integrated embedding.
+- **With `schema` and `deployment`**, the way Pinecone API version `2026-07` describes indexes. A schema of named
+  fields creates a document index, which combines dense vector, sparse vector, and full-text-search fields. A schema
+  made only of the reserved fields `_values` and `_sparse_values` creates a vector index. Use this style for new
+  indexes without integrated embedding.
+- **With `dimension`, `metric`, `vector_type`, `spec`, and `embed`**, the style earlier versions of the provider
+  used. This style is planned for deprecation. Indexes with integrated embedding and existing pod-based indexes still
+  need it for now.
 
-A configuration uses one style or the other, and an existing index keeps the style it was created with. Upgrading
-from version 4? See the [version 5 upgrade guide](docs/guides/version-5-upgrade.md).
+A configuration uses one style or the other. To move an existing vector index from `spec` to `schema` and
+`deployment`, rewrite its configuration: as long as it describes the same index, the plan shows an in-place update
+that only changes how Terraform records the index, without calling the API or replacing it. An index can't move back
+to `spec`. Upgrading from version 4? See the [version 5 upgrade guide](docs/guides/version-5-upgrade.md).
 
 #### Document indexes
 
@@ -228,7 +235,7 @@ resource "pinecone_index" "products" {
 }
 ```
 
-#### Vector indexes
+#### Vector indexes described with `spec`
 
 Serverless vector indexes take a `cloud` and `region`:
 
@@ -294,6 +301,16 @@ resource "pinecone_index" "integrated" {
 
 Pod-based indexes can't be created with Pinecone API version `2026-07`. Existing pod-based indexes can be imported,
 scaled in place with `spec.pod.replicas` and `spec.pod.pod_type`, and deleted.
+
+#### Importing indexes
+
+Import an index by name, with `terraform import` or an `import` block. Import records document indexes with `schema`
+and other indexes with `spec`. If the configuration describes an imported vector index with `schema`, the next plan
+shows an in-place update that only changes how Terraform records the index:
+
+```shell
+terraform import pinecone_index.example my-index
+```
 
 ### Read Capacity
 
