@@ -61,7 +61,7 @@ output "articles_full_text_search_fields" {
 - `deletion_protection` (String) Whether deletion protection is enabled: `enabled` or `disabled`.
 - `deployment` (Attributes) Where the index runs. Exactly one of `managed`, `pod`, or `byoc` is set. (see [below for nested schema](#nestedatt--deployment))
 - `dimension` (Number) The dimension of the index's dense vectors. Derived from the index's vector fields in `schema`: null when they don't determine a single value, as for an index with only full-text-search fields.
-- `embed` (Attributes) The index's integrated embedding, for an index created with embed, or a document index whose schema embeds a text field. Null for other indexes.
+- `embed` (Attributes) The embedding of a legacy integrated index, created with embed. Null for other indexes. Integrated embedding on a document index is reported on its `schema`'s `string` fields.
 
 Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details. (see [below for nested schema](#nestedatt--embed))
 - `host` (String) The URL address where the index is hosted.
@@ -181,9 +181,9 @@ Read-Only:
 - `float` (Attributes) A floating-point metadata field. The API adds these fields as data is upserted. (see [below for nested schema](#nestedatt--schema--fields--float))
 - `integer` (Attributes) An integer metadata field. The API adds these fields as data is upserted. (see [below for nested schema](#nestedatt--schema--fields--integer))
 - `legacy_metadata` (Attributes) A metadata field on an index created with a metadata schema before API version 2026-07. (see [below for nested schema](#nestedatt--schema--fields--legacy_metadata))
-- `semantic_text` (Attributes) A text field embedded by an integrated embedding model, as on an index created with `embed`. (see [below for nested schema](#nestedatt--schema--fields--semantic_text))
+- `semantic_text` (Attributes) The embedded text field of a legacy integrated index, created with `embed`. (see [below for nested schema](#nestedatt--schema--fields--semantic_text))
 - `sparse_vector` (Attributes) A sparse vector field. (see [below for nested schema](#nestedatt--schema--fields--sparse_vector))
-- `string` (Attributes) A string field, either declared for full-text search or added by the API as data is upserted. (see [below for nested schema](#nestedatt--schema--fields--string))
+- `string` (Attributes) A string field, either declared for full-text search or integrated embedding, or added by the API as data is upserted. (see [below for nested schema](#nestedatt--schema--fields--string))
 - `string_list` (Attributes) A string list metadata field. The API adds these fields as data is upserted. (see [below for nested schema](#nestedatt--schema--fields--string_list))
 
 <a id="nestedatt--schema--fields--boolean"></a>
@@ -258,8 +258,23 @@ Read-Only:
 Read-Only:
 
 - `description` (String) The field's description, if one was set.
+- `embed` (Attributes) The field's dense integrated embedding. Null unless the field was declared with it. (see [below for nested schema](#nestedatt--schema--fields--string--embed))
 - `filterable` (Boolean) Whether the field is indexed for metadata filtering.
 - `full_text_search` (Attributes) The field's full-text search configuration. Null unless the field was declared for full-text search. (see [below for nested schema](#nestedatt--schema--fields--string--full_text_search))
+- `sparse_embed` (Attributes) The field's sparse integrated embedding. Null unless the field was declared with it. (see [below for nested schema](#nestedatt--schema--fields--string--sparse_embed))
+- `store_text` (Boolean) Whether the field's text is stored. A field that stores its text is indexed for full-text search.
+
+<a id="nestedatt--schema--fields--string--embed"></a>
+### Nested Schema for `schema.fields.string.embed`
+
+Read-Only:
+
+- `dimension` (Number) The dimension of the embedding vectors.
+- `metric` (String) The distance metric used for similarity search.
+- `model` (String) The hosted dense embedding model.
+- `read_parameters` (Map of String) The model parameters applied when embedding search query text, including the model's defaults.
+- `write_parameters` (Map of String) The model parameters applied when embedding document text, including the model's defaults.
+
 
 <a id="nestedatt--schema--fields--string--full_text_search"></a>
 ### Nested Schema for `schema.fields.string.full_text_search`
@@ -280,6 +295,16 @@ Read-Only:
 - `min_gram` (Number) The minimum n-gram length.
 - `prefix_only` (Boolean) Whether only n-grams anchored at the start of each token are generated.
 
+
+
+<a id="nestedatt--schema--fields--string--sparse_embed"></a>
+### Nested Schema for `schema.fields.string.sparse_embed`
+
+Read-Only:
+
+- `model` (String) The hosted sparse embedding model.
+- `read_parameters` (Map of String) The model parameters applied when embedding search query text, including the model's defaults.
+- `write_parameters` (Map of String) The model parameters applied when embedding document text, including the model's defaults.
 
 
 

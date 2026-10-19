@@ -148,7 +148,7 @@ func (d *IndexesDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 							},
 						},
 						"embed": schema.SingleNestedAttribute{
-							Description: `The index's integrated embedding, for an index created with embed, or a document index whose schema embeds a text field. Null for other indexes.
+							Description: `The embedding of a legacy integrated index, created with embed. Null for other indexes. Integrated embedding on a document index is reported on its ` + "`schema`" + `'s ` + "`string`" + ` fields.
 			
 Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details.`,
 							Computed: true,

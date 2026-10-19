@@ -45,6 +45,24 @@ func TestNewIndexSchemaObject(t *testing.T) {
 		"title": {String: &pinecone.StringField{FullTextSearch: &pinecone.FullTextSearchConfig{
 			Ngram: &pinecone.NgramConfig{MinGram: 2, MaxGram: 5, PrefixOnly: ptr(true)},
 		}}},
+		"content": {String: &pinecone.StringField{
+			StoreText:      ptr(true),
+			FullTextSearch: &pinecone.FullTextSearchConfig{Language: ptr("en")},
+			Embed: &pinecone.EmbedConfig{
+				Model:           ptr("llama-text-embed-v2"),
+				Dimension:       ptr(int32(1024)),
+				Metric:          &metric,
+				ReadParameters:  &map[string]interface{}{"input_type": "query", "truncate": "END"},
+				WriteParameters: &map[string]interface{}{"input_type": "passage", "truncate": "END"},
+			},
+		}},
+		"notes": {String: &pinecone.StringField{
+			StoreText: ptr(false),
+			SparseEmbed: &pinecone.SparseEmbedConfig{
+				Model:          ptr("pinecone-sparse-english-v0"),
+				ReadParameters: &map[string]interface{}{"input_type": "query"},
+			},
+		}},
 		"author": {String: &pinecone.StringField{Filterable: ptr(true)}},
 		"tags":   {StringList: &pinecone.StringListField{Filterable: ptr(true)}},
 		"active": {Boolean: &pinecone.BooleanField{Filterable: ptr(false)}},
@@ -80,7 +98,17 @@ func TestNewIndexSchemaObject(t *testing.T) {
 		f.FullTextSearch.Ngram.MinGram.ValueInt64() != 2 || f.FullTextSearch.Ngram.MaxGram.ValueInt64() != 5 || !f.FullTextSearch.Ngram.PrefixOnly.ValueBool() {
 		t.Errorf("title = %+v", f)
 	}
-	if f := fields["author"].String; f == nil || f.FullTextSearch != nil || !f.Filterable.ValueBool() {
+	if f := fields["content"].String; f == nil || f.FullTextSearch == nil || !f.StoreText.ValueBool() || f.SparseEmbed != nil || f.Embed == nil ||
+		f.Embed.Model.ValueString() != "llama-text-embed-v2" || f.Embed.Dimension.ValueInt32() != 1024 || f.Embed.Metric.ValueString() != "cosine" ||
+		len(f.Embed.ReadParameters.Elements()) != 2 || len(f.Embed.WriteParameters.Elements()) != 2 {
+		t.Errorf("content = %+v", f)
+	}
+	if f := fields["notes"].String; f == nil || f.FullTextSearch != nil || f.StoreText.IsNull() || f.StoreText.ValueBool() || f.Embed != nil ||
+		f.SparseEmbed == nil || f.SparseEmbed.Model.ValueString() != "pinecone-sparse-english-v0" ||
+		len(f.SparseEmbed.ReadParameters.Elements()) != 1 || !f.SparseEmbed.WriteParameters.IsNull() {
+		t.Errorf("notes = %+v", f)
+	}
+	if f := fields["author"].String; f == nil || f.FullTextSearch != nil || f.Embed != nil || f.SparseEmbed != nil || !f.StoreText.IsNull() || !f.Filterable.ValueBool() {
 		t.Errorf("author = %+v", f)
 	}
 	if f := fields["tags"].StringList; f == nil || !f.Filterable.ValueBool() {

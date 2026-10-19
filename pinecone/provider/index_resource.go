@@ -68,11 +68,11 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 			"An index is described in one of two styles:\n\n" +
 			"- **The `schema` style**, with `schema` and `deployment`, the way Pinecone API version `2026-07` describes indexes. A schema of " +
 			"named fields creates a document index, which combines dense vector, sparse vector, and full-text-search fields. A schema made " +
-			"only of the reserved fields `_values` and `_sparse_values` creates a vector index. Use this style for new indexes without " +
-			"integrated embedding.\n\n" +
+			"only of the reserved fields `_values` and `_sparse_values` creates a vector index. Document indexes can embed a `string` " +
+			"field's text with a model hosted by Pinecone, through integrated embedding. Use this style for new indexes.\n\n" +
 			"- **The `spec` style**, with `dimension`, `metric`, `vector_type`, `spec`, and `embed`, the way earlier versions of the provider " +
-			"described indexes. It's planned for deprecation. Indexes with integrated embedding and existing pod-based indexes still need it " +
-			"for now.\n\n" +
+			"described indexes. It's planned for deprecation. Legacy integrated indexes, created with `embed`, and existing pod-based indexes " +
+			"still need it for now.\n\n" +
 			"A configuration uses one style or the other.\n\n" +
 			"**Moving to the `schema` style:** to move an existing vector index from the `spec` style to the `schema` style, rewrite its " +
 			"configuration to describe the same index. The plan shows an in-place update that only changes Terraform state: the API isn't " +
@@ -287,7 +287,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				},
 			},
 			"embed": schema.SingleNestedAttribute{
-				Description: `The index's integrated embedding: a model hosted by Pinecone that embeds a text field. Only with the ` + "`spec`" + ` style; the ` + "`schema`" + ` style doesn't support integrated embedding yet. It can only be set when the index is created: ` + "`model`" + ` and ` + "`field_map`" + ` can't be changed afterwards, and ` + "`embed`" + ` can't be added to or removed from an existing index. ` + "`read_parameters`" + ` and ` + "`write_parameters`" + ` can be updated in place.
+				Description: `Creates a legacy integrated index: a model hosted by Pinecone embeds a text field, and the index is read and written through the legacy Records API. Only with the ` + "`spec`" + ` style. For a new index, use integrated embedding instead: declare ` + "`embed`" + ` or ` + "`sparse_embed`" + ` on a ` + "`string`" + ` field of a ` + "`schema`" + `. ` + "`embed`" + ` can only be set when the index is created: ` + "`model`" + ` and ` + "`field_map`" + ` can't be changed afterwards, and ` + "`embed`" + ` can't be added to or removed from an existing index. ` + "`read_parameters`" + ` and ` + "`write_parameters`" + ` can be updated in place.
 
 Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details.`,
 				Optional: true,
@@ -536,7 +536,7 @@ func (r *IndexResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 				_, err := r.client.CreateIndexForModel(ctx, &indexForModelReq)
 				if err != nil {
-					resp.Diagnostics.AddError("Failed to create integrated serverless index", err.Error())
+					resp.Diagnostics.AddError("Failed to create legacy integrated index", err.Error())
 					return
 				}
 			} else {
@@ -1085,19 +1085,22 @@ func planEffectiveEmbedParameters(ctx context.Context, req resource.ModifyPlanRe
 // plansIndexReplacement reports whether the plan changes an attribute that recreates the index.
 func plansIndexReplacement(ctx context.Context, req resource.ModifyPlanRequest) (bool, diag.Diagnostics) {
 	var diags diag.Diagnostics
-	changed := func(p path.Path) (planned attr.Value, changed bool) {
-		var prior attr.Value
+	changed := func(p path.Path) (planned, prior attr.Value, changed bool) {
 		diags.Append(req.Plan.GetAttribute(ctx, p, &planned)...)
 		diags.Append(req.State.GetAttribute(ctx, p, &prior)...)
-		return planned, !diags.HasError() && (planned.IsUnknown() || !planned.Equal(prior))
+		return planned, prior, !diags.HasError() && (planned.IsUnknown() || !planned.Equal(prior))
 	}
 	for _, p := range indexReplacePaths {
-		if _, ok := changed(p); ok {
+		planned, prior, ok := changed(p)
+		if ok && p.Equal(path.Root("schema")) && adoptsSchemaParameters(ctx, planned, prior) {
+			continue
+		}
+		if ok {
 			return true, diags
 		}
 	}
 	for _, p := range indexReplaceUnlessRemovedPaths {
-		if planned, ok := changed(p); ok && !planned.IsNull() {
+		if planned, _, ok := changed(p); ok && !planned.IsNull() {
 			return true, diags
 		}
 	}
@@ -1130,7 +1133,7 @@ func validateIndexCreate(ctx context.Context, config models.IndexResourceModel) 
 		diags.AddAttributeError(path.Root("spec").AtName("pod"), podCreateUnsupportedSummary, podCreateUnsupportedDetail)
 	}
 	metadataSchemaDetail := "Metadata fields are indexed automatically when you upsert data, so they no longer need to be declared. " +
-		"Remove the schema attribute. It's only accepted together with embed, for integrated indexes."
+		"Remove the schema attribute. It's only accepted together with embed, for legacy integrated indexes."
 	if spec.Serverless != nil && !spec.Serverless.Schema.IsNull() && config.Embed.IsNull() {
 		diags.AddAttributeError(path.Root("spec").AtName("serverless").AtName("schema"), "Metadata schema isn't supported", metadataSchemaDetail)
 	}
@@ -1225,10 +1228,10 @@ func validateIndexUpdate(ctx context.Context, config, state models.IndexResource
 		switch {
 		case state.Embed.IsNull() && !config.Embed.IsNull():
 			diags.AddAttributeError(embedPath, "embed can't be added to an existing index",
-				"Integrated embedding can only be configured when an index is created. "+recreateIndexHint)
+				"embed creates a legacy integrated index, so it can only be set when the index is created. "+recreateIndexHint)
 		case !state.Embed.IsNull() && config.Embed.IsNull():
 			diags.AddAttributeError(embedPath, "embed can't be removed from an existing index",
-				"An index created with integrated embedding keeps it. Add the embed block back to match the index. "+recreateIndexHint)
+				"A legacy integrated index, created with embed, keeps it. Add the embed block back to match the index. "+recreateIndexHint)
 		case !state.Embed.IsNull() && !config.Embed.IsNull():
 			var configEmbed, stateEmbed models.IndexEmbedResourceModel
 			diags.Append(config.Embed.As(ctx, &configEmbed, basetypes.ObjectAsOptions{UnhandledUnknownAsEmpty: true})...)
@@ -1288,7 +1291,7 @@ func podTypeChange(from, to string) (detail string, ok bool) {
 	return "", true
 }
 
-// semanticTextFieldName returns the name of the schema field an integrated index embeds, which
+// semanticTextFieldName returns the name of the schema field a legacy integrated index embeds, which
 // ConfigureIndex addresses the embedding model by. It's the "text" entry of the field map, or the
 // only entry when the map has one.
 func semanticTextFieldName(fieldMap types.Map) (string, bool) {
@@ -1614,7 +1617,7 @@ func metadataSchemaResourceSchema() schema.Attribute {
 			"New serverless indexes accept it only together with `embed`, and new BYOC indexes don't accept it; " +
 			"other indexes index metadata automatically when you upsert data.",
 		DeprecationMessage: "Metadata fields are indexed automatically when you upsert data, so they no longer need to be declared. " +
-			"This attribute is kept for existing indexes and for integrated indexes created with embed.",
+			"This attribute is kept for existing indexes and for legacy integrated indexes created with embed.",
 		Optional: true,
 		PlanModifiers: []planmodifier.Object{
 			objectplanmodifier.RequiresReplaceIf(requiresReplaceUnlessRemoved,
@@ -1675,7 +1678,7 @@ func restoreEmbedParams(ctx context.Context, refEmbed *models.IndexEmbedResource
 // embedComputedStringModifier is a plan modifier for Computed-only string attributes
 // inside the embed nested object. In terraform-plugin-framework ≥1.15, when the parent
 // embed transitions from null prior state to configured (e.g. upgrading a plain index to
-// an integrated-inference index), Computed-only children are initialised as null in the
+// a legacy integrated index), Computed-only children are initialised as null in the
 // plan instead of unknown. UseStateForUnknown does not correct this because it only fires
 // when the plan value is already unknown; null is not unknown, so it no-ops and the plan
 // value stays null. Terraform then rejects the apply result because the API populates
@@ -1749,7 +1752,7 @@ func (embedComputedStringMapModifier) PlanModifyMap(_ context.Context, req planm
 //
 // When embed is Optional+Computed and the user hasn't configured it (config is null),
 // the Terraform Framework generates an unknown plan value because the block contains
-// Computed children. UseStateForUnknown cannot suppress this for non-integrated indexes
+// Computed children. UseStateForUnknown cannot suppress this for other indexes
 // because it no-ops when state is null. This modifier explicitly sets plan = null when
 // config is null, preventing spurious "(known after apply)" diffs.
 type embedNullForNullConfig struct{}

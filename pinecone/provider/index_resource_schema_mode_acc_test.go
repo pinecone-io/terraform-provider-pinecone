@@ -299,6 +299,95 @@ resource "pinecone_index" "test" {
 	})
 }
 
+// TestAccIndexResource_documentIndexIntegratedEmbedding creates a document index whose string fields
+// use dense and sparse integrated embedding. The API defaults the model, dimension, metric, and
+// full-text search, and merges the configured parameters with the model's defaults, none of which
+// show up as changes. After an import, which can't record what was configured, the configured
+// parameters are taken into state without replacing the index.
+func TestAccIndexResource_documentIndexIntegratedEmbedding(t *testing.T) {
+	t.Parallel()
+	rName := acctest.RandomWithPrefix("tftest")
+	config := fmt.Sprintf(`
+provider "pinecone" {
+}
+
+resource "pinecone_index" "test" {
+  name = %q
+  deployment = {
+    managed = { cloud = "aws", region = "us-east-1" }
+  }
+  schema = {
+    fields = {
+      body = {
+        string = {
+          embed = { read_parameters = { truncate = "END" } }
+        }
+      }
+      summary = {
+        string = {
+          sparse_embed = {}
+          store_text   = false
+        }
+      }
+    }
+  }
+}
+`, rName)
+	body, summary := "schema.fields.body.string.", "schema.fields.summary.string."
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckIndexDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckIndexExists(),
+					resource.TestCheckResourceAttr("pinecone_index.test", body+"embed.model", "llama-text-embed-v2"),
+					resource.TestCheckResourceAttrSet("pinecone_index.test", body+"embed.dimension"),
+					resource.TestCheckResourceAttrSet("pinecone_index.test", body+"embed.metric"),
+					resource.TestCheckResourceAttr("pinecone_index.test", body+"embed.read_parameters.%", "1"),
+					resource.TestCheckResourceAttr("pinecone_index.test", body+"embed.effective_read_parameters.truncate", "END"),
+					resource.TestCheckResourceAttr("pinecone_index.test", body+"store_text", "true"),
+					resource.TestCheckResourceAttrSet("pinecone_index.test", body+"full_text_search.language"),
+					resource.TestCheckResourceAttr("pinecone_index.test", summary+"sparse_embed.model", "pinecone-sparse-english-v0"),
+					resource.TestCheckResourceAttr("pinecone_index.test", summary+"store_text", "false"),
+					resource.TestCheckNoResourceAttr("pinecone_index.test", summary+"full_text_search.language"),
+				),
+			},
+			{
+				Config:   config,
+				PlanOnly: true,
+			},
+			{
+				ResourceName:            "pinecone_index.test",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{body + "embed.read_parameters.%", body + "embed.read_parameters.truncate"},
+			},
+			{
+				ResourceName:       "pinecone_index.test",
+				ImportState:        true,
+				ImportStatePersist: true,
+			},
+			{
+				Config: config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("pinecone_index.test", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.TestCheckResourceAttr("pinecone_index.test", body+"embed.read_parameters.truncate", "END"),
+			},
+			{
+				Config:   config,
+				PlanOnly: true,
+			},
+		},
+	})
+}
+
 func TestAccIndexResource_reservedVectorIndex(t *testing.T) {
 	t.Parallel()
 	rName := acctest.RandomWithPrefix("tftest")
@@ -391,6 +480,31 @@ resource "pinecone_index" "test" {
   schema     = { fields = { body = { string = { full_text_search = {} } } } }
 }`,
 			expectError: regexp.MustCompile("Document indexes require a managed deployment"),
+		},
+		{
+			name: "store_text false with full-text search",
+			config: `
+resource "pinecone_index" "test" {
+  name       = "test"
+  deployment = { managed = { cloud = "aws", region = "us-west-2" } }
+  schema     = { fields = { body = { string = { embed = {}, full_text_search = {}, store_text = false } } } }
+}`,
+			expectError: regexp.MustCompile("store_text = false can't be combined with full_text_search"),
+		},
+		{
+			name: "dense vector field and embed",
+			config: `
+resource "pinecone_index" "test" {
+  name       = "test"
+  deployment = { managed = { cloud = "aws", region = "us-west-2" } }
+  schema = {
+    fields = {
+      embedding = { dense_vector = { dimension = 1024, metric = "cosine" } }
+      body      = { string = { embed = {} } }
+    }
+  }
+}`,
+			expectError: regexp.MustCompile("Too many dense vector fields"),
 		},
 	}
 
