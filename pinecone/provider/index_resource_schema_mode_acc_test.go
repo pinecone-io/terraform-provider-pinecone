@@ -302,16 +302,18 @@ resource "pinecone_index" "test" {
 // TestAccIndexResource_documentIndexIntegratedEmbedding creates a document index whose string fields
 // use dense and sparse integrated embedding. The API defaults the model, dimension, metric, and
 // full-text search, and merges the configured parameters with the model's defaults, none of which
-// show up as changes. After an import, which can't record what was configured, the configured
-// parameters are taken into state without replacing the index.
+// show up as changes. An import can't record which parameters were configured, so after a removed
+// block drops the index from state and an import block brings it back, the configured parameters
+// are taken into state without replacing the index.
 func TestAccIndexResource_documentIndexIntegratedEmbedding(t *testing.T) {
 	t.Parallel()
 	rName := acctest.RandomWithPrefix("tftest")
-	config := fmt.Sprintf(`
+	config := func(address string) string {
+		return fmt.Sprintf(`
 provider "pinecone" {
 }
 
-resource "pinecone_index" "test" {
+resource "pinecone_index" %q {
   name = %q
   deployment = {
     managed = { cloud = "aws", region = "us-east-1" }
@@ -332,6 +334,20 @@ resource "pinecone_index" "test" {
     }
   }
 }
+`, address, rName)
+	}
+	imported := config("test") + fmt.Sprintf(`
+removed {
+  from = pinecone_index.original
+  lifecycle {
+    destroy = false
+  }
+}
+
+import {
+  to = pinecone_index.test
+  id = %q
+}
 `, rName)
 	body, summary := "schema.fields.body.string.", "schema.fields.summary.string."
 
@@ -339,49 +355,49 @@ resource "pinecone_index" "test" {
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckIndexDestroy(),
+		// removed blocks need Terraform 1.7, and import blocks 1.5.
+		TerraformVersionChecks: []tfversion.TerraformVersionCheck{tfversion.SkipBelow(tfversion.Version1_7_0)},
 		Steps: []resource.TestStep{
 			{
-				Config: config,
+				Config: config("original"),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					testAccCheckIndexExists(),
-					resource.TestCheckResourceAttr("pinecone_index.test", body+"embed.model", "llama-text-embed-v2"),
-					resource.TestCheckResourceAttrSet("pinecone_index.test", body+"embed.dimension"),
-					resource.TestCheckResourceAttrSet("pinecone_index.test", body+"embed.metric"),
-					resource.TestCheckResourceAttr("pinecone_index.test", body+"embed.read_parameters.%", "1"),
-					resource.TestCheckResourceAttr("pinecone_index.test", body+"embed.effective_read_parameters.truncate", "END"),
-					resource.TestCheckResourceAttr("pinecone_index.test", body+"store_text", "true"),
-					resource.TestCheckResourceAttrSet("pinecone_index.test", body+"full_text_search.language"),
-					resource.TestCheckResourceAttr("pinecone_index.test", summary+"sparse_embed.model", "pinecone-sparse-english-v0"),
-					resource.TestCheckResourceAttr("pinecone_index.test", summary+"store_text", "false"),
-					resource.TestCheckNoResourceAttr("pinecone_index.test", summary+"full_text_search.language"),
+					resource.TestCheckResourceAttr("pinecone_index.original", body+"embed.model", "llama-text-embed-v2"),
+					resource.TestCheckResourceAttrSet("pinecone_index.original", body+"embed.dimension"),
+					resource.TestCheckResourceAttrSet("pinecone_index.original", body+"embed.metric"),
+					resource.TestCheckResourceAttr("pinecone_index.original", body+"embed.read_parameters.%", "1"),
+					resource.TestCheckResourceAttr("pinecone_index.original", body+"embed.effective_read_parameters.truncate", "END"),
+					resource.TestCheckResourceAttr("pinecone_index.original", body+"store_text", "true"),
+					resource.TestCheckResourceAttrSet("pinecone_index.original", body+"full_text_search.language"),
+					resource.TestCheckResourceAttr("pinecone_index.original", summary+"sparse_embed.model", "pinecone-sparse-english-v0"),
+					resource.TestCheckResourceAttr("pinecone_index.original", summary+"store_text", "false"),
+					resource.TestCheckNoResourceAttr("pinecone_index.original", summary+"full_text_search.language"),
 				),
 			},
 			{
-				Config:   config,
+				Config:   config("original"),
 				PlanOnly: true,
 			},
 			{
-				ResourceName:            "pinecone_index.test",
+				ResourceName:            "pinecone_index.original",
 				ImportState:             true,
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{body + "embed.read_parameters.%", body + "embed.read_parameters.truncate"},
 			},
 			{
-				ResourceName:       "pinecone_index.test",
-				ImportState:        true,
-				ImportStatePersist: true,
-			},
-			{
-				Config: config,
+				Config: imported,
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectResourceAction("pinecone_index.test", plancheck.ResourceActionUpdate),
 					},
 				},
-				Check: resource.TestCheckResourceAttr("pinecone_index.test", body+"embed.read_parameters.truncate", "END"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckIndexExists(),
+					resource.TestCheckResourceAttr("pinecone_index.test", body+"embed.read_parameters.truncate", "END"),
+					resource.TestCheckResourceAttr("pinecone_index.test", body+"embed.effective_read_parameters.truncate", "END"),
+				),
 			},
 			{
-				Config:   config,
+				Config:   imported,
 				PlanOnly: true,
 			},
 		},

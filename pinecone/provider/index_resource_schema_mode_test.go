@@ -200,6 +200,9 @@ func TestIndexResourceValidateConfig(t *testing.T) {
 	}))
 	ftsAndEmbed := fullTextField(models.FullTextSearchModel{})
 	ftsAndEmbed.String.Embed = embedConfig(nil, nil)
+	ftsAndBothEmbeds := fullTextField(models.FullTextSearchModel{})
+	ftsAndBothEmbeds.String.Embed = embedConfig(nil, nil)
+	ftsAndBothEmbeds.String.SparseEmbed = sparseEmbedConfig()
 	ftsWithoutStoredText := fullTextField(models.FullTextSearchModel{})
 	ftsWithoutStoredText.String.Embed = embedConfig(nil, nil)
 	ftsWithoutStoredText.String.StoreText = types.BoolValue(false)
@@ -275,6 +278,9 @@ func TestIndexResourceValidateConfig(t *testing.T) {
 			"body": embeddedField(embedConfig(nil, nil), nil, nil), "notes": embeddedField(nil, sparseEmbedConfig(), pointerTo(false)),
 		})},
 		{name: "full-text search with integrated embedding", config: document(schemaFields{"body": ftsAndEmbed, "terms": sparseField()})},
+		{name: "full-text search, embed, and sparse_embed on one field", config: document(schemaFields{"body": ftsAndBothEmbeds, "title": fullTextField(models.FullTextSearchModel{})})},
+		{name: "second field with sparse_embed", config: document(schemaFields{"body": ftsAndBothEmbeds, "notes": embeddedField(nil, sparseEmbedConfig(), nil)}),
+			wantErr: "Too many sparse vector fields"},
 		{name: "string field without search", config: document(schemaFields{"body": embeddedField(nil, nil, nil)}), wantErr: "Invalid string field"},
 		{name: "store_text false without embedding", config: document(schemaFields{"body": embeddedField(nil, nil, pointerTo(false))}),
 			wantErr: "store_text = false requires integrated embedding"},
@@ -429,6 +435,107 @@ func TestPlansIndexReplacement_schemaMode(t *testing.T) {
 			requiresSchemaReplace().PlanModifyObject(ctx, req, &resp)
 			if schemaChanged := !planned.Equal(current); resp.Diagnostics.HasError() || resp.RequiresReplace != (tt.want && schemaChanged) {
 				t.Errorf("schema plan modifier RequiresReplace = %v (%v), want %v", resp.RequiresReplace, resp.Diagnostics, tt.want)
+			}
+		})
+	}
+}
+
+// TestRequiresSchemaReplace_importedParameters runs the schema's plan modifier on the plan an import
+// produces. The framework marks the computed attributes that aren't configured as unknown before
+// the modifier runs, and their UseStateForUnknown modifiers restore them only afterwards.
+func TestRequiresSchemaReplace_importedParameters(t *testing.T) {
+	ctx := context.Background()
+	s := indexResourceSchema(t)
+	base := testIndexModel(t, s)
+	effective := map[string]string{"input_type": "query", "truncate": "END"}
+
+	importedField := embeddedField(embedConfig(nil, effective), nil, pointerTo(true))
+	importedField.String.FullTextSearch = &models.FullTextSearchModel{Language: types.StringValue("en"), Stemming: types.BoolValue(false), StopWords: types.BoolValue(false)}
+	importedField.String.Description = types.StringNull()
+	imported := withSchemaMode(t, s, base, schemaFields{"body": importedField}, managedDeployment())
+
+	configured := func(readParameters types.Map) models.EmbedConfigResourceModel {
+		return models.EmbedConfigResourceModel{
+			Model: types.StringNull(), Dimension: types.Int32Null(), Metric: types.StringNull(),
+			ReadParameters: readParameters, WriteParameters: types.MapNull(types.StringType),
+			EffectiveReadParameters: types.MapNull(types.StringType), EffectiveWriteParameters: types.MapNull(types.StringType),
+		}
+	}
+	// marked is what the framework plans for a configured embed: unknown wherever the config is null.
+	marked := func(readParameters types.Map) models.EmbedConfigResourceModel {
+		return models.EmbedConfigResourceModel{
+			Model: types.StringUnknown(), Dimension: types.Int32Unknown(), Metric: types.StringUnknown(),
+			ReadParameters: readParameters, WriteParameters: types.MapNull(types.StringType),
+			EffectiveReadParameters: types.MapUnknown(types.StringType), EffectiveWriteParameters: types.MapUnknown(types.StringType),
+		}
+	}
+	schemaOf := func(embed models.EmbedConfigResourceModel, unknown bool) types.Object {
+		t.Helper()
+		embedObj, d := types.ObjectValueFrom(ctx, models.EmbedConfigResourceModel{}.AttrTypes(), embed)
+		if d.HasError() {
+			t.Fatalf("building embed: %v", d)
+		}
+		stringAttrs := map[string]attr.Value{
+			"full_text_search": types.ObjectNull(models.FullTextSearchModel{}.AttrTypes()),
+			"embed":            embedObj,
+			"sparse_embed":     types.ObjectNull(models.SparseEmbedConfigResourceModel{}.AttrTypes()),
+			"store_text":       types.BoolNull(),
+			"description":      types.StringNull(),
+		}
+		if unknown {
+			stringAttrs["full_text_search"] = types.ObjectUnknown(models.FullTextSearchModel{}.AttrTypes())
+			stringAttrs["store_text"] = types.BoolUnknown()
+			stringAttrs["description"] = types.StringUnknown()
+		}
+		field := types.ObjectValueMust(models.IndexResourceSchemaFieldModel{}.AttrTypes(), map[string]attr.Value{
+			"dense_vector":  types.ObjectNull(models.DenseVectorFieldModel{}.AttrTypes()),
+			"sparse_vector": types.ObjectNull(models.SparseVectorFieldModel{}.AttrTypes()),
+			"string":        types.ObjectValueMust(models.StringResourceFieldModel{}.AttrTypes(), stringAttrs),
+		})
+		fields := types.MapValueMust(types.ObjectType{AttrTypes: models.IndexResourceSchemaFieldModel{}.AttrTypes()}, map[string]attr.Value{"body": field})
+		return types.ObjectValueMust(attrTypesOf(t, s, "schema"), map[string]attr.Value{"fields": fields})
+	}
+
+	truncate := stringMapValue(map[string]string{"truncate": "END"})
+	tests := []struct {
+		name         string
+		config, plan types.Object
+		wantReplace  bool
+	}{
+		{"adopts parameters the index uses", schemaOf(configured(truncate), false), schemaOf(marked(truncate), true), false},
+		{"parameters the index doesn't use", schemaOf(configured(stringMapValue(map[string]string{"truncate": "NONE"})), false),
+			schemaOf(marked(stringMapValue(map[string]string{"truncate": "NONE"})), true), true},
+		{"parameters from another resource", schemaOf(configured(types.MapUnknown(types.StringType)), false),
+			schemaOf(marked(types.MapUnknown(types.StringType)), true), true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			schemaType := s.Type().TerraformType(ctx)
+			state := tfsdk.State{Schema: s, Raw: tftypes.NewValue(schemaType, nil)}
+			if d := state.Set(ctx, &imported); d.HasError() {
+				t.Fatalf("setting state: %v", d)
+			}
+			configModel := imported
+			configModel.Schema = tt.config
+			config := tfsdk.Plan{Schema: s, Raw: tftypes.NewValue(schemaType, nil)}
+			if d := config.Set(ctx, &configModel); d.HasError() {
+				t.Fatalf("setting config: %v", d)
+			}
+			planModel := imported
+			planModel.Schema = tt.plan
+			plan := tfsdk.Plan{Schema: s, Raw: tftypes.NewValue(schemaType, nil)}
+			if d := plan.Set(ctx, &planModel); d.HasError() {
+				t.Fatalf("setting plan: %v", d)
+			}
+
+			req := planmodifier.ObjectRequest{
+				Config: tfsdk.Config{Schema: s, Raw: config.Raw}, State: state, Plan: plan,
+				ConfigValue: tt.config, PlanValue: tt.plan, StateValue: imported.Schema,
+			}
+			var resp planmodifier.ObjectResponse
+			requiresSchemaReplace().PlanModifyObject(ctx, req, &resp)
+			if resp.Diagnostics.HasError() || resp.RequiresReplace != tt.wantReplace {
+				t.Errorf("RequiresReplace = %v (%v), want %v", resp.RequiresReplace, resp.Diagnostics, tt.wantReplace)
 			}
 		})
 	}

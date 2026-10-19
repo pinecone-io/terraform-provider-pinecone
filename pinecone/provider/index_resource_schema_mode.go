@@ -278,12 +278,74 @@ const requiresSchemaReplaceDescription = requiresReplaceUnlessStyleSwitchDescrip
 
 // requiresSchemaReplace recreates the index when its schema changes, unless the style switches or
 // the change only adopts integrated embedding parameters the index already uses.
+//
+// When the plan changes anything, the framework marks every computed attribute that isn't
+// configured as unknown before this runs, and the nested UseStateForUnknown modifiers that restore
+// them run after it. The adoption check resolves those values first, so they don't count as
+// changes.
 func requiresSchemaReplace() planmodifier.Object {
 	return objectplanmodifier.RequiresReplaceIf(func(ctx context.Context, req planmodifier.ObjectRequest, resp *objectplanmodifier.RequiresReplaceIfFuncResponse) {
 		switching, diags := indexStyleSwitch(ctx, req.Config, req.State)
 		resp.Diagnostics.Append(diags...)
-		resp.RequiresReplace = !switching && !models.AdoptsConfiguredParameters(ctx, req.PlanValue, req.StateValue)
+		if switching {
+			return
+		}
+		planned, ok := priorForUnconfiguredUnknowns(ctx, req.PlanValue, req.ConfigValue, req.StateValue).(types.Object)
+		resp.RequiresReplace = !ok || !models.AdoptsConfiguredParameters(ctx, planned, req.StateValue)
 	}, requiresSchemaReplaceDescription, requiresSchemaReplaceDescription)
+}
+
+// priorForUnconfiguredUnknowns returns planned with each unknown value that isn't configured
+// replaced by its prior value, as UseStateForUnknown will. An unknown that is configured, such as a
+// value from another resource, stays unknown.
+func priorForUnconfiguredUnknowns(ctx context.Context, planned, config, prior attr.Value) attr.Value {
+	if planned == nil || prior == nil || prior.IsUnknown() {
+		return planned
+	}
+	if planned.IsUnknown() {
+		if config == nil || config.IsNull() {
+			return prior
+		}
+		return planned
+	}
+	if planned.IsNull() || prior.IsNull() {
+		return planned
+	}
+	switch p := planned.(type) {
+	case types.Object:
+		configAttrs, priorAttrs := objectAttributes(config), objectAttributes(prior)
+		attrs := make(map[string]attr.Value, len(p.Attributes()))
+		for name, value := range p.Attributes() {
+			attrs[name] = priorForUnconfiguredUnknowns(ctx, value, configAttrs[name], priorAttrs[name])
+		}
+		if resolved, diags := types.ObjectValue(p.AttributeTypes(ctx), attrs); !diags.HasError() {
+			return resolved
+		}
+	case types.Map:
+		configElements, priorElements := mapElements(config), mapElements(prior)
+		elements := make(map[string]attr.Value, len(p.Elements()))
+		for key, value := range p.Elements() {
+			elements[key] = priorForUnconfiguredUnknowns(ctx, value, configElements[key], priorElements[key])
+		}
+		if resolved, diags := types.MapValue(p.ElementType(ctx), elements); !diags.HasError() {
+			return resolved
+		}
+	}
+	return planned
+}
+
+func objectAttributes(v attr.Value) map[string]attr.Value {
+	if obj, ok := v.(types.Object); ok {
+		return obj.Attributes()
+	}
+	return nil
+}
+
+func mapElements(v attr.Value) map[string]attr.Value {
+	if m, ok := v.(types.Map); ok {
+		return m.Elements()
+	}
+	return nil
 }
 
 func adoptsSchemaParameters(ctx context.Context, planned, prior attr.Value) bool {
