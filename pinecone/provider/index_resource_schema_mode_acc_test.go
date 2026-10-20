@@ -308,7 +308,7 @@ resource "pinecone_index" "test" {
 func TestAccIndexResource_documentIndexIntegratedEmbedding(t *testing.T) {
 	t.Parallel()
 	rName := acctest.RandomWithPrefix("tftest")
-	config := func(address string) string {
+	configWithBody := func(address, body string) string {
 		return fmt.Sprintf(`
 provider "pinecone" {
 }
@@ -322,7 +322,7 @@ resource "pinecone_index" %q {
     fields = {
       body = {
         string = {
-          embed = { read_parameters = { truncate = "END" } }
+          %s
         }
       }
       summary = {
@@ -334,7 +334,10 @@ resource "pinecone_index" %q {
     }
   }
 }
-`, address, rName)
+`, address, rName, body)
+	}
+	config := func(address string) string {
+		return configWithBody(address, `embed = { read_parameters = { truncate = "END" } }`)
 	}
 	imported := config("test") + fmt.Sprintf(`
 removed {
@@ -376,6 +379,12 @@ import {
 			{
 				Config:   config("original"),
 				PlanOnly: true,
+			},
+			// Leaving out integrated embedding the index has fails instead of replacing the index.
+			{
+				Config:      configWithBody("original", `full_text_search = {}`),
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile("Integrated embedding can't be removed from a field"),
 			},
 			{
 				ResourceName:            "pinecone_index.original",

@@ -336,6 +336,18 @@ func TestIndexResourceModifyPlan_schemaMode(t *testing.T) {
 	retagged.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{"team": types.StringValue("search")})
 	byocVector := withSchemaMode(t, s, base, schemaFields{"_values": denseField(1024, "cosine")}, byocDeployment())
 	byocDedicated := withReadCapacity(t, s, byocVector, true)
+	// embeddedBody is what a refresh records for a field version 5.0.0 imported as full-text search
+	// only: the index also embeds it, with dense and sparse integrated embedding.
+	embeddedBody := fullTextField(models.FullTextSearchModel{})
+	embeddedBody.String.Embed = embedConfig(nil, nil)
+	embeddedBody.String.SparseEmbed = sparseEmbedConfig()
+	refreshed := withSchemaMode(t, s, base, schemaFields{"body": embeddedBody}, managedDeployment())
+	fullTextOnly := withSchemaMode(t, s, base, schemaFields{"body": fullTextField(models.FullTextSearchModel{})}, managedDeployment())
+	denseOnlyBody := fullTextField(models.FullTextSearchModel{})
+	denseOnlyBody.String.Embed = embedConfig(nil, nil)
+	refreshedDense := withSchemaMode(t, s, base, schemaFields{"body": denseOnlyBody}, managedDeployment())
+	renamedFullTextOnly := fullTextOnly
+	renamedFullTextOnly.Name = types.StringValue("my-renamed-index")
 
 	tests := []struct {
 		name    string
@@ -350,6 +362,12 @@ func TestIndexResourceModifyPlan_schemaMode(t *testing.T) {
 		{name: "document index on-demand to dedicated", config: withReadCapacity(t, s, document, true), state: pointerTo(withReadCapacity(t, s, document, false))},
 		{name: "vector index dedicated to on-demand", config: withReadCapacity(t, s, vector, false), state: pointerTo(withReadCapacity(t, s, vector, true)),
 			wantErr: "Read capacity can't return to on-demand"},
+		{name: "config leaves out integrated embedding the index has", config: fullTextOnly, state: &refreshedDense,
+			wantErr: "Integrated embedding can't be removed from a field"},
+		{name: "config leaves out sparse_embed the index has", config: refreshedDense, state: &refreshed,
+			wantErr: "Integrated embedding can't be removed from a field"},
+		{name: "config adds back integrated embedding the index has", config: refreshed, state: &refreshed},
+		{name: "rename creates an index without integrated embedding", config: renamedFullTextOnly, state: &refreshed},
 		{name: "create byoc dedicated", config: byocDedicated},
 		{name: "create byoc without read capacity", config: byocVector, wantErr: "BYOC indexes need dedicated read capacity"},
 		{name: "create byoc on-demand", config: withReadCapacity(t, s, byocVector, false), wantErr: "BYOC indexes need dedicated read capacity"},

@@ -60,7 +60,10 @@ On an existing index, these changes are now rejected at plan time:
 API version `2026-07` calls indexes created with `embed` legacy integrated indexes, read and written through the legacy
 Records API. For new indexes, the API declares integrated embedding on the `string` fields of a `schema` instead.
 The provider supports that from version 5.1.0, with `embed`, `sparse_embed`, and `store_text` on a `string` field.
-Before 5.1.0, importing a document index whose fields use it leaves the embedding settings out of state.
+Before 5.1.0, importing a document index whose fields use it leaves the embedding settings out of state. From 5.1.0, a
+refresh records them, and a plan for such an index fails with `Integrated embedding can't be removed from a field` until
+the field's configuration sets `embed = {}` or `sparse_embed = {}` to match the index. Its model and other settings are
+read from the index, so the plan then shows no changes.
 
 ### The metadata schema is deprecated
 

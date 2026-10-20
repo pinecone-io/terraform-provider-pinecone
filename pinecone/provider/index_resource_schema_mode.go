@@ -589,6 +589,41 @@ func configSchemaFields(ctx context.Context, obj types.Object) (map[string]model
 	return fields, pending, diags
 }
 
+// validateIntegratedEmbeddingKept rejects a configuration that leaves out integrated embedding a
+// field of the index has, which would otherwise replace the index. A field can have it without
+// its configuration ever setting it: version 5.0.0 couldn't describe integrated embedding, so it
+// imported such fields without it, and a refresh now records it.
+func validateIntegratedEmbeddingKept(ctx context.Context, config, state models.IndexResourceModel) diag.Diagnostics {
+	stateFields, diags := models.ResourceSchemaFields(ctx, state.Schema)
+	configFields, pending, d := configSchemaFields(ctx, config.Schema)
+	diags.Append(d...)
+	if diags.HasError() || stateFields == nil || configFields == nil {
+		return diags
+	}
+	for _, name := range slices.Sorted(maps.Keys(stateFields)) {
+		current, configured := stateFields[name].String, configFields[name].String
+		if current == nil || configured == nil || pending[name] {
+			continue
+		}
+		stringPath := path.Root("schema").AtName("fields").AtMapKey(name).AtName("string")
+		for _, embedding := range []struct {
+			attribute string
+			missing   bool
+		}{
+			{"embed", current.Embed != nil && configured.Embed == nil},
+			{"sparse_embed", current.SparseEmbed != nil && configured.SparseEmbed == nil},
+		} {
+			if embedding.missing {
+				diags.AddAttributeError(stringPath.AtName(embedding.attribute), "Integrated embedding can't be removed from a field",
+					fmt.Sprintf("Field %q of this index uses %s, which is fixed when the index is created. Add %s = {} to the field "+
+						"to match the index: its model and other settings are read from the index. %s",
+						name, embedding.attribute, embedding.attribute, recreateIndexHint))
+			}
+		}
+	}
+	return diags
+}
+
 // validateStringField checks how a string field's text is searched and stored.
 func validateStringField(name string, field models.StringResourceFieldModel, p path.Path) diag.Diagnostics {
 	var diags diag.Diagnostics

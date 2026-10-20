@@ -1039,6 +1039,12 @@ func (r *IndexResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 		}
 		state = restyled
 	} else {
+		if plannedName.Equal(state.Name) {
+			resp.Diagnostics.Append(validateIntegratedEmbeddingKept(ctx, config, state)...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+		}
 		replace, diags := plansIndexReplacement(ctx, req)
 		resp.Diagnostics.Append(diags...)
 		if resp.Diagnostics.HasError() {
