@@ -111,7 +111,8 @@ resource "pinecone_index" "schema_vectors" {
   }
 }
 
-# BYOC (Bring Your Own Cloud) vector index. BYOC indexes need dedicated read capacity.
+# BYOC (Bring Your Own Cloud) vector index. Like serverless indexes, BYOC indexes default to
+# on-demand read capacity.
 resource "pinecone_index" "schema_byoc" {
   name = "tftestindex-schema-byoc"
   deployment = {
@@ -122,13 +123,6 @@ resource "pinecone_index" "schema_byoc" {
   schema = {
     fields = {
       _values = { dense_vector = { dimension = 1536, metric = "cosine" } }
-    }
-  }
-  read_capacity = {
-    dedicated = {
-      node_type = "b1"
-      replicas  = 1
-      shards    = 1
     }
   }
 }
@@ -191,7 +185,7 @@ resource "pinecone_index" "serverless" {
 
 Refer to the [model guide](https://docs.pinecone.io/models/overview) for available models and details. (see [below for nested schema](#nestedatt--embed))
 - `metric` (String) The distance metric used for similarity search: `cosine`, `dotproduct`, or `euclidean`. Sparse indexes use `dotproduct`. Defaults to `dotproduct` for sparse indexes, the model's metric with `embed`, and `cosine` otherwise. Not used with `schema`, where each dense vector field sets its own metric. Changing it replaces the index.
-- `read_capacity` (Attributes) Read capacity configuration for an index described with `schema`. With `spec`, set `read_capacity` inside `spec.serverless` or `spec.byoc` instead. BYOC indexes need `dedicated`: they don't support on-demand. Set exactly one of `dedicated` or `on_demand` to select the mode. Leaving `read_capacity` out when the index is created selects on-demand. To move an existing index from on-demand to dedicated, set `dedicated`; removing `read_capacity` from config will not change the mode already recorded in state. An index can't move from dedicated back to on-demand. Creating or changing read capacity waits until it's `Ready`, with the configured replicas and shards running; the apply fails if it reports `Error`. (see [below for nested schema](#nestedatt--read_capacity))
+- `read_capacity` (Attributes) Read capacity configuration for an index described with `schema`. With `spec`, set `read_capacity` inside `spec.serverless` or `spec.byoc` instead. Set exactly one of `dedicated` or `on_demand` to select the mode. Leaving `read_capacity` out when the index is created selects on-demand. To move an existing index from on-demand to dedicated, set `dedicated`; removing `read_capacity` from config will not change the mode already recorded in state. An index can't move from dedicated back to on-demand. Creating or changing read capacity waits until it's `Ready`, with the configured replicas and shards running; the apply fails if it reports `Error`. (see [below for nested schema](#nestedatt--read_capacity))
 - `schema` (Attributes) The index's schema: the typed fields its records contain. Use it with `deployment` instead of `dimension`, `metric`, `vector_type`, `spec`, and `embed`. A schema of named fields creates a document index, used with the documents API. A schema made only of the reserved fields `_values` (dense) and `_sparse_values` (sparse) creates a vector index, used with the vectors API. Metadata fields don't need to be declared: they're indexed automatically when you upsert data. The schema can't be changed after the index is created; changing it replaces the index. (see [below for nested schema](#nestedatt--schema))
 - `spec` (Attributes) Where and how the index runs, in the `spec` style. Set exactly one of `serverless`, `byoc`, or `pod`. Not used with `schema`, which uses `deployment` instead. (see [below for nested schema](#nestedatt--spec))
 - `tags` (Map of String) Custom user tags added to an index, at most 20 per index. Keys must be 80 characters or less and contain only letters, digits, `_`, or `-`. Values must be 120 characters or less and consist of printable ASCII characters or spaces. Values can't be empty. To remove a tag, remove its key from the map; to remove every tag, set `tags = {}`. Removing the `tags` attribute leaves the index's tags unchanged.
@@ -209,7 +203,7 @@ Refer to the [model guide](https://docs.pinecone.io/models/overview) for availab
 
 Optional:
 
-- `byoc` (Attributes) A BYOC (Bring Your Own Cloud) index. Only vector indexes, whose schema is made of the reserved fields, can run on BYOC. BYOC indexes need `read_capacity.dedicated`: they don't support on-demand read capacity. (see [below for nested schema](#nestedatt--deployment--byoc))
+- `byoc` (Attributes) A BYOC (Bring Your Own Cloud) index. Only vector indexes, whose schema is made of the reserved fields, can run on BYOC. Like serverless indexes, BYOC indexes default to on-demand read capacity. (see [below for nested schema](#nestedatt--deployment--byoc))
 - `managed` (Attributes) A serverless index. (see [below for nested schema](#nestedatt--deployment--managed))
 
 <a id="nestedatt--deployment--byoc"></a>
@@ -259,7 +253,7 @@ Read-Only:
 Optional:
 
 - `dedicated` (Attributes) Dedicated read capacity mode. Set `node_type`, `replicas`, and `shards` to provision fixed compute for this index. All three fields are required when first switching to dedicated mode. (see [below for nested schema](#nestedatt--read_capacity--dedicated))
-- `on_demand` (Attributes) On-demand read capacity, the default. Set it to `{}` to select on-demand explicitly. BYOC indexes don't support on-demand, and an index with dedicated read capacity can't switch back to it. (see [below for nested schema](#nestedatt--read_capacity--on_demand))
+- `on_demand` (Attributes) On-demand read capacity, the default. Set it to `{}` to select on-demand explicitly. An index with dedicated read capacity can't switch back to it. (see [below for nested schema](#nestedatt--read_capacity--on_demand))
 
 <a id="nestedatt--read_capacity--dedicated"></a>
 ### Nested Schema for `read_capacity.dedicated`
@@ -401,7 +395,7 @@ Required:
 
 Optional:
 
-- `read_capacity` (Attributes) Read capacity configuration for the index. BYOC indexes need `dedicated`: they don't support on-demand. Set exactly one of `dedicated` or `on_demand` to select the mode. Leaving `read_capacity` out when the index is created selects on-demand. To move an existing index from on-demand to dedicated, set `dedicated`; removing `read_capacity` from config will not change the mode already recorded in state. An index can't move from dedicated back to on-demand. Creating or changing read capacity waits until it's `Ready`, with the configured replicas and shards running; the apply fails if it reports `Error`. (see [below for nested schema](#nestedatt--spec--byoc--read_capacity))
+- `read_capacity` (Attributes) Read capacity configuration for the index. Set exactly one of `dedicated` or `on_demand` to select the mode. Leaving `read_capacity` out when the index is created selects on-demand. To move an existing index from on-demand to dedicated, set `dedicated`; removing `read_capacity` from config will not change the mode already recorded in state. An index can't move from dedicated back to on-demand. Creating or changing read capacity waits until it's `Ready`, with the configured replicas and shards running; the apply fails if it reports `Error`. (see [below for nested schema](#nestedatt--spec--byoc--read_capacity))
 - `schema` (Attributes, Deprecated) Schema for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when `schema` is present, only fields listed in `fields` with `filterable: true` are indexed. This field can only be set at index creation time — setting or changing it requires replacing the index, while removing it leaves the index in place. New serverless indexes accept it only together with `embed`, and new BYOC indexes don't accept it; other indexes index metadata automatically when you upsert data. (see [below for nested schema](#nestedatt--spec--byoc--schema))
 
 <a id="nestedatt--spec--byoc--read_capacity"></a>
@@ -410,7 +404,7 @@ Optional:
 Optional:
 
 - `dedicated` (Attributes) Dedicated read capacity mode. Set `node_type`, `replicas`, and `shards` to provision fixed compute for this index. All three fields are required when first switching to dedicated mode. (see [below for nested schema](#nestedatt--spec--byoc--read_capacity--dedicated))
-- `on_demand` (Attributes) On-demand read capacity, the default. Set it to `{}` to select on-demand explicitly. BYOC indexes don't support on-demand, and an index with dedicated read capacity can't switch back to it. (see [below for nested schema](#nestedatt--spec--byoc--read_capacity--on_demand))
+- `on_demand` (Attributes) On-demand read capacity, the default. Set it to `{}` to select on-demand explicitly. An index with dedicated read capacity can't switch back to it. (see [below for nested schema](#nestedatt--spec--byoc--read_capacity--on_demand))
 
 <a id="nestedatt--spec--byoc--read_capacity--dedicated"></a>
 ### Nested Schema for `spec.byoc.read_capacity.dedicated`
@@ -491,7 +485,7 @@ Optional:
 Optional:
 
 - `dedicated` (Attributes) Dedicated read capacity mode. Set `node_type`, `replicas`, and `shards` to provision fixed compute for this index. All three fields are required when first switching to dedicated mode. (see [below for nested schema](#nestedatt--spec--serverless--read_capacity--dedicated))
-- `on_demand` (Attributes) On-demand read capacity, the default. Set it to `{}` to select on-demand explicitly. BYOC indexes don't support on-demand, and an index with dedicated read capacity can't switch back to it. (see [below for nested schema](#nestedatt--spec--serverless--read_capacity--on_demand))
+- `on_demand` (Attributes) On-demand read capacity, the default. Set it to `{}` to select on-demand explicitly. An index with dedicated read capacity can't switch back to it. (see [below for nested schema](#nestedatt--spec--serverless--read_capacity--on_demand))
 
 <a id="nestedatt--spec--serverless--read_capacity--dedicated"></a>
 ### Nested Schema for `spec.serverless.read_capacity.dedicated`
