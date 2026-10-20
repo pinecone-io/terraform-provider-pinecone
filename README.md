@@ -306,8 +306,8 @@ document index instead. The model and `field_map` are fixed when the index is cr
 `write_parameters` can be updated in place.
 
 ```terraform
-resource "pinecone_index" "integrated" {
-  name = "my-integrated-index"
+resource "pinecone_index" "legacy_integrated" {
+  name = "my-legacy-integrated-index"
   spec = {
     serverless = {
       cloud  = "aws"
@@ -400,8 +400,8 @@ resource "pinecone_index" "dedicated" {
 ### Metadata Schema (deprecated)
 
 `spec.serverless.schema` and `spec.byoc.schema` are deprecated: metadata fields are indexed automatically when you
-upsert data. New indexes accept them only together with `embed`. Existing indexes keep the value, and it can be
-removed from the configuration without replacing the index.
+upsert data. New indexes accept them only together with `embed`, on legacy integrated indexes. Existing indexes keep
+the value, and it can be removed from the configuration without replacing the index.
 
 ## Documentation
 

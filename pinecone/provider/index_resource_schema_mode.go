@@ -82,7 +82,7 @@ func indexSchemaResourceAttribute() schema.Attribute {
 			PlanModifiers:       []planmodifier.Map{mapplanmodifier.UseStateForUnknown()},
 		}
 	}
-	modelGuide := "Refer to the [model guide](https://docs.pinecone.io/guides/index-data/create-an-index#embedding-models) for available " +
+	modelGuide := "Refer to the [model guide](https://docs.pinecone.io/models/overview) for available " +
 		"models. Pinecone embeds the field's text when documents are upserted or updated, and embeds the query of "
 
 	return schema.SingleNestedAttribute{
@@ -411,6 +411,13 @@ func (r *IndexResource) ValidateConfig(ctx context.Context, req resource.Validat
 	resp.Diagnostics.Append(validateIndexTags(config.Tags)...)
 }
 
+// conflictHint adds a pointer for a spec-style attribute whose schema-style counterpart lives
+// somewhere else.
+var conflictHint = map[string]string{
+	"embed": " Top-level embed creates a legacy integrated index. For integrated embedding on a document index, set embed or " +
+		"sparse_embed on a string field of the schema instead.",
+}
+
 // validateIndexStyleConfig checks that a configuration describes the index one way: with schema
 // and deployment, or with dimension, metric, vector_type, spec, and embed.
 func validateIndexStyleConfig(config models.IndexResourceModel) diag.Diagnostics {
@@ -449,7 +456,7 @@ func validateIndexStyleConfig(config models.IndexResourceModel) diag.Diagnostics
 			diags.AddAttributeError(path.Root(name), "Conflicting index configuration",
 				fmt.Sprintf("%s can't be used together with schema and deployment. An index is described either by schema and deployment, "+
 					"or by dimension, metric, vector_type, spec, and embed. For a vector index described by schema, use the reserved "+
-					"fields %s and %s.", name, models.ReservedDenseFieldName, models.ReservedSparseFieldName))
+					"fields %s and %s.%s", name, models.ReservedDenseFieldName, models.ReservedSparseFieldName, conflictHint[name]))
 		}
 	}
 	return diags

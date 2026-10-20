@@ -63,7 +63,7 @@ output "articles_full_text_search_fields" {
 - `dimension` (Number) The dimension of the index's dense vectors. Derived from the index's vector fields in `schema`: null when they don't determine a single value, as for an index with only full-text-search fields.
 - `embed` (Attributes) The embedding of a legacy integrated index, created with embed. Null for other indexes. Integrated embedding on a document index is reported on its `schema`'s `string` fields.
 
-Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details. (see [below for nested schema](#nestedatt--embed))
+Refer to the [model guide](https://docs.pinecone.io/models/overview) for available models and details. (see [below for nested schema](#nestedatt--embed))
 - `host` (String) The URL address where the index is hosted.
 - `id` (String) The index's name.
 - `metric` (String) The distance metric used for similarity search: `cosine`, `dotproduct`, or `euclidean`. Derived from the index's vector fields in `schema`: null when they don't determine a single value, as for an index with only full-text-search fields.

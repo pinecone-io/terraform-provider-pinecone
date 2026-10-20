@@ -104,8 +104,8 @@ resource "pinecone_index" "schema_byoc" {
 
 # Legacy integrated index, read and written through the legacy Records API. For new indexes, use
 # integrated embedding on a document index instead.
-resource "pinecone_index" "integrated" {
-  name = "tftestindex-integrated"
+resource "pinecone_index" "legacy_integrated" {
+  name = "tftestindex-legacy-integrated"
   spec = {
     serverless = {
       cloud  = "aws"

@@ -289,7 +289,7 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 			"embed": schema.SingleNestedAttribute{
 				Description: `Creates a legacy integrated index: a model hosted by Pinecone embeds a text field, and the index is read and written through the legacy Records API. Only with the ` + "`spec`" + ` style. For a new index, use integrated embedding instead: declare ` + "`embed`" + ` or ` + "`sparse_embed`" + ` on a ` + "`string`" + ` field of a ` + "`schema`" + `. ` + "`embed`" + ` can only be set when the index is created: ` + "`model`" + ` and ` + "`field_map`" + ` can't be changed afterwards, and ` + "`embed`" + ` can't be added to or removed from an existing index. ` + "`read_parameters`" + ` and ` + "`write_parameters`" + ` can be updated in place.
 
-Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details.`,
+Refer to the [model guide](https://docs.pinecone.io/models/overview) for available models and details.`,
 				Optional: true,
 				Computed: true,
 				Validators: []validator.Object{
