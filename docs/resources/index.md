@@ -6,8 +6,8 @@ description: |-
   The pinecone_index resource creates and manages a Pinecone index. Learn more about indexes in the docs https://docs.pinecone.io/guides/indexes/understanding-indexes.
   An index is described in one of two styles:
   
-  The schema style, with schema and deployment, the way Pinecone API version 2026-07 describes indexes. A schema of named fields creates a document index, which combines dense vector, sparse vector, and full-text-search fields. A schema made only of the reserved fields _values and _sparse_values creates a vector index. Use this style for new indexes without integrated embedding.
-  The spec style, with dimension, metric, vector_type, spec, and embed, the way earlier versions of the provider described indexes. It's planned for deprecation. Indexes with integrated embedding and existing pod-based indexes still need it for now.
+  The schema style, with schema and deployment, the way Pinecone API version 2026-07 describes indexes. A schema of named fields creates a document index, which combines dense vector, sparse vector, and full-text-search fields. A schema made only of the reserved fields _values and _sparse_values creates a vector index. Document indexes can embed a string field's text with a model hosted by Pinecone, through integrated embedding. Use this style for new indexes.
+  The spec style, with dimension, metric, vector_type, spec, and embed, the way earlier versions of the provider described indexes. It's planned for deprecation. Legacy integrated indexes, created with embed, and existing pod-based indexes still need it for now.
   A configuration uses one style or the other.
   Moving to the schema style: to move an existing vector index from the spec style to the schema style, rewrite its configuration to describe the same index. The plan shows an in-place update that only changes Terraform state: the API isn't called, and the index isn't replaced. The move is one way: an index in the schema style can't move back to the spec style. See the version 5 upgrade guide https://registry.terraform.io/providers/pinecone-io/pinecone/latest/docs/guides/version-5-upgrade for how each attribute maps.
   Importing: import records document indexes in the schema style and every other index in the spec style, however the index was created. If the configuration describes an imported vector index in the schema style, the next plan moves it there the same way.
@@ -19,9 +19,9 @@ The `pinecone_index` resource creates and manages a Pinecone index. Learn more a
 
 An index is described in one of two styles:
 
-- **The `schema` style**, with `schema` and `deployment`, the way Pinecone API version `2026-07` describes indexes. A schema of named fields creates a document index, which combines dense vector, sparse vector, and full-text-search fields. A schema made only of the reserved fields `_values` and `_sparse_values` creates a vector index. Use this style for new indexes without integrated embedding.
+- **The `schema` style**, with `schema` and `deployment`, the way Pinecone API version `2026-07` describes indexes. A schema of named fields creates a document index, which combines dense vector, sparse vector, and full-text-search fields. A schema made only of the reserved fields `_values` and `_sparse_values` creates a vector index. Document indexes can embed a `string` field's text with a model hosted by Pinecone, through integrated embedding. Use this style for new indexes.
 
-- **The `spec` style**, with `dimension`, `metric`, `vector_type`, `spec`, and `embed`, the way earlier versions of the provider described indexes. It's planned for deprecation. Indexes with integrated embedding and existing pod-based indexes still need it for now.
+- **The `spec` style**, with `dimension`, `metric`, `vector_type`, `spec`, and `embed`, the way earlier versions of the provider described indexes. It's planned for deprecation. Legacy integrated indexes, created with `embed`, and existing pod-based indexes still need it for now.
 
 A configuration uses one style or the other.
 
@@ -66,6 +66,35 @@ resource "pinecone_index" "document" {
   }
 }
 
+# Document index with integrated embedding: Pinecone embeds the text of body with a dense model
+# and the text of summary with a sparse model. body is also stored and indexed for full-text
+# search. summary's text is embedded and then discarded.
+resource "pinecone_index" "embedded" {
+  name = "tftestindex-embedded"
+  deployment = {
+    managed = {
+      cloud  = "aws"
+      region = "us-east-1"
+    }
+  }
+  schema = {
+    fields = {
+      body = {
+        string = {
+          embed            = { model = "llama-text-embed-v2", dimension = 1024 }
+          full_text_search = { stemming = true }
+        }
+      }
+      summary = {
+        string = {
+          sparse_embed = {}
+          store_text   = false
+        }
+      }
+    }
+  }
+}
+
 # Vector index, described by the reserved fields _values (dense) and _sparse_values (sparse)
 resource "pinecone_index" "schema_vectors" {
   name = "tftestindex-schema-vectors"
@@ -105,11 +134,12 @@ resource "pinecone_index" "schema_byoc" {
 }
 
 # ── Indexes described with dimension, metric, and spec ───────────────────────
-# This style is planned for deprecation. Indexes with integrated embedding still need it.
+# This style is planned for deprecation. Legacy integrated indexes still need it.
 
-# Index with integrated embedding
-resource "pinecone_index" "integrated" {
-  name = "tftestindex-integrated"
+# Legacy integrated index, read and written through the legacy Records API. For new indexes, use
+# integrated embedding on a document index instead.
+resource "pinecone_index" "legacy_integrated" {
+  name = "tftestindex-legacy-integrated"
   spec = {
     serverless = {
       cloud  = "aws"
@@ -157,9 +187,9 @@ resource "pinecone_index" "serverless" {
 - `deletion_protection` (String) Whether deletion protection is enabled: `enabled` or `disabled`. Defaults to `disabled`. An index with deletion protection enabled can't be deleted.
 - `deployment` (Attributes) Where the index runs. Required with `schema`. Set exactly one of `managed` or `byoc`. Changing it replaces the index. (see [below for nested schema](#nestedatt--deployment))
 - `dimension` (Number) The dimension of the index's dense vectors. Required for dense indexes without `embed`; with `embed`, it defaults to the model's dimension. Not used with `schema`, where each dense vector field sets its own dimension. Changing it replaces the index.
-- `embed` (Attributes) The index's integrated embedding: a model hosted by Pinecone that embeds a text field. Only with the `spec` style; the `schema` style doesn't support integrated embedding yet. It can only be set when the index is created: `model` and `field_map` can't be changed afterwards, and `embed` can't be added to or removed from an existing index. `read_parameters` and `write_parameters` can be updated in place.
+- `embed` (Attributes) Creates a legacy integrated index: a model hosted by Pinecone embeds a text field, and the index is read and written through the legacy Records API. Only with the `spec` style. For a new index, use integrated embedding instead: declare `embed` or `sparse_embed` on a `string` field of a `schema`. `embed` can only be set when the index is created: `model` and `field_map` can't be changed afterwards, and `embed` can't be added to or removed from an existing index. `read_parameters` and `write_parameters` can be updated in place.
 
-Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details. (see [below for nested schema](#nestedatt--embed))
+Refer to the [model guide](https://docs.pinecone.io/models/overview) for available models and details. (see [below for nested schema](#nestedatt--embed))
 - `metric` (String) The distance metric used for similarity search: `cosine`, `dotproduct`, or `euclidean`. Sparse indexes use `dotproduct`. Defaults to `dotproduct` for sparse indexes, the model's metric with `embed`, and `cosine` otherwise. Not used with `schema`, where each dense vector field sets its own metric. Changing it replaces the index.
 - `read_capacity` (Attributes) Read capacity configuration for an index described with `schema`. With `spec`, set `read_capacity` inside `spec.serverless` or `spec.byoc` instead. BYOC indexes need `dedicated`: they don't support on-demand. Set exactly one of `dedicated` or `on_demand` to select the mode. Leaving `read_capacity` out when the index is created selects on-demand. To move an existing index from on-demand to dedicated, set `dedicated`; removing `read_capacity` from config will not change the mode already recorded in state. An index can't move from dedicated back to on-demand. Creating or changing read capacity waits until it's `Ready`, with the configured replicas and shards running; the apply fails if it reports `Error`. (see [below for nested schema](#nestedatt--read_capacity))
 - `schema` (Attributes) The index's schema: the typed fields its records contain. Use it with `deployment` instead of `dimension`, `metric`, `vector_type`, `spec`, and `embed`. A schema of named fields creates a document index, used with the documents API. A schema made only of the reserved fields `_values` (dense) and `_sparse_values` (sparse) creates a vector index, used with the vectors API. Metadata fields don't need to be declared: they're indexed automatically when you upsert data. The schema can't be changed after the index is created; changing it replaces the index. (see [below for nested schema](#nestedatt--schema))
@@ -260,7 +290,7 @@ Optional:
 
 - `dense_vector` (Attributes) A dense vector field. An index can have at most one. (see [below for nested schema](#nestedatt--schema--fields--dense_vector))
 - `sparse_vector` (Attributes) A sparse vector field, which takes no dimension or metric. An index can have at most one. (see [below for nested schema](#nestedatt--schema--fields--sparse_vector))
-- `string` (Attributes) A string field indexed for full-text search. An index can have at most 100. (see [below for nested schema](#nestedatt--schema--fields--string))
+- `string` (Attributes) A string field searched by full-text search, integrated embedding, or both. Set at least one of `full_text_search`, `embed`, or `sparse_embed`. They can be combined, so the same text can be searched by full-text search, dense integrated embedding, and sparse integrated embedding. An index can have at most 100 string fields that store their text. (see [below for nested schema](#nestedatt--schema--fields--string))
 
 <a id="nestedatt--schema--fields--dense_vector"></a>
 ### Nested Schema for `schema.fields.dense_vector`
@@ -286,13 +316,30 @@ Optional:
 <a id="nestedatt--schema--fields--string"></a>
 ### Nested Schema for `schema.fields.string`
 
-Required:
-
-- `full_text_search` (Attributes) How the field's text is analyzed. Set it to `{}` for the defaults. (see [below for nested schema](#nestedatt--schema--fields--string--full_text_search))
-
 Optional:
 
 - `description` (String) A description of the field, at most 256 bytes.
+- `embed` (Attributes) Dense integrated embedding with a model hosted by Pinecone. Set it to `{}` for the default model at its default dimension and metric. An index has one dense vector slot: at most one field can set `embed` or be a `dense_vector` field. Refer to the [model guide](https://docs.pinecone.io/models/overview) for available models. Pinecone embeds the field's text when documents are upserted or updated, and embeds the query of an `embed` search with the same model. (see [below for nested schema](#nestedatt--schema--fields--string--embed))
+- `full_text_search` (Attributes) How the field's text is analyzed for full-text search. Set it to `{}` for the defaults. A field that stores its text is always indexed for full-text search, so when this isn't set, it's enabled with the defaults. Can't be set with `store_text = false`. (see [below for nested schema](#nestedatt--schema--fields--string--full_text_search))
+- `sparse_embed` (Attributes) Sparse integrated embedding with a model hosted by Pinecone. Set it to `{}` for the default model. Sparse embeddings have no dimension or metric. An index has one sparse vector slot: at most one field can set `sparse_embed` or be a `sparse_vector` field. Refer to the [model guide](https://docs.pinecone.io/models/overview) for available models. Pinecone embeds the field's text when documents are upserted or updated, and embeds the query of a `sparse_embed` search with the same model. (see [below for nested schema](#nestedatt--schema--fields--string--sparse_embed))
+- `store_text` (Boolean) Whether the field's text is stored. Defaults to `true`, in which case the field is also indexed for full-text search. Set it to `false` only on a field with `embed` or `sparse_embed` and without `full_text_search`: the text is embedded and then discarded. This can save space when the field is only used for similarity search, or keep sensitive text out of Pinecone. The field then has no full-text search: it can only be searched with `embed` or `sparse_embed` scoring, can't be matched by `$match_*` filters, and can't be named in a fetch's or search's `include_fields`. If you might need full-text search later, keep text stored.
+
+<a id="nestedatt--schema--fields--string--embed"></a>
+### Nested Schema for `schema.fields.string.embed`
+
+Optional:
+
+- `dimension` (Number) The dimension of the embedding vectors. Defaults to the model's default dimension. A dimension the model doesn't support is rejected.
+- `metric` (String) The distance metric used for similarity search: `cosine`, `dotproduct`, or `euclidean`. Defaults to the model's default metric. A metric the model doesn't support is rejected.
+- `model` (String) The name of a hosted dense embedding model. Defaults to `llama-text-embed-v2`.
+- `read_parameters` (Map of String) Model-specific parameters applied when embedding search query text, such as `truncate`. The defaults are chosen per model and are rarely worth changing. The parameters the index uses, including the model's defaults, are reported in `effective_read_parameters`.
+- `write_parameters` (Map of String) Model-specific parameters applied when embedding document text, such as `truncate`. The defaults are chosen per model and are rarely worth changing. The parameters the index uses, including the model's defaults, are reported in `effective_write_parameters`.
+
+Read-Only:
+
+- `effective_read_parameters` (Map of String) The parameters the index uses: `read_parameters` merged with the model's defaults.
+- `effective_write_parameters` (Map of String) The parameters the index uses: `write_parameters` merged with the model's defaults.
+
 
 <a id="nestedatt--schema--fields--string--full_text_search"></a>
 ### Nested Schema for `schema.fields.string.full_text_search`
@@ -316,6 +363,21 @@ Optional:
 
 - `prefix_only` (Boolean) Whether only n-grams anchored at the start of each token are generated, as for autocomplete. Defaults to `false`.
 
+
+
+<a id="nestedatt--schema--fields--string--sparse_embed"></a>
+### Nested Schema for `schema.fields.string.sparse_embed`
+
+Optional:
+
+- `model` (String) The name of a hosted sparse embedding model. Defaults to `pinecone-sparse-english-v0`.
+- `read_parameters` (Map of String) Model-specific parameters applied when embedding search query text, such as `truncate`. The defaults are chosen per model and are rarely worth changing. The parameters the index uses, including the model's defaults, are reported in `effective_read_parameters`.
+- `write_parameters` (Map of String) Model-specific parameters applied when embedding document text, such as `truncate`. The defaults are chosen per model and are rarely worth changing. The parameters the index uses, including the model's defaults, are reported in `effective_write_parameters`.
+
+Read-Only:
+
+- `effective_read_parameters` (Map of String) The parameters the index uses: `read_parameters` merged with the model's defaults.
+- `effective_write_parameters` (Map of String) The parameters the index uses: `write_parameters` merged with the model's defaults.
 
 
 

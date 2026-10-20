@@ -40,6 +40,39 @@ func fullTextField(config models.FullTextSearchModel) models.IndexResourceSchema
 	return models.IndexResourceSchemaFieldModel{String: &models.StringResourceFieldModel{FullTextSearch: &config}}
 }
 
+func stringMapValue(values map[string]string) types.Map {
+	if values == nil {
+		return types.MapNull(types.StringType)
+	}
+	elements := make(map[string]attr.Value, len(values))
+	for k, v := range values {
+		elements[k] = types.StringValue(v)
+	}
+	return types.MapValueMust(types.StringType, elements)
+}
+
+func embedConfig(readParameters, effectiveReadParameters map[string]string) *models.EmbedConfigResourceModel {
+	return &models.EmbedConfigResourceModel{
+		Model: types.StringValue("llama-text-embed-v2"), Dimension: types.Int32Value(1024), Metric: types.StringValue("cosine"),
+		ReadParameters: stringMapValue(readParameters), WriteParameters: types.MapNull(types.StringType),
+		EffectiveReadParameters: stringMapValue(effectiveReadParameters), EffectiveWriteParameters: types.MapNull(types.StringType),
+	}
+}
+
+func sparseEmbedConfig() *models.SparseEmbedConfigResourceModel {
+	return &models.SparseEmbedConfigResourceModel{
+		Model: types.StringValue("pinecone-sparse-english-v0"), ReadParameters: types.MapNull(types.StringType), WriteParameters: types.MapNull(types.StringType),
+		EffectiveReadParameters: types.MapNull(types.StringType), EffectiveWriteParameters: types.MapNull(types.StringType),
+	}
+}
+
+// embeddedField is a string field with integrated embedding. storeText is null when it's nil.
+func embeddedField(embed *models.EmbedConfigResourceModel, sparseEmbed *models.SparseEmbedConfigResourceModel, storeText *bool) models.IndexResourceSchemaFieldModel {
+	return models.IndexResourceSchemaFieldModel{String: &models.StringResourceFieldModel{
+		Embed: embed, SparseEmbed: sparseEmbed, StoreText: types.BoolPointerValue(storeText),
+	}}
+}
+
 func managedDeployment() models.IndexResourceDeploymentModel {
 	return models.IndexResourceDeploymentModel{Managed: &models.ManagedDeploymentModel{
 		Cloud: types.StringValue("aws"), Region: types.StringValue("us-east-1"),
@@ -154,6 +187,25 @@ func TestIndexResourceValidateConfig(t *testing.T) {
 		"sparse_vector": types.ObjectNull(models.SparseVectorFieldModel{}.AttrTypes()),
 		"string":        types.ObjectNull(models.StringResourceFieldModel{}.AttrTypes()),
 	}))
+	unknownEmbed := withUnknownField(t, s, document(documentFields), "body", types.ObjectValueMust(fieldType.AttrTypes, map[string]attr.Value{
+		"dense_vector":  types.ObjectNull(models.DenseVectorFieldModel{}.AttrTypes()),
+		"sparse_vector": types.ObjectNull(models.SparseVectorFieldModel{}.AttrTypes()),
+		"string": types.ObjectValueMust(models.StringResourceFieldModel{}.AttrTypes(), map[string]attr.Value{
+			"full_text_search": types.ObjectNull(models.FullTextSearchModel{}.AttrTypes()),
+			"embed":            types.ObjectUnknown(models.EmbedConfigResourceModel{}.AttrTypes()),
+			"sparse_embed":     types.ObjectNull(models.SparseEmbedConfigResourceModel{}.AttrTypes()),
+			"store_text":       types.BoolValue(false),
+			"description":      types.StringNull(),
+		}),
+	}))
+	ftsAndEmbed := fullTextField(models.FullTextSearchModel{})
+	ftsAndEmbed.String.Embed = embedConfig(nil, nil)
+	ftsAndBothEmbeds := fullTextField(models.FullTextSearchModel{})
+	ftsAndBothEmbeds.String.Embed = embedConfig(nil, nil)
+	ftsAndBothEmbeds.String.SparseEmbed = sparseEmbedConfig()
+	ftsWithoutStoredText := fullTextField(models.FullTextSearchModel{})
+	ftsWithoutStoredText.String.Embed = embedConfig(nil, nil)
+	ftsWithoutStoredText.String.StoreText = types.BoolValue(false)
 	unknownManaged := withUnknownDeployment(t, s, document(documentFields), "managed")
 	unknownByoc := withUnknownDeployment(t, s, withSchemaMode(t, s, base, schemaFields{"_values": denseField(1024, "cosine")}, byocDeployment()), "byoc")
 	specTypes := attrTypesOf(t, s, "spec")
@@ -222,6 +274,25 @@ func TestIndexResourceValidateConfig(t *testing.T) {
 		{name: "ngram range", config: document(schemaFields{"body": fullTextField(models.FullTextSearchModel{
 			Ngram: &models.NgramModel{MinGram: types.Int64Value(5), MaxGram: types.Int64Value(3)},
 		})}), wantErr: "Invalid n-gram range"},
+		{name: "integrated embedding", config: document(schemaFields{
+			"body": embeddedField(embedConfig(nil, nil), nil, nil), "notes": embeddedField(nil, sparseEmbedConfig(), pointerTo(false)),
+		})},
+		{name: "full-text search with integrated embedding", config: document(schemaFields{"body": ftsAndEmbed, "terms": sparseField()})},
+		{name: "full-text search, embed, and sparse_embed on one field", config: document(schemaFields{"body": ftsAndBothEmbeds, "title": fullTextField(models.FullTextSearchModel{})})},
+		{name: "second field with sparse_embed", config: document(schemaFields{"body": ftsAndBothEmbeds, "notes": embeddedField(nil, sparseEmbedConfig(), nil)}),
+			wantErr: "Too many sparse vector fields"},
+		{name: "string field without search", config: document(schemaFields{"body": embeddedField(nil, nil, nil)}), wantErr: "Invalid string field"},
+		{name: "store_text false without embedding", config: document(schemaFields{"body": embeddedField(nil, nil, pointerTo(false))}),
+			wantErr: "store_text = false requires integrated embedding"},
+		{name: "store_text false with full-text search", config: document(schemaFields{"body": ftsWithoutStoredText}),
+			wantErr: "store_text = false can't be combined with full_text_search"},
+		{name: "dense vector and embed", config: document(schemaFields{"embedding": denseField(8, "cosine"), "body": embeddedField(embedConfig(nil, nil), nil, nil)}),
+			wantErr: "Too many dense vector fields"},
+		{name: "sparse vector and sparse_embed", config: document(schemaFields{"terms": sparseField(), "body": embeddedField(nil, sparseEmbedConfig(), nil)}),
+			wantErr: "Too many sparse vector fields"},
+		{name: "two embed fields", config: document(schemaFields{"a": embeddedField(embedConfig(nil, nil), nil, nil), "b": embeddedField(embedConfig(nil, nil), nil, nil)}),
+			wantErr: "Too many dense vector fields"},
+		{name: "unknown embed", config: unknownEmbed},
 		{name: "document index on BYOC", config: withSchemaMode(t, s, base, documentFields, byocDeployment()), wantErr: "Document indexes require a managed deployment"},
 		{name: "both deployment types", config: withSchemaMode(t, s, base, documentFields, bothDeployments), wantErr: "Conflicting deployment types"},
 		{name: "no deployment type", config: withSchemaMode(t, s, base, documentFields, models.IndexResourceDeploymentModel{}), wantErr: "Missing deployment type"},
@@ -265,6 +336,18 @@ func TestIndexResourceModifyPlan_schemaMode(t *testing.T) {
 	retagged.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{"team": types.StringValue("search")})
 	byocVector := withSchemaMode(t, s, base, schemaFields{"_values": denseField(1024, "cosine")}, byocDeployment())
 	byocDedicated := withReadCapacity(t, s, byocVector, true)
+	// embeddedBody is what a refresh records for a field version 5.0.0 imported as full-text search
+	// only: the index also embeds it, with dense and sparse integrated embedding.
+	embeddedBody := fullTextField(models.FullTextSearchModel{})
+	embeddedBody.String.Embed = embedConfig(nil, nil)
+	embeddedBody.String.SparseEmbed = sparseEmbedConfig()
+	refreshed := withSchemaMode(t, s, base, schemaFields{"body": embeddedBody}, managedDeployment())
+	fullTextOnly := withSchemaMode(t, s, base, schemaFields{"body": fullTextField(models.FullTextSearchModel{})}, managedDeployment())
+	denseOnlyBody := fullTextField(models.FullTextSearchModel{})
+	denseOnlyBody.String.Embed = embedConfig(nil, nil)
+	refreshedDense := withSchemaMode(t, s, base, schemaFields{"body": denseOnlyBody}, managedDeployment())
+	renamedFullTextOnly := fullTextOnly
+	renamedFullTextOnly.Name = types.StringValue("my-renamed-index")
 
 	tests := []struct {
 		name    string
@@ -279,6 +362,12 @@ func TestIndexResourceModifyPlan_schemaMode(t *testing.T) {
 		{name: "document index on-demand to dedicated", config: withReadCapacity(t, s, document, true), state: pointerTo(withReadCapacity(t, s, document, false))},
 		{name: "vector index dedicated to on-demand", config: withReadCapacity(t, s, vector, false), state: pointerTo(withReadCapacity(t, s, vector, true)),
 			wantErr: "Read capacity can't return to on-demand"},
+		{name: "config leaves out integrated embedding the index has", config: fullTextOnly, state: &refreshedDense,
+			wantErr: "Integrated embedding can't be removed from a field"},
+		{name: "config leaves out sparse_embed the index has", config: refreshedDense, state: &refreshed,
+			wantErr: "Integrated embedding can't be removed from a field"},
+		{name: "config adds back integrated embedding the index has", config: refreshed, state: &refreshed},
+		{name: "rename creates an index without integrated embedding", config: renamedFullTextOnly, state: &refreshed},
 		{name: "create byoc dedicated", config: byocDedicated},
 		{name: "create byoc without read capacity", config: byocVector, wantErr: "BYOC indexes need dedicated read capacity"},
 		{name: "create byoc on-demand", config: withReadCapacity(t, s, byocVector, false), wantErr: "BYOC indexes need dedicated read capacity"},
@@ -311,14 +400,26 @@ func TestPlansIndexReplacement_schemaMode(t *testing.T) {
 	otherRegion := managedDeployment()
 	otherRegion.Managed.Region = types.StringValue("us-west-2")
 
+	effective := map[string]string{"input_type": "query", "truncate": "END"}
+	imported := withSchemaMode(t, s, base, schemaFields{"body": embeddedField(embedConfig(nil, effective), nil, pointerTo(true))}, managedDeployment())
+	otherDimension := embedConfig(map[string]string{"truncate": "END"}, effective)
+	otherDimension.Dimension = types.Int32Value(512)
+
 	tests := []struct {
 		name   string
 		config models.IndexResourceModel
+		state  *models.IndexResourceModel
 		want   bool
 	}{
-		{"unchanged", document, false},
-		{"field added", withSchemaMode(t, s, base, schemaFields{"body": fullTextField(models.FullTextSearchModel{}), "title": fullTextField(models.FullTextSearchModel{})}, managedDeployment()), true},
-		{"region changed", withSchemaMode(t, s, base, schemaFields{"body": fullTextField(models.FullTextSearchModel{})}, otherRegion), true},
+		{"unchanged", document, nil, false},
+		{"adopts parameters the index uses", withSchemaMode(t, s, base,
+			schemaFields{"body": embeddedField(embedConfig(map[string]string{"truncate": "END"}, effective), nil, pointerTo(true))}, managedDeployment()), &imported, false},
+		{"parameters the index doesn't use", withSchemaMode(t, s, base,
+			schemaFields{"body": embeddedField(embedConfig(map[string]string{"truncate": "NONE"}, effective), nil, pointerTo(true))}, managedDeployment()), &imported, true},
+		{"embed dimension changed", withSchemaMode(t, s, base,
+			schemaFields{"body": embeddedField(otherDimension, nil, pointerTo(true))}, managedDeployment()), &imported, true},
+		{"field added", withSchemaMode(t, s, base, schemaFields{"body": fullTextField(models.FullTextSearchModel{}), "title": fullTextField(models.FullTextSearchModel{})}, managedDeployment()), nil, true},
+		{"region changed", withSchemaMode(t, s, base, schemaFields{"body": fullTextField(models.FullTextSearchModel{})}, otherRegion), nil, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -328,12 +429,131 @@ func TestPlansIndexReplacement_schemaMode(t *testing.T) {
 			if d := plan.Set(ctx, &tt.config); d.HasError() {
 				t.Fatalf("setting plan: %v", d)
 			}
-			if d := state.Set(ctx, &document); d.HasError() {
+			prior := &document
+			if tt.state != nil {
+				prior = tt.state
+			}
+			if d := state.Set(ctx, prior); d.HasError() {
 				t.Fatalf("setting state: %v", d)
 			}
 			got, d := plansIndexReplacement(ctx, resource.ModifyPlanRequest{Plan: plan, State: state})
 			if d.HasError() || got != tt.want {
 				t.Errorf("plansIndexReplacement() = %v (%v), want %v", got, d, tt.want)
+			}
+
+			// The schema's own plan modifier makes the same decision when the schema changes.
+			var planned, current types.Object
+			plan.GetAttribute(ctx, path.Root("schema"), &planned)
+			state.GetAttribute(ctx, path.Root("schema"), &current)
+			req := planmodifier.ObjectRequest{
+				Config: tfsdk.Config{Schema: s, Raw: plan.Raw}, State: state, Plan: plan,
+				PlanValue: planned, StateValue: current, ConfigValue: planned,
+			}
+			var resp planmodifier.ObjectResponse
+			requiresSchemaReplace().PlanModifyObject(ctx, req, &resp)
+			if schemaChanged := !planned.Equal(current); resp.Diagnostics.HasError() || resp.RequiresReplace != (tt.want && schemaChanged) {
+				t.Errorf("schema plan modifier RequiresReplace = %v (%v), want %v", resp.RequiresReplace, resp.Diagnostics, tt.want)
+			}
+		})
+	}
+}
+
+// TestRequiresSchemaReplace_importedParameters runs the schema's plan modifier on the plan an import
+// produces. The framework marks the computed attributes that aren't configured as unknown before
+// the modifier runs, and their UseStateForUnknown modifiers restore them only afterwards.
+func TestRequiresSchemaReplace_importedParameters(t *testing.T) {
+	ctx := context.Background()
+	s := indexResourceSchema(t)
+	base := testIndexModel(t, s)
+	effective := map[string]string{"input_type": "query", "truncate": "END"}
+
+	importedField := embeddedField(embedConfig(nil, effective), nil, pointerTo(true))
+	importedField.String.FullTextSearch = &models.FullTextSearchModel{Language: types.StringValue("en"), Stemming: types.BoolValue(false), StopWords: types.BoolValue(false)}
+	importedField.String.Description = types.StringNull()
+	imported := withSchemaMode(t, s, base, schemaFields{"body": importedField}, managedDeployment())
+
+	configured := func(readParameters types.Map) models.EmbedConfigResourceModel {
+		return models.EmbedConfigResourceModel{
+			Model: types.StringNull(), Dimension: types.Int32Null(), Metric: types.StringNull(),
+			ReadParameters: readParameters, WriteParameters: types.MapNull(types.StringType),
+			EffectiveReadParameters: types.MapNull(types.StringType), EffectiveWriteParameters: types.MapNull(types.StringType),
+		}
+	}
+	// marked is what the framework plans for a configured embed: unknown wherever the config is null.
+	marked := func(readParameters types.Map) models.EmbedConfigResourceModel {
+		return models.EmbedConfigResourceModel{
+			Model: types.StringUnknown(), Dimension: types.Int32Unknown(), Metric: types.StringUnknown(),
+			ReadParameters: readParameters, WriteParameters: types.MapNull(types.StringType),
+			EffectiveReadParameters: types.MapUnknown(types.StringType), EffectiveWriteParameters: types.MapUnknown(types.StringType),
+		}
+	}
+	schemaOf := func(embed models.EmbedConfigResourceModel, unknown bool) types.Object {
+		t.Helper()
+		embedObj, d := types.ObjectValueFrom(ctx, models.EmbedConfigResourceModel{}.AttrTypes(), embed)
+		if d.HasError() {
+			t.Fatalf("building embed: %v", d)
+		}
+		stringAttrs := map[string]attr.Value{
+			"full_text_search": types.ObjectNull(models.FullTextSearchModel{}.AttrTypes()),
+			"embed":            embedObj,
+			"sparse_embed":     types.ObjectNull(models.SparseEmbedConfigResourceModel{}.AttrTypes()),
+			"store_text":       types.BoolNull(),
+			"description":      types.StringNull(),
+		}
+		if unknown {
+			stringAttrs["full_text_search"] = types.ObjectUnknown(models.FullTextSearchModel{}.AttrTypes())
+			stringAttrs["store_text"] = types.BoolUnknown()
+			stringAttrs["description"] = types.StringUnknown()
+		}
+		field := types.ObjectValueMust(models.IndexResourceSchemaFieldModel{}.AttrTypes(), map[string]attr.Value{
+			"dense_vector":  types.ObjectNull(models.DenseVectorFieldModel{}.AttrTypes()),
+			"sparse_vector": types.ObjectNull(models.SparseVectorFieldModel{}.AttrTypes()),
+			"string":        types.ObjectValueMust(models.StringResourceFieldModel{}.AttrTypes(), stringAttrs),
+		})
+		fields := types.MapValueMust(types.ObjectType{AttrTypes: models.IndexResourceSchemaFieldModel{}.AttrTypes()}, map[string]attr.Value{"body": field})
+		return types.ObjectValueMust(attrTypesOf(t, s, "schema"), map[string]attr.Value{"fields": fields})
+	}
+
+	truncate := stringMapValue(map[string]string{"truncate": "END"})
+	tests := []struct {
+		name         string
+		config, plan types.Object
+		wantReplace  bool
+	}{
+		{"adopts parameters the index uses", schemaOf(configured(truncate), false), schemaOf(marked(truncate), true), false},
+		{"parameters the index doesn't use", schemaOf(configured(stringMapValue(map[string]string{"truncate": "NONE"})), false),
+			schemaOf(marked(stringMapValue(map[string]string{"truncate": "NONE"})), true), true},
+		{"parameters from another resource", schemaOf(configured(types.MapUnknown(types.StringType)), false),
+			schemaOf(marked(types.MapUnknown(types.StringType)), true), true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			schemaType := s.Type().TerraformType(ctx)
+			state := tfsdk.State{Schema: s, Raw: tftypes.NewValue(schemaType, nil)}
+			if d := state.Set(ctx, &imported); d.HasError() {
+				t.Fatalf("setting state: %v", d)
+			}
+			configModel := imported
+			configModel.Schema = tt.config
+			config := tfsdk.Plan{Schema: s, Raw: tftypes.NewValue(schemaType, nil)}
+			if d := config.Set(ctx, &configModel); d.HasError() {
+				t.Fatalf("setting config: %v", d)
+			}
+			planModel := imported
+			planModel.Schema = tt.plan
+			plan := tfsdk.Plan{Schema: s, Raw: tftypes.NewValue(schemaType, nil)}
+			if d := plan.Set(ctx, &planModel); d.HasError() {
+				t.Fatalf("setting plan: %v", d)
+			}
+
+			req := planmodifier.ObjectRequest{
+				Config: tfsdk.Config{Schema: s, Raw: config.Raw}, State: state, Plan: plan,
+				ConfigValue: tt.config, PlanValue: tt.plan, StateValue: imported.Schema,
+			}
+			var resp planmodifier.ObjectResponse
+			requiresSchemaReplace().PlanModifyObject(ctx, req, &resp)
+			if resp.Diagnostics.HasError() || resp.RequiresReplace != tt.wantReplace {
+				t.Errorf("RequiresReplace = %v (%v), want %v", resp.RequiresReplace, resp.Diagnostics, tt.wantReplace)
 			}
 		})
 	}
@@ -410,6 +630,15 @@ func TestIndexResource_schemaModeStateMatchesSchema(t *testing.T) {
 			"embedding": {DenseVector: &pinecone.DenseVectorField{Dimension: 1536, Metric: pinecone.IndexMetricDotproduct}},
 			"terms":     {SparseVector: &pinecone.SparseVectorField{}},
 			"body":      {String: &pinecone.StringField{FullTextSearch: &pinecone.FullTextSearchConfig{Language: &language}}},
+			"content": {String: &pinecone.StringField{
+				StoreText:      pointerTo(true),
+				FullTextSearch: &pinecone.FullTextSearchConfig{Language: &language},
+				Embed: &pinecone.EmbedConfig{
+					Model: pointerTo("llama-text-embed-v2"), Dimension: pointerTo(int32(1024)), Metric: pointerTo(pinecone.IndexMetricCosine),
+					ReadParameters: &map[string]interface{}{"input_type": "query", "truncate": "END"},
+				},
+			}},
+			"notes": {String: &pinecone.StringField{StoreText: pointerTo(false), SparseEmbed: &pinecone.SparseEmbedConfig{Model: pointerTo("pinecone-sparse-english-v0")}}},
 		}},
 		Deployment:   &pinecone.IndexDeployment{Managed: &pinecone.ManagedDeployment{Cloud: pinecone.CloudAWS, Region: "us-east-1"}},
 		ReadCapacity: &pinecone.ReadCapacity{OnDemand: &pinecone.ReadCapacityOnDemand{}},
@@ -428,5 +657,10 @@ func TestIndexResource_schemaModeStateMatchesSchema(t *testing.T) {
 	var region types.String
 	if d := state.GetAttribute(ctx, path.Root("deployment").AtName("managed").AtName("region"), &region); d.HasError() || region.ValueString() != "us-east-1" {
 		t.Errorf("deployment.managed.region = %v (%v)", region, d)
+	}
+	var effective types.Map
+	if d := state.GetAttribute(ctx, path.Root("schema").AtName("fields").AtMapKey("content").AtName("string").AtName("embed").AtName("effective_read_parameters"), &effective); d.HasError() ||
+		len(effective.Elements()) != 2 {
+		t.Errorf("content effective_read_parameters = %v (%v)", effective, d)
 	}
 }

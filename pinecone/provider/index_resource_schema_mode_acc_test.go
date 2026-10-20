@@ -299,6 +299,134 @@ resource "pinecone_index" "test" {
 	})
 }
 
+// TestAccIndexResource_documentIndexIntegratedEmbedding creates a document index whose string fields
+// use dense and sparse integrated embedding. The API defaults the model, dimension, metric, and
+// full-text search, and merges the configured parameters with the model's defaults, none of which
+// show up as changes. An import can't record which parameters were configured, so after a removed
+// block drops the index from state and an import block brings it back, the configured parameters
+// are taken into state without replacing the index.
+func TestAccIndexResource_documentIndexIntegratedEmbedding(t *testing.T) {
+	t.Parallel()
+	rName := acctest.RandomWithPrefix("tftest")
+	configWithBody := func(address, body string) string {
+		return fmt.Sprintf(`
+provider "pinecone" {
+}
+
+resource "pinecone_index" %q {
+  name = %q
+  deployment = {
+    managed = { cloud = "aws", region = "us-east-1" }
+  }
+  schema = {
+    fields = {
+      body = {
+        string = {
+          %s
+        }
+      }
+      summary = {
+        string = {
+          sparse_embed = {}
+          store_text   = false
+        }
+      }
+    }
+  }
+}
+`, address, rName, body)
+	}
+	config := func(address string) string {
+		return configWithBody(address, `embed = { read_parameters = { truncate = "END" } }`)
+	}
+	imported := config("test") + fmt.Sprintf(`
+removed {
+  from = pinecone_index.original
+  lifecycle {
+    destroy = false
+  }
+}
+
+import {
+  to = pinecone_index.test
+  id = %q
+}
+`, rName)
+	body, summary := "schema.fields.body.string.", "schema.fields.summary.string."
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckIndexDestroy(),
+		// removed blocks need Terraform 1.7, and import blocks 1.5.
+		TerraformVersionChecks: []tfversion.TerraformVersionCheck{tfversion.SkipBelow(tfversion.Version1_7_0)},
+		Steps: []resource.TestStep{
+			{
+				Config: config("original"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("pinecone_index.original", body+"embed.model", "llama-text-embed-v2"),
+					resource.TestCheckResourceAttrSet("pinecone_index.original", body+"embed.dimension"),
+					resource.TestCheckResourceAttrSet("pinecone_index.original", body+"embed.metric"),
+					resource.TestCheckResourceAttr("pinecone_index.original", body+"embed.read_parameters.%", "1"),
+					resource.TestCheckResourceAttr("pinecone_index.original", body+"embed.effective_read_parameters.truncate", "END"),
+					resource.TestCheckResourceAttr("pinecone_index.original", body+"store_text", "true"),
+					resource.TestCheckResourceAttrSet("pinecone_index.original", body+"full_text_search.language"),
+					resource.TestCheckResourceAttr("pinecone_index.original", summary+"sparse_embed.model", "pinecone-sparse-english-v0"),
+					resource.TestCheckResourceAttr("pinecone_index.original", summary+"store_text", "false"),
+					resource.TestCheckNoResourceAttr("pinecone_index.original", summary+"full_text_search.language"),
+				),
+			},
+			{
+				Config:   config("original"),
+				PlanOnly: true,
+			},
+			// Leaving out integrated embedding the index has fails instead of replacing the index.
+			{
+				Config:      configWithBody("original", `full_text_search = {}`),
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile("Integrated embedding can't be removed from a field"),
+			},
+			{
+				ResourceName:            "pinecone_index.original",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{body + "embed.read_parameters.%", body + "embed.read_parameters.truncate"},
+			},
+			{
+				Config: imported,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("pinecone_index.test", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckIndexExists(),
+					resource.TestCheckResourceAttr("pinecone_index.test", body+"embed.read_parameters.truncate", "END"),
+					resource.TestCheckResourceAttr("pinecone_index.test", body+"embed.effective_read_parameters.truncate", "END"),
+				),
+			},
+			{
+				Config:   imported,
+				PlanOnly: true,
+			},
+			// A tainted index is planned as a new one, so leaving out integrated embedding recreates it.
+			{
+				Config: configWithBody("test", `full_text_search = {}`),
+				Taint:  []string{"pinecone_index.test"},
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("pinecone_index.test", plancheck.ResourceActionDestroyBeforeCreate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckIndexExists(),
+					resource.TestCheckNoResourceAttr("pinecone_index.test", body+"embed.model"),
+				),
+			},
+		},
+	})
+}
+
 func TestAccIndexResource_reservedVectorIndex(t *testing.T) {
 	t.Parallel()
 	rName := acctest.RandomWithPrefix("tftest")
@@ -391,6 +519,31 @@ resource "pinecone_index" "test" {
   schema     = { fields = { body = { string = { full_text_search = {} } } } }
 }`,
 			expectError: regexp.MustCompile("Document indexes require a managed deployment"),
+		},
+		{
+			name: "store_text false with full-text search",
+			config: `
+resource "pinecone_index" "test" {
+  name       = "test"
+  deployment = { managed = { cloud = "aws", region = "us-west-2" } }
+  schema     = { fields = { body = { string = { embed = {}, full_text_search = {}, store_text = false } } } }
+}`,
+			expectError: regexp.MustCompile("store_text = false can't be combined with full_text_search"),
+		},
+		{
+			name: "dense vector field and embed",
+			config: `
+resource "pinecone_index" "test" {
+  name       = "test"
+  deployment = { managed = { cloud = "aws", region = "us-west-2" } }
+  schema = {
+    fields = {
+      embedding = { dense_vector = { dimension = 1024, metric = "cosine" } }
+      body      = { string = { embed = {} } }
+    }
+  }
+}`,
+			expectError: regexp.MustCompile("Too many dense vector fields"),
 		},
 	}
 

@@ -47,7 +47,7 @@ Creating an index from a collection (`spec.pod.source_collection`) isn't support
 new indexes from backups instead, which the provider doesn't manage yet. `pinecone_collection` can still create
 collections, but only from an existing pod-based index.
 
-### Integrated embedding is fixed when an index is created
+### Legacy integrated indexes are fixed when they're created
 
 On an existing index, these changes are now rejected at plan time:
 
@@ -57,9 +57,13 @@ On an existing index, these changes are now rejected at plan time:
 
 `embed.read_parameters` and `embed.write_parameters` still update in place.
 
-API version `2026-07` calls indexes created this way legacy integrated indexes, read and written through the legacy
-Records API. The API can also declare integrated embedding on the `string` fields of a `schema`, but the provider
-doesn't support that yet. Importing a document index whose fields use it leaves the embedding settings out of state.
+API version `2026-07` calls indexes created with `embed` legacy integrated indexes, read and written through the legacy
+Records API. For new indexes, the API declares integrated embedding on the `string` fields of a `schema` instead.
+The provider supports that from version 5.1.0, with `embed`, `sparse_embed`, and `store_text` on a `string` field.
+Before 5.1.0, importing a document index whose fields use it leaves the embedding settings out of state. From 5.1.0, a
+refresh records them, and a plan for such an index fails with `Integrated embedding can't be removed from a field` until
+the field's configuration sets `embed = {}` or `sparse_embed = {}` to match the index. Its model and other settings are
+read from the index, so the plan then shows no changes.
 
 ### The metadata schema is deprecated
 
@@ -85,6 +89,9 @@ terraform apply
 
 Terraform plans the replacement of a tainted index as a new index, so the errors above still apply. A configuration
 that can't be created fails at plan time, before the existing index is deleted.
+
+`terraform apply -replace=pinecone_index.example` doesn't get past these errors: Terraform still plans the change
+against the existing index before replacing it, so the plan fails the same way. Use `terraform taint` instead.
 
 ### BYOC indexes need dedicated read capacity
 
@@ -176,7 +183,7 @@ Things to know:
 - With `schema`, read capacity and encryption are set at the top level: `read_capacity` and `cmek_id`.
 - Changing `schema`, `deployment`, or `cmek_id` replaces the index.
 - Document indexes run only on managed deployments.
-- Indexes with integrated embedding (`embed`) are still created in the `spec` style.
+- Legacy integrated indexes (`embed`) are still created in the `spec` style.
 
 ### Moving an index to the `schema` style
 
@@ -234,7 +241,7 @@ After the move, `deployment.managed.environment`, which Pinecone reports for ser
 after apply. It's read-only, and the `spec` style didn't record it.
 
 The move is one way. An index in the `schema` style can't move back to the `spec` style: the plan fails with `An
-index can't move back to spec`. Indexes with integrated embedding and pod-based indexes can't move yet, and keep the
+index can't move back to spec`. Legacy integrated indexes and pod-based indexes can't move yet, and keep the
 `spec` style for now.
 
 ### Importing indexes
@@ -288,7 +295,7 @@ Some existing data source attributes changed:
 
 - Sparse indexes (`vector_type = "sparse"`) can be created, and `metric` can be left out: it defaults to
   `dotproduct`. Earlier versions always failed with `Dimension should not be specified when VectorType is 'sparse'`.
-- Integrated indexes (`embed`) without `metric` use the model's metric. Earlier versions always sent `cosine`.
+- Legacy integrated indexes (`embed`) without `metric` use the model's metric. Earlier versions always sent `cosine`.
 - `embed` without `field_map` fails at plan time. Earlier versions crashed the provider during apply.
 - An index without `spec` or `schema`, with an empty `spec`, or with more than one type in `spec` fails at plan
   time. Earlier versions failed during apply.

@@ -7,6 +7,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/pinecone-io/go-pinecone/v7/pinecone"
 )
@@ -39,6 +40,36 @@ func sortedFieldNames(t *testing.T, obj types.Object) []string {
 	return names
 }
 
+func stringMap(values map[string]string) types.Map {
+	if values == nil {
+		return types.MapNull(types.StringType)
+	}
+	elements := make(map[string]attr.Value, len(values))
+	for k, v := range values {
+		elements[k] = types.StringValue(v)
+	}
+	return types.MapValueMust(types.StringType, elements)
+}
+
+// embedField is a string field with dense integrated embedding, configured with read parameters
+// and with the effective parameters the API reports.
+func embedField(configured, effective map[string]string) IndexResourceSchemaFieldModel {
+	return IndexResourceSchemaFieldModel{String: &StringResourceFieldModel{
+		FullTextSearch: &FullTextSearchModel{Language: types.StringValue("en"), Stemming: types.BoolValue(false), StopWords: types.BoolValue(false)},
+		Embed: &EmbedConfigResourceModel{
+			Model:                    types.StringValue("llama-text-embed-v2"),
+			Dimension:                types.Int32Value(1024),
+			Metric:                   types.StringValue("cosine"),
+			ReadParameters:           stringMap(configured),
+			WriteParameters:          stringMap(nil),
+			EffectiveReadParameters:  stringMap(effective),
+			EffectiveWriteParameters: stringMap(map[string]string{"input_type": "passage", "truncate": "END"}),
+		},
+		StoreText:   types.BoolValue(true),
+		Description: types.StringNull(),
+	}}
+}
+
 func TestToIndexSchema(t *testing.T) {
 	obj := resourceSchemaObject(t, map[string]IndexResourceSchemaFieldModel{
 		"embedding": {DenseVector: &DenseVectorFieldModel{Dimension: types.Int32Value(1536), Metric: types.StringValue("dotproduct"), Description: types.StringUnknown()}},
@@ -49,6 +80,21 @@ func TestToIndexSchema(t *testing.T) {
 		"title": {String: &StringResourceFieldModel{FullTextSearch: &FullTextSearchModel{
 			Ngram: &NgramModel{MinGram: types.Int64Value(2), MaxGram: types.Int64Value(5), PrefixOnly: types.BoolUnknown()},
 		}}},
+		"content": {String: &StringResourceFieldModel{
+			Embed: &EmbedConfigResourceModel{
+				Model: types.StringUnknown(), Dimension: types.Int32Value(512), Metric: types.StringUnknown(),
+				ReadParameters: stringMap(map[string]string{"truncate": "END"}), WriteParameters: types.MapNull(types.StringType),
+				EffectiveReadParameters: types.MapUnknown(types.StringType), EffectiveWriteParameters: types.MapUnknown(types.StringType),
+			},
+			StoreText: types.BoolUnknown(),
+		}},
+		"notes": {String: &StringResourceFieldModel{
+			SparseEmbed: &SparseEmbedConfigResourceModel{
+				Model: types.StringValue("pinecone-sparse-english-v0"), ReadParameters: types.MapNull(types.StringType), WriteParameters: types.MapNull(types.StringType),
+				EffectiveReadParameters: types.MapUnknown(types.StringType), EffectiveWriteParameters: types.MapUnknown(types.StringType),
+			},
+			StoreText: types.BoolValue(false),
+		}},
 	})
 
 	schema, d := ToIndexSchema(t.Context(), obj)
@@ -72,6 +118,17 @@ func TestToIndexSchema(t *testing.T) {
 	if title == nil || title.FullTextSearch.Ngram == nil || title.FullTextSearch.Ngram.MinGram != 2 || title.FullTextSearch.Ngram.MaxGram != 5 ||
 		title.FullTextSearch.Ngram.PrefixOnly != nil {
 		t.Errorf("title = %+v", title)
+	}
+	content := schema.Fields["content"].String
+	if content == nil || content.FullTextSearch != nil || content.StoreText != nil || content.SparseEmbed != nil || content.Embed == nil ||
+		content.Embed.Model != nil || content.Embed.Metric != nil || content.Embed.Dimension == nil || *content.Embed.Dimension != 512 ||
+		content.Embed.ReadParameters == nil || (*content.Embed.ReadParameters)["truncate"] != "END" || content.Embed.WriteParameters != nil {
+		t.Errorf("content = %+v; full_text_search isn't configured, so it's left for the API to default", content)
+	}
+	notes := schema.Fields["notes"].String
+	if notes == nil || notes.FullTextSearch != nil || notes.StoreText == nil || *notes.StoreText || notes.Embed != nil ||
+		notes.SparseEmbed == nil || notes.SparseEmbed.Model == nil || *notes.SparseEmbed.Model != "pinecone-sparse-english-v0" {
+		t.Errorf("notes = %+v; the API rejects full_text_search with store_text = false", notes)
 	}
 }
 
@@ -150,6 +207,61 @@ func TestNewIndexResourceSchemaObject(t *testing.T) {
 		}
 	})
 
+	embedded := func() *pinecone.IndexSchema {
+		return &pinecone.IndexSchema{Fields: map[string]pinecone.IndexSchemaField{
+			"content": {String: &pinecone.StringField{
+				StoreText:      ptr(true),
+				FullTextSearch: &pinecone.FullTextSearchConfig{Language: ptr("en"), Stemming: ptr(false), StopWords: ptr(false)},
+				Embed: &pinecone.EmbedConfig{
+					Model: ptr("llama-text-embed-v2"), Dimension: ptr(int32(1024)), Metric: ptr(pinecone.IndexMetricCosine),
+					ReadParameters:  &map[string]interface{}{"input_type": "query", "truncate": "END"},
+					WriteParameters: &map[string]interface{}{"input_type": "passage", "truncate": "END"},
+				},
+			}},
+			"notes": {String: &pinecone.StringField{
+				StoreText:   ptr(false),
+				SparseEmbed: &pinecone.SparseEmbedConfig{Model: ptr("pinecone-sparse-english-v0")},
+			}},
+		}}
+	}
+
+	t.Run("keeps configured embedding parameters", func(t *testing.T) {
+		prior := resourceSchemaObject(t, map[string]IndexResourceSchemaFieldModel{
+			"content": embedField(map[string]string{"truncate": "END"}, nil),
+		})
+		obj, d := NewIndexResourceSchemaObject(ctx, embedded(), prior)
+		if d.HasError() {
+			t.Fatalf("returned errors: %v", d)
+		}
+		fields, _ := ResourceSchemaFields(ctx, obj)
+		embed := fields["content"].String.Embed
+		if !embed.ReadParameters.Equal(stringMap(map[string]string{"truncate": "END"})) || !embed.WriteParameters.IsNull() {
+			t.Errorf("read_parameters = %v, write_parameters = %v, want the configured values", embed.ReadParameters, embed.WriteParameters)
+		}
+		if !embed.EffectiveReadParameters.Equal(stringMap(map[string]string{"input_type": "query", "truncate": "END"})) {
+			t.Errorf("effective_read_parameters = %v, want the response", embed.EffectiveReadParameters)
+		}
+	})
+
+	t.Run("import leaves embedding parameters unconfigured", func(t *testing.T) {
+		obj, d := NewIndexResourceSchemaObject(ctx, embedded(), types.ObjectNull(IndexResourceSchemaModel{}.AttrTypes()))
+		if d.HasError() {
+			t.Fatalf("returned errors: %v", d)
+		}
+		fields, _ := ResourceSchemaFields(ctx, obj)
+		if got := sortedFieldNames(t, obj); !slices.Equal(got, []string{"content", "notes"}) {
+			t.Fatalf("fields = %v, want [content notes]", got)
+		}
+		embed := fields["content"].String.Embed
+		if !embed.ReadParameters.IsNull() || len(embed.EffectiveReadParameters.Elements()) != 2 || embed.Dimension.ValueInt32() != 1024 {
+			t.Errorf("content embed = %+v", embed)
+		}
+		notes := fields["notes"].String
+		if notes.FullTextSearch != nil || notes.StoreText.ValueBool() || notes.SparseEmbed == nil || notes.SparseEmbed.Model.ValueString() != "pinecone-sparse-english-v0" {
+			t.Errorf("notes = %+v", notes)
+		}
+	})
+
 	t.Run("import keeps declarable named fields", func(t *testing.T) {
 		obj, d := NewIndexResourceSchemaObject(ctx, documentIndexSchema(), types.ObjectNull(IndexResourceSchemaModel{}.AttrTypes()))
 		if d.HasError() {
@@ -176,7 +288,43 @@ func TestIsDocumentIndexSchema(t *testing.T) {
 		"chunk_text": {SemanticText: &pinecone.SemanticTextField{Model: "multilingual-e5-large"}},
 	}}
 	if IsDocumentIndexSchema(integrated) {
-		t.Error("an integrated index's semantic_text field can't be declared, so it isn't a document index")
+		t.Error("a legacy integrated index's semantic_text field can't be declared, so it isn't a document index")
+	}
+	embedded := &pinecone.IndexSchema{Fields: map[string]pinecone.IndexSchemaField{
+		"notes": {String: &pinecone.StringField{StoreText: ptr(false), SparseEmbed: &pinecone.SparseEmbedConfig{}}},
+	}}
+	if !IsDocumentIndexSchema(embedded) {
+		t.Error("a string field with integrated embedding and no full-text search makes a document index")
+	}
+}
+
+func TestAdoptsConfiguredParameters(t *testing.T) {
+	effective := map[string]string{"input_type": "query", "truncate": "END"}
+	imported := resourceSchemaObject(t, map[string]IndexResourceSchemaFieldModel{"content": embedField(nil, effective)})
+	configured := resourceSchemaObject(t, map[string]IndexResourceSchemaFieldModel{"content": embedField(map[string]string{"truncate": "END"}, effective)})
+	otherModel := embedField(map[string]string{"truncate": "END"}, effective)
+	otherModel.String.Embed.Model = types.StringValue("multilingual-e5-large")
+
+	tests := []struct {
+		name    string
+		planned types.Object
+		prior   types.Object
+		want    bool
+	}{
+		{"subset of effective after import", configured, imported, true},
+		{"all effective keys", resourceSchemaObject(t, map[string]IndexResourceSchemaFieldModel{"content": embedField(effective, effective)}), imported, true},
+		{"different value", resourceSchemaObject(t, map[string]IndexResourceSchemaFieldModel{"content": embedField(map[string]string{"truncate": "NONE"}, effective)}), imported, false},
+		{"key the index doesn't use", resourceSchemaObject(t, map[string]IndexResourceSchemaFieldModel{"content": embedField(map[string]string{"dimension": "512"}, effective)}), imported, false},
+		{"prior already configured", resourceSchemaObject(t, map[string]IndexResourceSchemaFieldModel{"content": embedField(effective, effective)}), configured, false},
+		{"another change", resourceSchemaObject(t, map[string]IndexResourceSchemaFieldModel{"content": otherModel}), imported, false},
+		{"unchanged", imported, imported, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := AdoptsConfiguredParameters(t.Context(), tt.planned, tt.prior); got != tt.want {
+				t.Errorf("AdoptsConfiguredParameters() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 

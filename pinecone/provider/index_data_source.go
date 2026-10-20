@@ -145,9 +145,9 @@ func (d *IndexDataSource) Schema(ctx context.Context, req datasource.SchemaReque
 				},
 			},
 			"embed": schema.SingleNestedAttribute{
-				Description: `The index's integrated embedding, for an index created with embed, or a document index whose schema embeds a text field. Null for other indexes.
+				Description: `The embedding of a legacy integrated index, created with embed. Null for other indexes. Integrated embedding on a document index is reported on its ` + "`schema`" + `'s ` + "`string`" + ` fields.
 
-Refer to the [model guide](https://docs.pinecone.io/guides/inference/understanding-inference#embedding-models) for available models and details.`,
+Refer to the [model guide](https://docs.pinecone.io/models/overview) for available models and details.`,
 				Computed: true,
 				Attributes: map[string]schema.Attribute{
 					"model": schema.StringAttribute{
@@ -219,6 +219,9 @@ func sharedIndexDSAttributes() map[string]schema.Attribute {
 		Computed:            true,
 	}
 	fieldDescription := description("The field's description, if one was set.")
+	embedParameters := func(what string) schema.MapAttribute {
+		return schema.MapAttribute{MarkdownDescription: what, Computed: true, ElementType: types.StringType}
+	}
 	metadataField := func(what string) schema.SingleNestedAttribute {
 		return schema.SingleNestedAttribute{
 			MarkdownDescription: what + " The API adds these fields as data is upserted.",
@@ -258,7 +261,7 @@ func sharedIndexDSAttributes() map[string]schema.Attribute {
 								},
 							},
 							"semantic_text": schema.SingleNestedAttribute{
-								MarkdownDescription: "A text field embedded by an integrated embedding model, as on an index created with `embed`.",
+								MarkdownDescription: "The embedded text field of a legacy integrated index, created with `embed`.",
 								Computed:            true,
 								Attributes: map[string]schema.Attribute{
 									"model":     description("The embedding model."),
@@ -278,7 +281,7 @@ func sharedIndexDSAttributes() map[string]schema.Attribute {
 								},
 							},
 							"string": schema.SingleNestedAttribute{
-								MarkdownDescription: "A string field, either declared for full-text search or added by the API as data is upserted.",
+								MarkdownDescription: "A string field, either declared for full-text search or integrated embedding, or added by the API as data is upserted.",
 								Computed:            true,
 								Attributes: map[string]schema.Attribute{
 									"full_text_search": schema.SingleNestedAttribute{
@@ -298,6 +301,30 @@ func sharedIndexDSAttributes() map[string]schema.Attribute {
 												},
 											},
 										},
+									},
+									"embed": schema.SingleNestedAttribute{
+										MarkdownDescription: "The field's dense integrated embedding. Null unless the field was declared with it.",
+										Computed:            true,
+										Attributes: map[string]schema.Attribute{
+											"model":            description("The hosted dense embedding model."),
+											"dimension":        schema.Int32Attribute{MarkdownDescription: "The dimension of the embedding vectors.", Computed: true},
+											"metric":           description("The distance metric used for similarity search."),
+											"read_parameters":  embedParameters("The model parameters applied when embedding search query text, including the model's defaults."),
+											"write_parameters": embedParameters("The model parameters applied when embedding document text, including the model's defaults."),
+										},
+									},
+									"sparse_embed": schema.SingleNestedAttribute{
+										MarkdownDescription: "The field's sparse integrated embedding. Null unless the field was declared with it.",
+										Computed:            true,
+										Attributes: map[string]schema.Attribute{
+											"model":            description("The hosted sparse embedding model."),
+											"read_parameters":  embedParameters("The model parameters applied when embedding search query text, including the model's defaults."),
+											"write_parameters": embedParameters("The model parameters applied when embedding document text, including the model's defaults."),
+										},
+									},
+									"store_text": schema.BoolAttribute{
+										MarkdownDescription: "Whether the field's text is stored. A field that stores its text is indexed for full-text search.",
+										Computed:            true,
 									},
 									"filterable":  filterable,
 									"description": fieldDescription,

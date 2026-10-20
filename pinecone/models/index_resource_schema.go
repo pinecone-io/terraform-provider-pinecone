@@ -53,17 +53,68 @@ func (m IndexResourceSchemaFieldModel) AttrTypes() map[string]attr.Type {
 	}
 }
 
-// StringResourceFieldModel is a full-text-search string field. Filterable is reported for
-// metadata fields only, so the resource leaves it out.
+// StringResourceFieldModel is a string field searched by full-text search, integrated embedding,
+// or both. Filterable is reported for metadata fields only, so the resource leaves it out.
 type StringResourceFieldModel struct {
-	FullTextSearch *FullTextSearchModel `tfsdk:"full_text_search"`
-	Description    types.String         `tfsdk:"description"`
+	FullTextSearch *FullTextSearchModel            `tfsdk:"full_text_search"`
+	Embed          *EmbedConfigResourceModel       `tfsdk:"embed"`
+	SparseEmbed    *SparseEmbedConfigResourceModel `tfsdk:"sparse_embed"`
+	StoreText      types.Bool                      `tfsdk:"store_text"`
+	Description    types.String                    `tfsdk:"description"`
 }
 
 func (m StringResourceFieldModel) AttrTypes() map[string]attr.Type {
 	return map[string]attr.Type{
 		"full_text_search": types.ObjectType{AttrTypes: FullTextSearchModel{}.AttrTypes()},
+		"embed":            types.ObjectType{AttrTypes: EmbedConfigResourceModel{}.AttrTypes()},
+		"sparse_embed":     types.ObjectType{AttrTypes: SparseEmbedConfigResourceModel{}.AttrTypes()},
+		"store_text":       types.BoolType,
 		"description":      types.StringType,
+	}
+}
+
+// EmbedConfigResourceModel is a string field's dense integrated embedding. ReadParameters and
+// WriteParameters hold what was configured; the effective parameters hold the API's response,
+// which merges them with the model's defaults.
+type EmbedConfigResourceModel struct {
+	Model                    types.String `tfsdk:"model"`
+	Dimension                types.Int32  `tfsdk:"dimension"`
+	Metric                   types.String `tfsdk:"metric"`
+	ReadParameters           types.Map    `tfsdk:"read_parameters"`
+	WriteParameters          types.Map    `tfsdk:"write_parameters"`
+	EffectiveReadParameters  types.Map    `tfsdk:"effective_read_parameters"`
+	EffectiveWriteParameters types.Map    `tfsdk:"effective_write_parameters"`
+}
+
+func (m EmbedConfigResourceModel) AttrTypes() map[string]attr.Type {
+	return map[string]attr.Type{
+		"model":                      types.StringType,
+		"dimension":                  types.Int32Type,
+		"metric":                     types.StringType,
+		"read_parameters":            types.MapType{ElemType: types.StringType},
+		"write_parameters":           types.MapType{ElemType: types.StringType},
+		"effective_read_parameters":  types.MapType{ElemType: types.StringType},
+		"effective_write_parameters": types.MapType{ElemType: types.StringType},
+	}
+}
+
+// SparseEmbedConfigResourceModel is a string field's sparse integrated embedding. Its parameters
+// work as in EmbedConfigResourceModel.
+type SparseEmbedConfigResourceModel struct {
+	Model                    types.String `tfsdk:"model"`
+	ReadParameters           types.Map    `tfsdk:"read_parameters"`
+	WriteParameters          types.Map    `tfsdk:"write_parameters"`
+	EffectiveReadParameters  types.Map    `tfsdk:"effective_read_parameters"`
+	EffectiveWriteParameters types.Map    `tfsdk:"effective_write_parameters"`
+}
+
+func (m SparseEmbedConfigResourceModel) AttrTypes() map[string]attr.Type {
+	return map[string]attr.Type{
+		"model":                      types.StringType,
+		"read_parameters":            types.MapType{ElemType: types.StringType},
+		"write_parameters":           types.MapType{ElemType: types.StringType},
+		"effective_read_parameters":  types.MapType{ElemType: types.StringType},
+		"effective_write_parameters": types.MapType{ElemType: types.StringType},
 	}
 }
 
@@ -88,7 +139,7 @@ func IsDocumentIndexSchema(schema *pinecone.IndexSchema) bool {
 		return false
 	}
 	for name, field := range schema.Fields {
-		if _, ok := newIndexResourceSchemaField(field); ok && !IsReservedFieldName(name) {
+		if isDeclarableField(field) && !IsReservedFieldName(name) {
 			return true
 		}
 	}
@@ -105,7 +156,8 @@ func IsDocumentIndexConfig(fields map[string]IndexResourceSchemaFieldModel) bool
 }
 
 // ResourceSchemaFields decodes a schema object's fields. It returns nil for a null or unknown
-// schema or field map.
+// schema or field map. A nested object that isn't known yet, such as full_text_search before the
+// API defaults it, decodes as nil.
 func ResourceSchemaFields(ctx context.Context, obj types.Object) (map[string]IndexResourceSchemaFieldModel, diag.Diagnostics) {
 	if obj.IsNull() || obj.IsUnknown() {
 		return nil, nil
@@ -116,7 +168,7 @@ func ResourceSchemaFields(ctx context.Context, obj types.Object) (map[string]Ind
 		return nil, diags
 	}
 	var fields map[string]IndexResourceSchemaFieldModel
-	diags.Append(model.Fields.ElementsAs(ctx, &fields, false)...)
+	diags.Append(model.Fields.ElementsAs(ctx, &fields, true)...)
 	return fields, diags
 }
 
@@ -146,6 +198,9 @@ func ToIndexSchema(ctx context.Context, obj types.Object) (pinecone.IndexSchema,
 		case field.String != nil:
 			sdkField.String = &pinecone.StringField{
 				FullTextSearch: toFullTextSearchConfig(field.String.FullTextSearch),
+				Embed:          toEmbedConfig(field.String.Embed),
+				SparseEmbed:    toSparseEmbedConfig(field.String.SparseEmbed),
+				StoreText:      knownBoolPointer(field.String.StoreText),
 				Description:    knownStringPointer(field.String.Description),
 			}
 		}
@@ -154,9 +209,11 @@ func ToIndexSchema(ctx context.Context, obj types.Object) (pinecone.IndexSchema,
 	return schema, diags
 }
 
+// toFullTextSearchConfig leaves full-text search out when it isn't configured. The API enables it
+// with its defaults on every field that stores its text, and rejects it with store_text = false.
 func toFullTextSearchConfig(model *FullTextSearchModel) *pinecone.FullTextSearchConfig {
 	if model == nil {
-		return &pinecone.FullTextSearchConfig{}
+		return nil
 	}
 	config := &pinecone.FullTextSearchConfig{
 		Language:  knownStringPointer(model.Language),
@@ -171,6 +228,35 @@ func toFullTextSearchConfig(model *FullTextSearchModel) *pinecone.FullTextSearch
 		}
 	}
 	return config
+}
+
+func toEmbedConfig(model *EmbedConfigResourceModel) *pinecone.EmbedConfig {
+	if model == nil {
+		return nil
+	}
+	config := &pinecone.EmbedConfig{
+		Model:           knownStringPointer(model.Model),
+		ReadParameters:  mapAttrToInterfacePtr(model.ReadParameters),
+		WriteParameters: mapAttrToInterfacePtr(model.WriteParameters),
+	}
+	if !model.Dimension.IsNull() && !model.Dimension.IsUnknown() {
+		config.Dimension = model.Dimension.ValueInt32Pointer()
+	}
+	if metric := knownStringPointer(model.Metric); metric != nil {
+		config.Metric = (*pinecone.IndexMetric)(metric)
+	}
+	return config
+}
+
+func toSparseEmbedConfig(model *SparseEmbedConfigResourceModel) *pinecone.SparseEmbedConfig {
+	if model == nil {
+		return nil
+	}
+	return &pinecone.SparseEmbedConfig{
+		Model:           knownStringPointer(model.Model),
+		ReadParameters:  mapAttrToInterfacePtr(model.ReadParameters),
+		WriteParameters: mapAttrToInterfacePtr(model.WriteParameters),
+	}
 }
 
 func ToIndexDeployment(ctx context.Context, obj types.Object) (*pinecone.IndexDeployment, diag.Diagnostics) {
@@ -202,6 +288,10 @@ func ToIndexDeployment(ctx context.Context, obj types.Object) (*pinecone.IndexDe
 // is upserted, which were never declared. A declared field the response doesn't describe keeps its
 // prior value, since a schema can't change after the index is created. Without a prior schema, as
 // on import, every field the resource can declare is kept.
+//
+// The response reports integrated embedding parameters merged with the model's defaults, so they
+// fill the effective parameters, and the configured parameters keep their prior values. On import,
+// nothing was configured, so they're null.
 func NewIndexResourceSchemaObject(ctx context.Context, schema *pinecone.IndexSchema, prior types.Object) (types.Object, diag.Diagnostics) {
 	priorFields, diags := ResourceSchemaFields(ctx, prior)
 	if diags.HasError() {
@@ -216,18 +306,26 @@ func NewIndexResourceSchemaObject(ctx context.Context, schema *pinecone.IndexSch
 	fields := make(map[string]IndexResourceSchemaFieldModel)
 	if priorFields != nil {
 		for name, priorField := range priorFields {
-			if field, ok := newIndexResourceSchemaField(apiFields[name]); ok {
-				fields[name] = field
-			} else {
+			field, ok, d := newIndexResourceSchemaField(ctx, apiFields[name])
+			diags.Append(d...)
+			if !ok {
 				fields[name] = priorField
+				continue
 			}
+			keepConfiguredParameters(field.String, priorField.String)
+			fields[name] = field
 		}
 	} else {
 		for name, apiField := range apiFields {
-			if field, ok := newIndexResourceSchemaField(apiField); ok && !IsReservedFieldName(name) {
+			field, ok, d := newIndexResourceSchemaField(ctx, apiField)
+			diags.Append(d...)
+			if ok && !IsReservedFieldName(name) {
 				fields[name] = field
 			}
 		}
+	}
+	if diags.HasError() {
+		return types.ObjectNull(IndexResourceSchemaModel{}.AttrTypes()), diags
 	}
 
 	fieldsMap, d := types.MapValueFrom(ctx, types.ObjectType{AttrTypes: IndexResourceSchemaFieldModel{}.AttrTypes()}, fields)
@@ -240,27 +338,147 @@ func NewIndexResourceSchemaObject(ctx context.Context, schema *pinecone.IndexSch
 	return obj, diags
 }
 
+// isDeclarableField reports whether the resource can declare a reported field. String fields with
+// neither full-text search nor integrated embedding are metadata fields, which aren't declared.
+func isDeclarableField(field pinecone.IndexSchemaField) bool {
+	if field.String != nil {
+		return field.String.FullTextSearch != nil || field.String.Embed != nil || field.String.SparseEmbed != nil
+	}
+	return field.DenseVector != nil || field.SparseVector != nil
+}
+
 // newIndexResourceSchemaField converts a reported field to its resource model. It reports false for
-// field types the resource can't declare, including string fields without full-text search.
-func newIndexResourceSchemaField(field pinecone.IndexSchemaField) (IndexResourceSchemaFieldModel, bool) {
+// field types the resource can't declare.
+func newIndexResourceSchemaField(ctx context.Context, field pinecone.IndexSchemaField) (IndexResourceSchemaFieldModel, bool, diag.Diagnostics) {
 	switch {
 	case field.DenseVector != nil:
 		return IndexResourceSchemaFieldModel{DenseVector: &DenseVectorFieldModel{
 			Dimension:   types.Int32Value(field.DenseVector.Dimension),
 			Metric:      types.StringValue(string(field.DenseVector.Metric)),
 			Description: types.StringPointerValue(field.DenseVector.Description),
-		}}, true
+		}}, true, nil
 	case field.SparseVector != nil:
 		return IndexResourceSchemaFieldModel{SparseVector: &SparseVectorFieldModel{
 			Description: types.StringPointerValue(field.SparseVector.Description),
-		}}, true
-	case field.String != nil && field.String.FullTextSearch != nil:
+		}}, true, nil
+	case field.String != nil && isDeclarableField(field):
+		embed, diags := newEmbedConfigResourceModel(ctx, field.String.Embed)
+		sparseEmbed, d := newSparseEmbedConfigResourceModel(ctx, field.String.SparseEmbed)
+		diags.Append(d...)
 		return IndexResourceSchemaFieldModel{String: &StringResourceFieldModel{
 			FullTextSearch: newFullTextSearchModel(field.String.FullTextSearch),
+			Embed:          embed,
+			SparseEmbed:    sparseEmbed,
+			StoreText:      types.BoolPointerValue(field.String.StoreText),
 			Description:    types.StringPointerValue(field.String.Description),
-		}}, true
+		}}, true, diags
 	}
-	return IndexResourceSchemaFieldModel{}, false
+	return IndexResourceSchemaFieldModel{}, false, nil
+}
+
+func newEmbedConfigResourceModel(ctx context.Context, config *pinecone.EmbedConfig) (*EmbedConfigResourceModel, diag.Diagnostics) {
+	model, diags := newEmbedConfigModel(ctx, config)
+	if model == nil || diags.HasError() {
+		return nil, diags
+	}
+	return &EmbedConfigResourceModel{
+		Model:                    model.Model,
+		Dimension:                model.Dimension,
+		Metric:                   model.Metric,
+		ReadParameters:           types.MapNull(types.StringType),
+		WriteParameters:          types.MapNull(types.StringType),
+		EffectiveReadParameters:  model.ReadParameters,
+		EffectiveWriteParameters: model.WriteParameters,
+	}, nil
+}
+
+func newSparseEmbedConfigResourceModel(ctx context.Context, config *pinecone.SparseEmbedConfig) (*SparseEmbedConfigResourceModel, diag.Diagnostics) {
+	model, diags := newSparseEmbedConfigModel(ctx, config)
+	if model == nil || diags.HasError() {
+		return nil, diags
+	}
+	return &SparseEmbedConfigResourceModel{
+		Model:                    model.Model,
+		ReadParameters:           types.MapNull(types.StringType),
+		WriteParameters:          types.MapNull(types.StringType),
+		EffectiveReadParameters:  model.ReadParameters,
+		EffectiveWriteParameters: model.WriteParameters,
+	}, nil
+}
+
+// AdoptsConfiguredParameters reports whether planned differs from prior only by integrated
+// embedding parameters that prior doesn't record as configured, as after an import, and that the
+// index already uses: each configured key has the same value in the effective parameters. Taking
+// them into state then describes the same index, so it doesn't need to be replaced.
+func AdoptsConfiguredParameters(ctx context.Context, planned, prior types.Object) bool {
+	plannedFields, diags := ResourceSchemaFields(ctx, planned)
+	priorFields, d := ResourceSchemaFields(ctx, prior)
+	diags.Append(d...)
+	if diags.HasError() || plannedFields == nil || priorFields == nil {
+		return false
+	}
+
+	adopted := false
+	for name, field := range plannedFields {
+		priorString := priorFields[name].String
+		if field.String == nil || priorString == nil {
+			continue
+		}
+		adoptedString := *field.String
+		if field.String.Embed != nil && priorString.Embed != nil {
+			embed := *field.String.Embed
+			embed.ReadParameters, adopted = adoptParameters(embed.ReadParameters, priorString.Embed.ReadParameters, priorString.Embed.EffectiveReadParameters, adopted)
+			embed.WriteParameters, adopted = adoptParameters(embed.WriteParameters, priorString.Embed.WriteParameters, priorString.Embed.EffectiveWriteParameters, adopted)
+			adoptedString.Embed = &embed
+		}
+		if field.String.SparseEmbed != nil && priorString.SparseEmbed != nil {
+			sparseEmbed := *field.String.SparseEmbed
+			sparseEmbed.ReadParameters, adopted = adoptParameters(sparseEmbed.ReadParameters, priorString.SparseEmbed.ReadParameters, priorString.SparseEmbed.EffectiveReadParameters, adopted)
+			sparseEmbed.WriteParameters, adopted = adoptParameters(sparseEmbed.WriteParameters, priorString.SparseEmbed.WriteParameters, priorString.SparseEmbed.EffectiveWriteParameters, adopted)
+			adoptedString.SparseEmbed = &sparseEmbed
+		}
+		field.String = &adoptedString
+		plannedFields[name] = field
+	}
+	if !adopted {
+		return false
+	}
+
+	fieldType := types.ObjectType{AttrTypes: IndexResourceSchemaFieldModel{}.AttrTypes()}
+	plannedMap, d := types.MapValueFrom(ctx, fieldType, plannedFields)
+	diags.Append(d...)
+	priorMap, d := types.MapValueFrom(ctx, fieldType, priorFields)
+	diags.Append(d...)
+	return !diags.HasError() && plannedMap.Equal(priorMap)
+}
+
+// adoptParameters returns prior in place of planned when prior is null and planned is a known
+// subset of effective, and reports whether any parameters were adopted.
+func adoptParameters(planned, prior, effective types.Map, adopted bool) (types.Map, bool) {
+	if !prior.IsNull() || planned.IsNull() || planned.IsUnknown() || effective.IsNull() || effective.IsUnknown() {
+		return planned, adopted
+	}
+	effectiveElements := effective.Elements()
+	for key, value := range planned.Elements() {
+		if current, ok := effectiveElements[key]; !ok || !value.Equal(current) {
+			return planned, adopted
+		}
+	}
+	return prior, true
+}
+
+// keepConfiguredParameters copies the configured integrated embedding parameters from prior to
+// field.
+func keepConfiguredParameters(field, prior *StringResourceFieldModel) {
+	if field == nil || prior == nil {
+		return
+	}
+	if field.Embed != nil && prior.Embed != nil {
+		field.Embed.ReadParameters, field.Embed.WriteParameters = prior.Embed.ReadParameters, prior.Embed.WriteParameters
+	}
+	if field.SparseEmbed != nil && prior.SparseEmbed != nil {
+		field.SparseEmbed.ReadParameters, field.SparseEmbed.WriteParameters = prior.SparseEmbed.ReadParameters, prior.SparseEmbed.WriteParameters
+	}
 }
 
 // NewIndexResourceDeploymentObject builds the resource's deployment state from the index's

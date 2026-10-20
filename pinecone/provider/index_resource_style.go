@@ -112,8 +112,8 @@ func restyleIndexStateToSchema(ctx context.Context, config, state models.IndexRe
 		diags.AddAttributeError(schemaPath, "Pod-based indexes are described with spec",
 			"deployment can't describe a pod-based index, so it keeps spec.pod. Describe this index with spec again.")
 	case !state.Embed.IsNull():
-		diags.AddAttributeError(schemaPath, "Indexes with integrated embedding are described with spec",
-			"schema doesn't support integrated embedding yet, so an index created with embed keeps spec and embed. Describe this index with spec and embed again.")
+		diags.AddAttributeError(schemaPath, "Legacy integrated indexes are described with spec",
+			"schema can't describe a legacy integrated index, so an index created with embed keeps spec and embed. Describe this index with spec and embed again.")
 	case spec.Serverless == nil && spec.BYOC == nil:
 		diags.AddAttributeError(schemaPath, "Unknown index deployment",
 			"The index's state doesn't say where it runs, so it can't be described with deployment. Describe this index with spec again.")

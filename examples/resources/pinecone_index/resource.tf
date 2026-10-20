@@ -32,6 +32,35 @@ resource "pinecone_index" "document" {
   }
 }
 
+# Document index with integrated embedding: Pinecone embeds the text of body with a dense model
+# and the text of summary with a sparse model. body is also stored and indexed for full-text
+# search. summary's text is embedded and then discarded.
+resource "pinecone_index" "embedded" {
+  name = "tftestindex-embedded"
+  deployment = {
+    managed = {
+      cloud  = "aws"
+      region = "us-east-1"
+    }
+  }
+  schema = {
+    fields = {
+      body = {
+        string = {
+          embed            = { model = "llama-text-embed-v2", dimension = 1024 }
+          full_text_search = { stemming = true }
+        }
+      }
+      summary = {
+        string = {
+          sparse_embed = {}
+          store_text   = false
+        }
+      }
+    }
+  }
+}
+
 # Vector index, described by the reserved fields _values (dense) and _sparse_values (sparse)
 resource "pinecone_index" "schema_vectors" {
   name = "tftestindex-schema-vectors"
@@ -71,11 +100,12 @@ resource "pinecone_index" "schema_byoc" {
 }
 
 # ── Indexes described with dimension, metric, and spec ───────────────────────
-# This style is planned for deprecation. Indexes with integrated embedding still need it.
+# This style is planned for deprecation. Legacy integrated indexes still need it.
 
-# Index with integrated embedding
-resource "pinecone_index" "integrated" {
-  name = "tftestindex-integrated"
+# Legacy integrated index, read and written through the legacy Records API. For new indexes, use
+# integrated embedding on a document index instead.
+resource "pinecone_index" "legacy_integrated" {
+  name = "tftestindex-legacy-integrated"
   spec = {
     serverless = {
       cloud  = "aws"

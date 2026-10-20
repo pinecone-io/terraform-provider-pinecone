@@ -96,16 +96,58 @@ func (m SemanticTextFieldModel) AttrTypes() map[string]attr.Type {
 }
 
 type StringFieldModel struct {
-	FullTextSearch *FullTextSearchModel `tfsdk:"full_text_search"`
-	Filterable     types.Bool           `tfsdk:"filterable"`
-	Description    types.String         `tfsdk:"description"`
+	FullTextSearch *FullTextSearchModel    `tfsdk:"full_text_search"`
+	Embed          *EmbedConfigModel       `tfsdk:"embed"`
+	SparseEmbed    *SparseEmbedConfigModel `tfsdk:"sparse_embed"`
+	StoreText      types.Bool              `tfsdk:"store_text"`
+	Filterable     types.Bool              `tfsdk:"filterable"`
+	Description    types.String            `tfsdk:"description"`
 }
 
 func (m StringFieldModel) AttrTypes() map[string]attr.Type {
 	return map[string]attr.Type{
 		"full_text_search": types.ObjectType{AttrTypes: FullTextSearchModel{}.AttrTypes()},
+		"embed":            types.ObjectType{AttrTypes: EmbedConfigModel{}.AttrTypes()},
+		"sparse_embed":     types.ObjectType{AttrTypes: SparseEmbedConfigModel{}.AttrTypes()},
+		"store_text":       types.BoolType,
 		"filterable":       types.BoolType,
 		"description":      types.StringType,
+	}
+}
+
+// EmbedConfigModel is a string field's dense integrated embedding, with the parameters resolved
+// at index creation.
+type EmbedConfigModel struct {
+	Model           types.String `tfsdk:"model"`
+	Dimension       types.Int32  `tfsdk:"dimension"`
+	Metric          types.String `tfsdk:"metric"`
+	ReadParameters  types.Map    `tfsdk:"read_parameters"`
+	WriteParameters types.Map    `tfsdk:"write_parameters"`
+}
+
+func (m EmbedConfigModel) AttrTypes() map[string]attr.Type {
+	return map[string]attr.Type{
+		"model":            types.StringType,
+		"dimension":        types.Int32Type,
+		"metric":           types.StringType,
+		"read_parameters":  types.MapType{ElemType: types.StringType},
+		"write_parameters": types.MapType{ElemType: types.StringType},
+	}
+}
+
+// SparseEmbedConfigModel is a string field's sparse integrated embedding, with the parameters
+// resolved at index creation.
+type SparseEmbedConfigModel struct {
+	Model           types.String `tfsdk:"model"`
+	ReadParameters  types.Map    `tfsdk:"read_parameters"`
+	WriteParameters types.Map    `tfsdk:"write_parameters"`
+}
+
+func (m SparseEmbedConfigModel) AttrTypes() map[string]attr.Type {
+	return map[string]attr.Type{
+		"model":            types.StringType,
+		"read_parameters":  types.MapType{ElemType: types.StringType},
+		"write_parameters": types.MapType{ElemType: types.StringType},
 	}
 }
 
@@ -216,8 +258,19 @@ func newIndexSchemaFieldModel(ctx context.Context, field pinecone.IndexSchemaFie
 			Description:     types.StringPointerValue(semantic.Description),
 		}
 	case field.String != nil:
+		embed, diags := newEmbedConfigModel(ctx, field.String.Embed)
+		if diags.HasError() {
+			return model, diags
+		}
+		sparseEmbed, diags := newSparseEmbedConfigModel(ctx, field.String.SparseEmbed)
+		if diags.HasError() {
+			return model, diags
+		}
 		model.String = &StringFieldModel{
 			FullTextSearch: newFullTextSearchModel(field.String.FullTextSearch),
+			Embed:          embed,
+			SparseEmbed:    sparseEmbed,
+			StoreText:      types.BoolPointerValue(field.String.StoreText),
 			Filterable:     types.BoolPointerValue(field.String.Filterable),
 			Description:    types.StringPointerValue(field.String.Description),
 		}
@@ -266,6 +319,46 @@ func newFullTextSearchModel(config *pinecone.FullTextSearchConfig) *FullTextSear
 		}
 	}
 	return model
+}
+
+func newEmbedConfigModel(ctx context.Context, config *pinecone.EmbedConfig) (*EmbedConfigModel, diag.Diagnostics) {
+	if config == nil {
+		return nil, nil
+	}
+	readParameters, diags := stringMapValue(ctx, config.ReadParameters)
+	if diags.HasError() {
+		return nil, diags
+	}
+	writeParameters, diags := stringMapValue(ctx, config.WriteParameters)
+	if diags.HasError() {
+		return nil, diags
+	}
+	return &EmbedConfigModel{
+		Model:           types.StringPointerValue(config.Model),
+		Dimension:       types.Int32PointerValue(config.Dimension),
+		Metric:          types.StringPointerValue((*string)(config.Metric)),
+		ReadParameters:  readParameters,
+		WriteParameters: writeParameters,
+	}, nil
+}
+
+func newSparseEmbedConfigModel(ctx context.Context, config *pinecone.SparseEmbedConfig) (*SparseEmbedConfigModel, diag.Diagnostics) {
+	if config == nil {
+		return nil, nil
+	}
+	readParameters, diags := stringMapValue(ctx, config.ReadParameters)
+	if diags.HasError() {
+		return nil, diags
+	}
+	writeParameters, diags := stringMapValue(ctx, config.WriteParameters)
+	if diags.HasError() {
+		return nil, diags
+	}
+	return &SparseEmbedConfigModel{
+		Model:           types.StringPointerValue(config.Model),
+		ReadParameters:  readParameters,
+		WriteParameters: writeParameters,
+	}, nil
 }
 
 func stringMapValue(ctx context.Context, in *map[string]interface{}) (types.Map, diag.Diagnostics) {

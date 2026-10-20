@@ -78,7 +78,7 @@ func TestIndexResourceModifyPlan_styleSwitch(t *testing.T) {
 		{name: "spec to schema without the dense field", config: sparseSchema, state: base, wantErr: mismatch},
 		{name: "sparse spec to schema with a dense field", config: vector, state: sparseSpec, wantErr: mismatch},
 		{name: "integrated spec to schema", config: vector, state: withEmbed(t, s, base, "multilingual-e5-large", "chunk_text"),
-			wantErr: "Indexes with integrated embedding are described with spec"},
+			wantErr: "Legacy integrated indexes are described with spec"},
 		{name: "pod spec to schema", config: vector, state: withPod(t, s, base, "p1.x1", 1), wantErr: "Pod-based indexes are described with spec"},
 		{name: "dedicated spec to on-demand schema", config: withReadCapacity(t, s, vector, false), state: dedicatedSpec,
 			wantErr: "Read capacity can't return to on-demand"},
