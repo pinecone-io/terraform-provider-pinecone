@@ -90,6 +90,9 @@ terraform apply
 Terraform plans the replacement of a tainted index as a new index, so the errors above still apply. A configuration
 that can't be created fails at plan time, before the existing index is deleted.
 
+`terraform apply -replace=pinecone_index.example` doesn't get past these errors: Terraform still plans the change
+against the existing index before replacing it, so the plan fails the same way. Use `terraform taint` instead.
+
 ### BYOC indexes need dedicated read capacity
 
 API version `2026-07` doesn't support on-demand read capacity on BYOC indexes, and leaving out `read_capacity`

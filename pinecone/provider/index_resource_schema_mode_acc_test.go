@@ -409,6 +409,20 @@ import {
 				Config:   imported,
 				PlanOnly: true,
 			},
+			// A tainted index is planned as a new one, so leaving out integrated embedding recreates it.
+			{
+				Config: configWithBody("test", `full_text_search = {}`),
+				Taint:  []string{"pinecone_index.test"},
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("pinecone_index.test", plancheck.ResourceActionDestroyBeforeCreate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckIndexExists(),
+					resource.TestCheckNoResourceAttr("pinecone_index.test", body+"embed.model"),
+				),
+			},
 		},
 	})
 }

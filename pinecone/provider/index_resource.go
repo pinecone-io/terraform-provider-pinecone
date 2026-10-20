@@ -965,7 +965,8 @@ const (
 	podCreateUnsupportedSummary = "Pod-based indexes can't be created"
 	podCreateUnsupportedDetail  = "Pinecone API version 2026-07 doesn't support creating pod-based indexes. " +
 		"Existing pod-based indexes can still be imported, scaled, and deleted. Use spec.serverless or spec.byoc to create a new index."
-	recreateIndexHint = "To recreate the index with the new configuration, taint it first (`terraform taint <address>`). " +
+	recreateIndexHint = "To recreate the index with the new configuration, taint it first (`terraform taint <address>`); " +
+		"`-replace` still checks the configuration against the existing index, so it fails with this error too. " +
 		"Recreating an index deletes all of its data."
 )
 
