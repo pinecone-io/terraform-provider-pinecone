@@ -277,7 +277,7 @@ resource "pinecone_index" "serverless" {
 ```
 
 BYOC (Bring Your Own Cloud) indexes are deployed into your own cloud environment, identified by the `environment`
-Pinecone provides. They need dedicated read capacity:
+Pinecone provides. Like serverless indexes, they default to on-demand read capacity (see [Read Capacity](#read-capacity)):
 
 ```terraform
 resource "pinecone_index" "byoc" {
@@ -286,13 +286,6 @@ resource "pinecone_index" "byoc" {
   spec = {
     byoc = {
       environment = "my-byoc-env-id"
-      read_capacity = {
-        dedicated = {
-          node_type = "b1"
-          replicas  = 1
-          shards    = 1
-        }
-      }
     }
   }
 }
@@ -350,9 +343,8 @@ terraform import pinecone_index.example my-index
 ### Read Capacity
 
 Serverless and BYOC indexes support configurable read capacity. With `schema`, set `read_capacity` at the top level;
-with `spec`, set it inside the `serverless` or `byoc` block. Omitting `read_capacity` defaults to `on_demand`, which
-BYOC indexes don't support, so BYOC indexes must set `dedicated`. Creating or changing read capacity waits until the
-new capacity is running (see `timeouts.create` and `timeouts.update`):
+with `spec`, set it inside the `serverless` or `byoc` block. Omitting `read_capacity` defaults to `on_demand`. Creating
+or changing read capacity waits until the new capacity is running (see `timeouts.create` and `timeouts.update`):
 
 ```terraform
 # Dedicated read capacity on a document index

@@ -77,7 +77,8 @@ resource "pinecone_index" "schema_vectors" {
   }
 }
 
-# BYOC (Bring Your Own Cloud) vector index. BYOC indexes need dedicated read capacity.
+# BYOC (Bring Your Own Cloud) vector index. Like serverless indexes, BYOC indexes default to
+# on-demand read capacity.
 resource "pinecone_index" "schema_byoc" {
   name = "tftestindex-schema-byoc"
   deployment = {
@@ -88,13 +89,6 @@ resource "pinecone_index" "schema_byoc" {
   schema = {
     fields = {
       _values = { dense_vector = { dimension = 1536, metric = "cosine" } }
-    }
-  }
-  read_capacity = {
-    dedicated = {
-      node_type = "b1"
-      replicas  = 1
-      shards    = 1
     }
   }
 }

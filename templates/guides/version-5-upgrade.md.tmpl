@@ -93,35 +93,13 @@ that can't be created fails at plan time, before the existing index is deleted.
 `terraform apply -replace=pinecone_index.example` doesn't get past these errors: Terraform still plans the change
 against the existing index before replacing it, so the plan fails the same way. Use `terraform taint` instead.
 
-### BYOC indexes need dedicated read capacity
+### BYOC indexes needed dedicated read capacity in 5.0.0
 
-API version `2026-07` doesn't support on-demand read capacity on BYOC indexes, and leaving out `read_capacity`
-selects on-demand. A new BYOC index, with `spec.byoc` or `deployment.byoc`, needs `read_capacity.dedicated`, or it
-fails at plan time with `BYOC indexes need dedicated read capacity`. Switching an existing BYOC index from dedicated to
-`on_demand` fails at plan time too.
-
-An existing BYOC index without `read_capacity` in its configuration keeps working. A change that replaces it, such as to
-`name`, `dimension`, `metric`, or `spec.byoc.environment`, or tainting it, fails at plan time until you add
-`read_capacity.dedicated`.
-
-```terraform
-resource "pinecone_index" "byoc" {
-  name      = "my-byoc-index"
-  dimension = 1536
-  spec = {
-    byoc = {
-      environment = "my-byoc-env-id"
-      read_capacity = {
-        dedicated = {
-          node_type = "b1"
-          replicas  = 1
-          shards    = 1
-        }
-      }
-    }
-  }
-}
-```
+In version 5.0.0, a new BYOC index, with `spec.byoc` or `deployment.byoc`, needed `read_capacity.dedicated`, or it
+failed at plan time with `BYOC indexes need dedicated read capacity`. From version 5.1.0, BYOC indexes support
+on-demand read capacity like serverless indexes, and leaving out `read_capacity` selects on-demand. Configurations
+that set `read_capacity.dedicated` keep working unchanged. Switching an index from dedicated back to `on_demand` still
+fails at plan time, as it does for every index.
 
 ### Read-only attributes can't be set
 

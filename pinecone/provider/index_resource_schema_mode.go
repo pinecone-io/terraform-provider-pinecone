@@ -260,7 +260,7 @@ func indexDeploymentResourceAttribute() schema.Attribute {
 			},
 			"byoc": schema.SingleNestedAttribute{
 				MarkdownDescription: "A BYOC (Bring Your Own Cloud) index. Only vector indexes, whose schema is made of the reserved fields, can run on BYOC. " +
-					"BYOC indexes need `read_capacity.dedicated`: they don't support on-demand read capacity.",
+					"Like serverless indexes, BYOC indexes default to on-demand read capacity.",
 				Optional: true,
 				Attributes: map[string]schema.Attribute{
 					"environment": schema.StringAttribute{
