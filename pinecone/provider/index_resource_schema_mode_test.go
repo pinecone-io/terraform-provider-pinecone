@@ -258,7 +258,7 @@ func TestIndexResourceValidateConfig(t *testing.T) {
 		{name: "deployment without schema", config: noSchema, wantErr: "Missing schema"},
 		{name: "top-level read_capacity with spec", config: specReadCapacity, wantErr: "read_capacity requires schema"},
 		{name: "cmek_id with spec", config: specCmek, wantErr: "cmek_id requires schema"},
-		{name: "cmek_id on BYOC", config: byocCmek, wantErr: "cmek_id isn't supported on BYOC"},
+		{name: "cmek_id on BYOC", config: byocCmek},
 		{name: "empty schema", config: document(schemaFields{}), wantErr: "Empty schema"},
 		{name: "reserved mixed with named", config: document(schemaFields{"_values": denseField(1024, "cosine"), "body": fullTextField(models.FullTextSearchModel{})}), wantErr: "Reserved fields mixed with named fields"},
 		{name: "_values as sparse", config: document(schemaFields{"_values": sparseField()}), wantErr: "Invalid reserved field"},
@@ -293,7 +293,8 @@ func TestIndexResourceValidateConfig(t *testing.T) {
 		{name: "two embed fields", config: document(schemaFields{"a": embeddedField(embedConfig(nil, nil), nil, nil), "b": embeddedField(embedConfig(nil, nil), nil, nil)}),
 			wantErr: "Too many dense vector fields"},
 		{name: "unknown embed", config: unknownEmbed},
-		{name: "document index on BYOC", config: withSchemaMode(t, s, base, documentFields, byocDeployment()), wantErr: "Document indexes require a managed deployment"},
+		{name: "document index on BYOC", config: withSchemaMode(t, s, base, documentFields, byocDeployment())},
+		{name: "integrated embedding on BYOC", config: withSchemaMode(t, s, base, schemaFields{"body": ftsAndBothEmbeds}, byocDeployment())},
 		{name: "both deployment types", config: withSchemaMode(t, s, base, documentFields, bothDeployments), wantErr: "Conflicting deployment types"},
 		{name: "no deployment type", config: withSchemaMode(t, s, base, documentFields, models.IndexResourceDeploymentModel{}), wantErr: "Missing deployment type"},
 		{name: "unknown field", config: unknownField},
@@ -336,6 +337,7 @@ func TestIndexResourceModifyPlan_schemaMode(t *testing.T) {
 	retagged.Tags = types.MapValueMust(types.StringType, map[string]attr.Value{"team": types.StringValue("search")})
 	byocVector := withSchemaMode(t, s, base, schemaFields{"_values": denseField(1024, "cosine")}, byocDeployment())
 	byocDedicated := withReadCapacity(t, s, byocVector, true)
+	byocDocument := withSchemaMode(t, s, base, schemaFields{"embedding": denseField(1536, "dotproduct"), "body": fullTextField(models.FullTextSearchModel{})}, byocDeployment())
 	// embeddedBody is what a refresh records for a field version 5.0.0 imported as full-text search
 	// only: the index also embeds it, with dense and sparse integrated embedding.
 	embeddedBody := fullTextField(models.FullTextSearchModel{})
@@ -372,6 +374,7 @@ func TestIndexResourceModifyPlan_schemaMode(t *testing.T) {
 		{name: "create byoc without read capacity", config: byocVector},
 		{name: "create byoc on-demand", config: withReadCapacity(t, s, byocVector, false)},
 		{name: "create byoc with unknown deployment", config: withUnknownDeployment(t, s, byocVector, "byoc")},
+		{name: "create byoc document index", config: byocDocument},
 		{name: "byoc dedicated to on-demand", config: withReadCapacity(t, s, byocVector, false), state: &byocDedicated,
 			wantErr: "Read capacity can't return to on-demand"},
 	}

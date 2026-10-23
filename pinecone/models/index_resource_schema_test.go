@@ -9,6 +9,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/pinecone-io/go-pinecone/v7/pinecone"
 )
 
@@ -365,6 +366,38 @@ func TestIndexResourceModelRead_schemaMode(t *testing.T) {
 
 	if d := model.Read(ctx, index); d.HasError() || model.Schema.IsNull() {
 		t.Errorf("refresh should stay in schema mode (%v)", d)
+	}
+}
+
+func TestIndexResourceModelRead_byocDocumentIndex(t *testing.T) {
+	ctx := t.Context()
+	index := &pinecone.Index{
+		Name:       "articles",
+		Host:       "https://articles.example.com",
+		Schema:     documentIndexSchema(),
+		Deployment: &pinecone.IndexDeployment{Byoc: &pinecone.ByocDeployment{Environment: "aws-us-east-1-b921"}},
+		Metric:     pinecone.IndexMetricDotproduct,
+		VectorType: "dense",
+		Spec:       &pinecone.IndexSpec{BYOC: &pinecone.BYOCSpec{Environment: "aws-us-east-1-b921"}},
+		Status:     &pinecone.IndexStatus{Ready: true, State: pinecone.IndexStatusStateReady},
+	}
+
+	var model IndexResourceModel
+	if d := model.Read(ctx, index); d.HasError() {
+		t.Fatalf("Read returned errors: %v", d)
+	}
+	if !model.UsesSchemaMode(index) || model.Schema.IsNull() || !model.Spec.IsNull() {
+		t.Fatalf("an imported BYOC document index should be read in schema mode: schema=%v spec=%v", model.Schema, model.Spec)
+	}
+	var deployment IndexResourceDeploymentModel
+	if d := model.Deployment.As(ctx, &deployment, basetypes.ObjectAsOptions{}); d.HasError() {
+		t.Fatalf("reading deployment: %v", d)
+	}
+	if deployment.Managed != nil || deployment.Byoc == nil || deployment.Byoc.Environment.ValueString() != "aws-us-east-1-b921" {
+		t.Errorf("deployment = %+v, want byoc in aws-us-east-1-b921", deployment)
+	}
+	if got := sortedFieldNames(t, model.Schema); !slices.Equal(got, []string{"body", "embedding"}) {
+		t.Errorf("fields = %v, want [body embedding]", got)
 	}
 }
 

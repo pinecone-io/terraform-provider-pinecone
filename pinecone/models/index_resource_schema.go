@@ -146,15 +146,6 @@ func IsDocumentIndexSchema(schema *pinecone.IndexSchema) bool {
 	return false
 }
 
-func IsDocumentIndexConfig(fields map[string]IndexResourceSchemaFieldModel) bool {
-	for name := range fields {
-		if !IsReservedFieldName(name) {
-			return true
-		}
-	}
-	return false
-}
-
 // ResourceSchemaFields decodes a schema object's fields. It returns nil for a null or unknown
 // schema or field map. A nested object that isn't known yet, such as full_text_search before the
 // API defaults it, decodes as nil.

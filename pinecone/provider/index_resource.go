@@ -171,8 +171,8 @@ func (r *IndexResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 			"deployment":    indexDeploymentResourceAttribute(),
 			"read_capacity": readCapacitySchema("Read capacity configuration for an index described with `schema`. With `spec`, set `read_capacity` inside `spec.serverless` or `spec.byoc` instead. "),
 			"cmek_id": schema.StringAttribute{
-				MarkdownDescription: "The ID of a customer-managed encryption key (CMEK) to encrypt the index with. Only with `schema` and a managed " +
-					"`deployment`, and only when the index is created; changing it replaces the index.",
+				MarkdownDescription: "The ID of a customer-managed encryption key (CMEK) to encrypt the index with. Only with `schema` and `deployment`, " +
+					"and only when the index is created; changing it replaces the index.",
 				Optional: true,
 				Computed: true,
 				PlanModifiers: []planmodifier.String{

@@ -511,16 +511,6 @@ resource "pinecone_index" "test" {
 			expectError: regexp.MustCompile("Reserved fields mixed with named fields"),
 		},
 		{
-			name: "document index on BYOC",
-			config: `
-resource "pinecone_index" "test" {
-  name       = "test"
-  deployment = { byoc = { environment = "aws-us-east-1-b921" } }
-  schema     = { fields = { body = { string = { full_text_search = {} } } } }
-}`,
-			expectError: regexp.MustCompile("Document indexes require a managed deployment"),
-		},
-		{
 			name: "store_text false with full-text search",
 			config: `
 resource "pinecone_index" "test" {
