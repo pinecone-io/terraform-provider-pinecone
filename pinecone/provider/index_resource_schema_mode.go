@@ -259,9 +259,8 @@ func indexDeploymentResourceAttribute() schema.Attribute {
 				},
 			},
 			"byoc": schema.SingleNestedAttribute{
-				MarkdownDescription: "A BYOC (Bring Your Own Cloud) index. Only vector indexes, whose schema is made of the reserved fields, can run on BYOC. " +
-					"Like serverless indexes, BYOC indexes default to on-demand read capacity.",
-				Optional: true,
+				MarkdownDescription: "A BYOC (Bring Your Own Cloud) index. Like serverless indexes, BYOC indexes default to on-demand read capacity.",
+				Optional:            true,
 				Attributes: map[string]schema.Attribute{
 					"environment": schema.StringAttribute{
 						MarkdownDescription: "The BYOC environment where the index is hosted.",
@@ -551,7 +550,7 @@ func validateIndexSchemaConfig(ctx context.Context, config models.IndexResourceM
 			fmt.Sprintf("An index can have at most %d string fields that store their text, which are indexed for full-text search; found %d.", maxFullTextFields, len(fullText)))
 	}
 
-	diags.Append(validateIndexDeploymentConfig(ctx, config, models.IsDocumentIndexConfig(fields))...)
+	diags.Append(validateIndexDeploymentConfig(ctx, config)...)
 	return diags
 }
 
@@ -707,7 +706,7 @@ func validateIndexSpecConfig(spec types.Object) diag.Diagnostics {
 	return diags
 }
 
-func validateIndexDeploymentConfig(ctx context.Context, config models.IndexResourceModel, documentIndex bool) diag.Diagnostics {
+func validateIndexDeploymentConfig(ctx context.Context, config models.IndexResourceModel) diag.Diagnostics {
 	var diags diag.Diagnostics
 	if config.Deployment.IsNull() || config.Deployment.IsUnknown() {
 		return diags
@@ -728,11 +727,6 @@ func validateIndexDeploymentConfig(ctx context.Context, config models.IndexResou
 		diags.AddAttributeError(path.Root("deployment"), "Missing deployment type", "Set one of deployment.managed or deployment.byoc.")
 	case deployment.Managed != nil && deployment.Byoc != nil:
 		diags.AddAttributeError(path.Root("deployment"), "Conflicting deployment types", "Set only one of deployment.managed or deployment.byoc.")
-	case deployment.Byoc != nil && documentIndex:
-		diags.AddAttributeError(path.Root("deployment").AtName("byoc"), "Document indexes require a managed deployment",
-			"An index with named schema fields is a document index, which runs only on serverless (managed) deployments.")
-	case deployment.Byoc != nil && !config.CmekId.IsNull():
-		diags.AddAttributeError(path.Root("cmek_id"), "cmek_id isn't supported on BYOC", "Customer-managed encryption keys are only supported on managed deployments.")
 	}
 	return diags
 }

@@ -160,7 +160,6 @@ Things to know:
   `metric`, `vector_type`, `spec`, or `embed`.
 - With `schema`, read capacity and encryption are set at the top level: `read_capacity` and `cmek_id`.
 - Changing `schema`, `deployment`, or `cmek_id` replaces the index.
-- Document indexes run only on managed deployments.
 - Legacy integrated indexes (`embed`) are still created in the `spec` style.
 
 ### Moving an index to the `schema` style

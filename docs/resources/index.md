@@ -177,7 +177,7 @@ resource "pinecone_index" "serverless" {
 
 ### Optional
 
-- `cmek_id` (String) The ID of a customer-managed encryption key (CMEK) to encrypt the index with. Only with `schema` and a managed `deployment`, and only when the index is created; changing it replaces the index.
+- `cmek_id` (String) The ID of a customer-managed encryption key (CMEK) to encrypt the index with. Only with `schema` and `deployment`, and only when the index is created; changing it replaces the index.
 - `deletion_protection` (String) Whether deletion protection is enabled: `enabled` or `disabled`. Defaults to `disabled`. An index with deletion protection enabled can't be deleted.
 - `deployment` (Attributes) Where the index runs. Required with `schema`. Set exactly one of `managed` or `byoc`. Changing it replaces the index. (see [below for nested schema](#nestedatt--deployment))
 - `dimension` (Number) The dimension of the index's dense vectors. Required for dense indexes without `embed`; with `embed`, it defaults to the model's dimension. Not used with `schema`, where each dense vector field sets its own dimension. Changing it replaces the index.
@@ -203,7 +203,7 @@ Refer to the [model guide](https://docs.pinecone.io/models/overview) for availab
 
 Optional:
 
-- `byoc` (Attributes) A BYOC (Bring Your Own Cloud) index. Only vector indexes, whose schema is made of the reserved fields, can run on BYOC. Like serverless indexes, BYOC indexes default to on-demand read capacity. (see [below for nested schema](#nestedatt--deployment--byoc))
+- `byoc` (Attributes) A BYOC (Bring Your Own Cloud) index. Like serverless indexes, BYOC indexes default to on-demand read capacity. (see [below for nested schema](#nestedatt--deployment--byoc))
 - `managed` (Attributes) A serverless index. (see [below for nested schema](#nestedatt--deployment--managed))
 
 <a id="nestedatt--deployment--byoc"></a>

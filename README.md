@@ -214,7 +214,7 @@ resource "pinecone_index" "articles" {
 Field names are at most 64 bytes and can't start with `$` or `_`. An index can have at most one dense vector field,
 one sparse vector field, and 100 full-text-search fields. Metadata fields don't need to be declared: they're indexed
 automatically when you upsert data. The schema can't be changed after the index is created; changing it replaces the
-index. Document indexes run only on managed (serverless) deployments.
+index.
 
 #### Integrated embedding
 
