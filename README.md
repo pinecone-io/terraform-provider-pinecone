@@ -49,6 +49,26 @@ Follow these steps to build the Terraform Provider for Pinecone:
     go install .
     ```
 
+### Testing a local build
+
+`go install .` puts the binary in `$(go env GOPATH)/bin`. To make Terraform use it
+instead of the Registry release, create a CLI config file:
+
+```hcl
+provider_installation {
+  dev_overrides {
+    "pinecone-io/pinecone" = "/path/to/go/bin"
+  }
+  direct {}
+}
+```
+
+Point Terraform at it with `export TF_CLI_CONFIG_FILE=/path/to/that/file`, set your
+credentials as described in [Authentication](#authentication), then run
+`terraform plan` or `terraform apply` from any directory with a config (the
+[examples](./examples) are a good start). `terraform init` isn't needed while dev
+overrides are active.
+
 ## Usage
 
 You can enable the provider in your Terraform configuration by adding the
@@ -412,10 +432,9 @@ Please create an issue for any support requests.
 
 ## Contributing
 
-Thank you to [skyscrapr](https://github.com/skyscrapr/) for developing this
-Terraform Provider. The original repository can be found at
+This provider was originally created by [skyscrapr](https://github.com/skyscrapr/),
+and is now maintained by Pinecone. The original repository can be found at
 [skyscrapr/terraform-provider-pinecone](https://github.com/skyscrapr/terraform-provider-pinecone).
-He continues to be the primary developer of this codebase.
 
 We welcome all contributions. If you identify issues or improvements, please
 create an issue or pull request.

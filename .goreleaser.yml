@@ -1,9 +1,6 @@
-# Visit https://goreleaser.com for documentation on how to customize this
-# behavior.
 version: 2
 before:
   hooks:
-    # this is just an example and not a requirement for provider building/publishing
     - go mod tidy
 builds:
 - env:
@@ -42,11 +39,10 @@ checksum:
 signs:
   - artifacts: checksum
     args:
-      # if you are using this in a GitHub action or some other automated pipeline, you 
-      # need to pass the batch flag to indicate its not interactive.
+      # for CI / automated pipelines pass --batch to indicate non-interactive mode
       - "--batch"
       - "--local-user"
-      - "{{ .Env.GPG_FINGERPRINT }}" # set this environment variable for your signing key
+      - "{{ .Env.GPG_FINGERPRINT }}"
       - "--output"
       - "${signature}"
       - "--detach-sign"
@@ -55,5 +51,3 @@ release:
   extra_files:
     - glob: 'terraform-registry-manifest.json'
       name_template: '{{ .ProjectName }}_{{ .Version }}_manifest.json'
-  # If you want to manually examine the release before its live, uncomment this line:
-  # draft: true
