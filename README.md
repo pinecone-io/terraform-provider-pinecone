@@ -19,8 +19,6 @@ please responsibly disclose it by contacting us.
 ## Requirements
 
 - [Terraform](https://www.terraform.io/downloads.html) >= v1.4.6
-- [Go](https://golang.org/doc/install) >= 1.26. This is necessary to build the
-  provider plugin.
 
 ## Installing the provider
 
@@ -31,43 +29,6 @@ init`. You can also download the latest binary for your target platform from
 the
 [releases](https://github.com/pinecone-io/terraform-provider-pinecone/releases)
 tab.
-
-## Building the provider
-
-Follow these steps to build the Terraform Provider for Pinecone:
-
-1.  Clone the repository:
-
-    ```sh
-    git clone https://github.com/pinecone-io/terraform-provider-pinecone
-    ```
-
-1.  Build and install the provider. The install directory depends on the `GOPATH`
-    environment variable.
-
-    ```sh
-    go install .
-    ```
-
-### Testing a local build
-
-`go install .` puts the binary in `$(go env GOPATH)/bin`. To make Terraform use it
-instead of the Registry release, create a CLI config file:
-
-```hcl
-provider_installation {
-  dev_overrides {
-    "pinecone-io/pinecone" = "/path/to/go/bin"
-  }
-  direct {}
-}
-```
-
-Point Terraform at it with `export TF_CLI_CONFIG_FILE=/path/to/that/file`, set your
-credentials as described in [Authentication](#authentication), then run
-`terraform plan` or `terraform apply` from any directory with a config (the
-[examples](./examples) are a good start). `terraform init` isn't needed while dev
-overrides are active.
 
 ## Usage
 
@@ -436,5 +397,5 @@ This provider was originally created by [skyscrapr](https://github.com/skyscrapr
 and is now maintained by Pinecone. The original repository can be found at
 [skyscrapr/terraform-provider-pinecone](https://github.com/skyscrapr/terraform-provider-pinecone).
 
-We welcome all contributions. If you identify issues or improvements, please
-create an issue or pull request.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for building the provider, testing local
+changes, and running the test suite.
