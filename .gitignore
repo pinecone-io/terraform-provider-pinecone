@@ -1,42 +1,27 @@
-*.dll
+# Build output
+/terraform-provider-pinecone
 *.exe
-.DS_Store
-example.tf
-terraform.tfplan
-terraform.tfstate
-bin/
 dist/
-modules-dev/
-/pkg/
-website/.vagrant
-website/.bundle
-website/build
-website/node_modules
-.vagrant/
-*.backup
-./*.tfstate
-.terraform/
-*.log
-*.bak
-*~
-.*.swp
-.idea
-*.iml
+
+# Go test artifacts
 *.test
-*.iml
-
-website/vendor
-
-# Test exclusions
-!command/test-fixtures/**/*.tfstate
-!command/test-fixtures/**/.terraform/
 coverage.out
 
-# Keep windows files with windows line endings
-*.winfile eol=crlf
+# Terraform working files
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
 
-# don't check in dev builds
-terraform-provider-pinecone
+# Local credentials
+.env
 
-# local scratch / handoff notes
+# Editor and OS files
+.DS_Store
+.idea/
+*.iml
+*.swp
+*~
+
+# Local scratch / handoff notes
 scratch/

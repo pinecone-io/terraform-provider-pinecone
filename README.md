@@ -19,8 +19,6 @@ please responsibly disclose it by contacting us.
 ## Requirements
 
 - [Terraform](https://www.terraform.io/downloads.html) >= v1.4.6
-- [Go](https://golang.org/doc/install) >= 1.26. This is necessary to build the
-  provider plugin.
 
 ## Installing the provider
 
@@ -31,23 +29,6 @@ init`. You can also download the latest binary for your target platform from
 the
 [releases](https://github.com/pinecone-io/terraform-provider-pinecone/releases)
 tab.
-
-## Building the provider
-
-Follow these steps to build the Terraform Provider for Pinecone:
-
-1.  Clone the repository:
-
-    ```sh
-    git clone https://github.com/pinecone-io/terraform-provider-pinecone
-    ```
-
-1.  Build and install the provider. The install directory depends on the `GOPATH`
-    environment variable.
-
-    ```sh
-    go install .
-    ```
 
 ## Usage
 
@@ -412,10 +393,9 @@ Please create an issue for any support requests.
 
 ## Contributing
 
-Thank you to [skyscrapr](https://github.com/skyscrapr/) for developing this
-Terraform Provider. The original repository can be found at
+This provider was originally created by [skyscrapr](https://github.com/skyscrapr/),
+and is now maintained by Pinecone. The original repository can be found at
 [skyscrapr/terraform-provider-pinecone](https://github.com/skyscrapr/terraform-provider-pinecone).
-He continues to be the primary developer of this codebase.
 
-We welcome all contributions. If you identify issues or improvements, please
-create an issue or pull request.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for building the provider, testing local
+changes, and running the test suite.
