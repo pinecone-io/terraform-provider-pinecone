@@ -1,3 +1,30 @@
+## How changes are merged
+
+Development happens in a private mirror of this repository. Pull requests opened
+here are reviewed as usual, but a maintainer applies accepted changes in the
+mirror instead of merging them here; they reach this repository on the next sync.
+
+### For maintainers
+
+- **Never merge a pull request in the public repository**, including Dependabot
+  PRs. The sync script only fast-forwards public `main`, so any commit merged
+  there blocks every later sync until it's brought into the mirror's history.
+- Merge changes into the mirror's `main`, then sync them to public:
+
+  ```sh
+  ./scripts/sync_to_public.sh          # dry run: lists the commits to publish
+  ./scripts/sync_to_public.sh --push   # fast-forwards public main
+  ```
+
+- Releases run only in the public repository. After public CI passes on the
+  synced commit, tag it there to trigger the release:
+
+  ```sh
+  git fetch public main
+  git tag -a vX.Y.Z public/main -m "vX.Y.Z"
+  git push public vX.Y.Z
+  ```
+
 ## Requirements
 
 - [Go](https://golang.org/doc/install) >= 1.26
