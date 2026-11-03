@@ -392,6 +392,89 @@ func TestIndexResourceModifyPlan_effectiveEmbedParameters(t *testing.T) {
 	}
 }
 
+// withSparseEmbed is withEmbed for a model that produces sparse vectors, which has no dimension.
+func withSparseEmbed(t *testing.T, s schema.Schema, model models.IndexResourceModel, embedModel string) models.IndexResourceModel {
+	t.Helper()
+	embed, d := types.ObjectValueFrom(context.Background(), attrTypesOf(t, s, "embed"), models.IndexEmbedResourceModel{
+		Model:                    types.StringValue(embedModel),
+		Dimension:                types.Int32Null(),
+		Metric:                   types.StringValue("dotproduct"),
+		VectorType:               types.StringValue("sparse"),
+		FieldMap:                 types.MapValueMust(types.StringType, map[string]attr.Value{"text": types.StringValue("text")}),
+		ReadParameters:           types.MapNull(types.StringType),
+		WriteParameters:          types.MapNull(types.StringType),
+		EffectiveReadParameters:  types.MapNull(types.StringType),
+		EffectiveWriteParameters: types.MapNull(types.StringType),
+	})
+	if d.HasError() {
+		t.Fatalf("building embed: %v", d)
+	}
+	model.Dimension = types.Int32Null()
+	model.Metric = types.StringValue("dotproduct")
+	model.VectorType = types.StringValue("sparse")
+	model.Embed = embed
+	return model
+}
+
+func TestEmbedComputedInt32Modifier(t *testing.T) {
+	ctx := context.Background()
+	s := indexResourceSchema(t)
+	schemaType := s.Type().TerraformType(ctx)
+	sparse := withSparseEmbed(t, s, testIndexModel(t, s), "pinecone-sparse-english-v0")
+	dimensionPath := path.Root("embed").AtName("dimension")
+
+	tests := []struct {
+		name        string
+		state       *models.IndexResourceModel
+		plan        models.IndexResourceModel
+		wantUnknown bool
+	}{
+		// https://github.com/pinecone-io/terraform-provider-pinecone/issues/99
+		{"existing sparse index, same model", &sparse, sparse, false},
+		{"existing sparse index, model changes", &sparse, withEmbed(t, s, testIndexModel(t, s), "multilingual-e5-large", "text"), true},
+		{"existing index gains an embed", func() *models.IndexResourceModel { m := testIndexModel(t, s); return &m }(), sparse, true},
+		{"new index", nil, sparse, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			state := tfsdk.State{Schema: s, Raw: tftypes.NewValue(schemaType, nil)}
+			stateValue := types.Int32Null()
+			if tt.state != nil {
+				if d := state.Set(ctx, tt.state); d.HasError() {
+					t.Fatalf("setting state: %v", d)
+				}
+				if d := state.GetAttribute(ctx, dimensionPath, &stateValue); d.HasError() {
+					t.Fatalf("reading state: %v", d)
+				}
+			}
+			plan := tfsdk.Plan{Schema: s, Raw: tftypes.NewValue(schemaType, nil)}
+			if d := plan.Set(ctx, &tt.plan); d.HasError() {
+				t.Fatalf("setting plan: %v", d)
+			}
+
+			req := planmodifier.Int32Request{
+				Path:        dimensionPath,
+				State:       state,
+				Plan:        plan,
+				StateValue:  stateValue,
+				PlanValue:   types.Int32Unknown(),
+				ConfigValue: types.Int32Null(),
+			}
+			resp := &planmodifier.Int32Response{PlanValue: req.PlanValue}
+			embedComputedInt32Modifier{}.PlanModifyInt32(ctx, req, resp)
+			if resp.Diagnostics.HasError() {
+				t.Fatalf("unexpected errors: %v", resp.Diagnostics)
+			}
+			if resp.PlanValue.IsUnknown() != tt.wantUnknown {
+				t.Errorf("embed.dimension unknown = %v, want %v", resp.PlanValue.IsUnknown(), tt.wantUnknown)
+			}
+			if !tt.wantUnknown && !resp.PlanValue.IsNull() {
+				t.Errorf("embed.dimension = %v, want null", resp.PlanValue)
+			}
+		})
+	}
+}
+
 func requiresReplace[M interface{ Description(context.Context) string }](mods []M) bool {
 	return slices.ContainsFunc(mods, func(m M) bool {
 		return strings.Contains(m.Description(context.Background()), "destroy and recreate")
