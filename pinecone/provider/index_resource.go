@@ -29,6 +29,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
@@ -1688,23 +1689,42 @@ func (embedComputedStringModifier) PlanModifyString(_ context.Context, req planm
 	}
 }
 
-// embedComputedInt32Modifier is the Int32 equivalent of embedComputedStringModifier.
+// embedComputedInt32Modifier is the Int32 equivalent of embedComputedStringModifier,
+// except that a null dimension on an existing index stays null while the embedding
+// model is unchanged: models that produce sparse vectors have no dimension.
 type embedComputedInt32Modifier struct{}
 
 func (embedComputedInt32Modifier) Description(_ context.Context) string {
-	return "Returns unknown when prior state is null; otherwise copies state for unknown."
+	return "Returns unknown when prior state is null, unless the index exists and the embedding model is unchanged; otherwise copies state for unknown."
 }
 func (embedComputedInt32Modifier) MarkdownDescription(_ context.Context) string {
-	return "Returns unknown when prior state is null; otherwise copies state for unknown."
+	return "Returns unknown when prior state is null, unless the index exists and the embedding model is unchanged; otherwise copies state for unknown."
 }
-func (embedComputedInt32Modifier) PlanModifyInt32(_ context.Context, req planmodifier.Int32Request, resp *planmodifier.Int32Response) {
+func (embedComputedInt32Modifier) PlanModifyInt32(ctx context.Context, req planmodifier.Int32Request, resp *planmodifier.Int32Response) {
 	if req.StateValue.IsNull() {
+		if !req.State.Raw.IsNull() && !embedModelChanging(ctx, req.State, req.Plan, &resp.Diagnostics) {
+			resp.PlanValue = types.Int32Null()
+			return
+		}
 		resp.PlanValue = types.Int32Unknown()
 		return
 	}
 	if resp.PlanValue.IsUnknown() {
 		resp.PlanValue = req.StateValue
 	}
+}
+
+// embedModelChanging reports whether the planned embed.model differs from the one in
+// prior state, or isn't known yet.
+func embedModelChanging(ctx context.Context, state tfsdk.State, plan tfsdk.Plan, diags *diag.Diagnostics) bool {
+	modelPath := path.Root("embed").AtName("model")
+	var stateModel, planModel types.String
+	diags.Append(state.GetAttribute(ctx, modelPath, &stateModel)...)
+	diags.Append(plan.GetAttribute(ctx, modelPath, &planModel)...)
+	if diags.HasError() || planModel.IsUnknown() {
+		return true
+	}
+	return !planModel.Equal(stateModel)
 }
 
 // embedComputedStringMapModifier is the Map[string]string equivalent of embedComputedStringModifier.
